@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Babe, Get This</string>
+    <string name="home_empty_title">No lists yet</string>
+    <string name="home_empty_subtitle">Create a list and share it so you can shop together.</string>
+    <string name="home_empty_cta">Create your first list</string>
+    <string name="action_create_list">Create list</string>
+</resources>
