@@ -1,6 +1,8 @@
 package com.babegetthis.android.feature.shoppingitems.data.repository
 
 import com.babegetthis.android.core.data.local.dao.CategoryDao
+import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toDomain
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toEntity
@@ -16,9 +18,6 @@ class ShoppingItemRepository @Inject constructor(
     private val shoppingItemDao: ShoppingItemDao,
     private val categoryDao: CategoryDao,
 ) {
-    // Combines items with categories so each item has its categoryName resolved.
-    // combine = merges two Flows. Like Rx's combineLatest or StreamZip in Dart.
-    // Whenever items OR categories change, the combined result updates.
     fun getItemsByListId(listId: String): Flow<List<ShoppingItem>> {
         return combine(
             shoppingItemDao.getItemsByListId(listId),
@@ -37,7 +36,8 @@ class ShoppingItemRepository @Inject constructor(
         name: String,
         quantity: String,
         categoryId: String? = null,
-    ): String {
+        shop: String? = null,
+    ): Result<String> = safeCall {
         val now = System.currentTimeMillis()
         val id = UUID.randomUUID().toString()
         val item = ShoppingItem(
@@ -46,19 +46,20 @@ class ShoppingItemRepository @Inject constructor(
             name = name,
             quantity = quantity,
             categoryId = categoryId,
+            shop = shop,
             createdAt = now,
             updatedAt = now,
         )
         shoppingItemDao.insertItem(item.toEntity())
-        return id
+        id
     }
 
-    suspend fun updateItem(item: ShoppingItem) {
+    suspend fun updateItem(item: ShoppingItem): Result<Unit> = safeCall {
         val updatedItem = item.copy(updatedAt = System.currentTimeMillis())
         shoppingItemDao.updateItem(updatedItem.toEntity())
     }
 
-    suspend fun togglePickedUp(itemId: String, isPickedUp: Boolean) {
+    suspend fun togglePickedUp(itemId: String, isPickedUp: Boolean): Result<Unit> = safeCall {
         shoppingItemDao.updatePickedUpStatus(
             itemId = itemId,
             isPickedUp = isPickedUp,
@@ -66,7 +67,7 @@ class ShoppingItemRepository @Inject constructor(
         )
     }
 
-    suspend fun deleteItem(itemId: String) {
+    suspend fun deleteItem(itemId: String): Result<Unit> = safeCall {
         shoppingItemDao.deleteItem(itemId)
     }
 }

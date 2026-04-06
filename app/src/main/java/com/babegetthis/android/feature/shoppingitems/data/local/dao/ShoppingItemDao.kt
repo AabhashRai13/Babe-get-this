@@ -11,12 +11,14 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ShoppingItemDao {
 
-    // Gets items for a list, sorted by category (nulls last) then by name.
-    // This groups items by category automatically in the UI.
+    // Sorted by: shop (nulls last) → category (nulls last) → name
+    // This groups items by store first, then by aisle within each store.
     @Query("""
         SELECT * FROM shopping_items
         WHERE listId = :listId
         ORDER BY
+            CASE WHEN shop IS NULL THEN 1 ELSE 0 END,
+            shop ASC,
             CASE WHEN categoryId IS NULL THEN 1 ELSE 0 END,
             categoryId ASC,
             name ASC
@@ -32,7 +34,6 @@ interface ShoppingItemDao {
     @Query("DELETE FROM shopping_items WHERE id = :itemId")
     suspend fun deleteItem(itemId: String)
 
-    // Toggle picked up status — used when tapping an item in the store
     @Query("UPDATE shopping_items SET isPickedUp = :isPickedUp, updatedAt = :updatedAt WHERE id = :itemId")
     suspend fun updatePickedUpStatus(itemId: String, isPickedUp: Boolean, updatedAt: Long)
 }

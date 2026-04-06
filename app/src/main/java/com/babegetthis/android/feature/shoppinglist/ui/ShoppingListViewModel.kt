@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.shoppinglist.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,9 +29,11 @@ class ShoppingListViewModel @Inject constructor(
 
     val showCreateDialog = MutableStateFlow(false)
 
-    // SharedFlow for one-time navigation events.
-    // Unlike StateFlow, it doesn't replay — fires once and is consumed.
-    // Like an Event in BLoC or a one-shot callback.
+    // One-time error events — like showing a snackbar.
+    // SharedFlow fires once and is consumed, unlike StateFlow which replays.
+    private val _errorMessage = MutableSharedFlow<String>()
+    val errorMessage = _errorMessage.asSharedFlow()
+
     private val _navigateToList = MutableSharedFlow<Pair<String, String>>()
     val navigateToList = _navigateToList.asSharedFlow()
 
@@ -44,16 +47,26 @@ class ShoppingListViewModel @Inject constructor(
 
     fun createList(name: String) {
         viewModelScope.launch {
-            val listId = repository.createList(name)
-            showCreateDialog.value = false
-            // Navigate to the newly created list
-            _navigateToList.emit(listId to name)
+            when (val result = repository.createList(name)) {
+                is Result.Success -> {
+                    showCreateDialog.value = false
+                    _navigateToList.emit(result.data to name)
+                }
+                is Result.Error -> {
+                    _errorMessage.emit(result.error.message)
+                }
+            }
         }
     }
 
     fun deleteList(listId: String) {
         viewModelScope.launch {
-            repository.deleteList(listId)
+            when (val result = repository.deleteList(listId)) {
+                is Result.Success -> { /* list removed, UI auto-updates via Flow */ }
+                is Result.Error -> {
+                    _errorMessage.emit(result.error.message)
+                }
+            }
         }
     }
 }

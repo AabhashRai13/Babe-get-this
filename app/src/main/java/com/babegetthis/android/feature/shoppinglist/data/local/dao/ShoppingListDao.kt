@@ -19,7 +19,7 @@ interface ShoppingListDao {
         FROM shopping_lists l
         LEFT JOIN shopping_items i ON l.id = i.listId
         GROUP BY l.id
-        ORDER BY l.updatedAt DESC
+        ORDER BY l.createdAt DESC
     """)
     fun getAllListsWithItemCount(): Flow<List<ShoppingListWithItemCount>>
 

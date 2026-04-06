@@ -1,0 +1,49 @@
+package com.babegetthis.android.core.error
+
+// Result wraps every repository return value.
+// Forces the ViewModel to handle both success and failure — no uncaught exceptions.
+
+// Like Either<Failure, T> from dartz in Flutter,
+// or AsyncValue from Riverpod.
+
+sealed class Result<out T> {
+    data class Success<T>(val data: T) : Result<T>()
+    data class Error(val error: AppError) : Result<Nothing>()
+
+    // Helper to check state quickly
+    val isSuccess: Boolean get() = this is Success
+    val isError: Boolean get() = this is Error
+
+    // Get data or null — like .valueOrNull in Riverpod
+    fun getOrNull(): T? = when (this) {
+        is Success -> data
+        is Error -> null
+    }
+
+    // Get error or null
+    fun errorOrNull(): AppError? = when (this) {
+        is Success -> null
+        is Error -> error
+    }
+}
+
+// Helper function to wrap database/network calls in try/catch.
+// Any repository function can use this instead of writing try/catch everywhere.
+// Like a reusable wrapper: final result = await safeCall(() => api.getItems());
+
+suspend fun <T> safeCall(
+    block: suspend () -> T
+): Result<T> {
+    return try {
+        Result.Success(block())
+    } catch (e: Exception) {
+        // Map the exception to the right AppError type
+        val error = when (e) {
+            is android.database.sqlite.SQLiteException -> AppError.DatabaseError()
+            is java.net.UnknownHostException -> AppError.NetworkError()
+            is java.net.SocketTimeoutException -> AppError.TimeoutError()
+            else -> AppError.UnknownError(e.message ?: "An unexpected error occurred.")
+        }
+        Result.Error(error)
+    }
+}

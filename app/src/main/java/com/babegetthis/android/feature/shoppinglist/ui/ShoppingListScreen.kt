@@ -1,6 +1,5 @@
 package com.babegetthis.android.feature.shoppinglist.ui
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,11 +28,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +44,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
+import com.babegetthis.android.core.util.TimePeriod
+import com.babegetthis.android.core.util.displayName
+import com.babegetthis.android.core.util.getTimePeriod
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 
 @Composable
@@ -52,16 +57,35 @@ fun ShoppingListScreen(
 ) {
     val lists by viewModel.shoppingLists.collectAsState()
     val showDialog by viewModel.showCreateDialog.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // LaunchedEffect = runs a side effect when the composable enters composition.
-    // Like initState() in Flutter. We use it to listen for one-time navigation events.
+    // Group lists by time period (Today, Yesterday, Last 7 Days, etc.)
+    // linkedMapOf preserves insertion order — so Today always appears first.
+    val groupedLists = remember(lists) {
+        val grouped = linkedMapOf<TimePeriod, MutableList<ShoppingList>>()
+        // TimePeriod enum is ordered: TODAY, YESTERDAY, LAST_WEEK, THIS_MONTH, OLDER
+        // We initialize in order so the map keys are always sorted correctly
+        for (list in lists) {
+            val period = getTimePeriod(list.createdAt)
+            grouped.getOrPut(period) { mutableListOf() }.add(list)
+        }
+        grouped
+    }
+
     LaunchedEffect(Unit) {
         viewModel.navigateToList.collect { (listId, listName) ->
             onNavigateToNewList(listId, listName)
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.errorMessage.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             BgtTopAppBar(
                 title = stringResource(R.string.app_name),
@@ -93,19 +117,28 @@ fun ShoppingListScreen(
                     .padding(padding)
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item { Spacer(modifier = Modifier.height(4.dp)) }
 
-                items(lists, key = { it.id }) { list ->
-                    ShoppingListCard(
-                        list = list,
-                        onClick = { onNavigateToList(list.id, list.name) },
-                        onDelete = { viewModel.deleteList(list.id) }
-                    )
+                groupedLists.forEach { (period, periodLists) ->
+                    // Time period header
+                    item(key = "header-$period") {
+                        TimePeriodHeader(period = period)
+                    }
+
+                    items(periodLists, key = { it.id }) { list ->
+                        ShoppingListCard(
+                            list = list,
+                            onClick = { onNavigateToList(list.id, list.name) },
+                            onDelete = { viewModel.deleteList(list.id) }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    item { Spacer(modifier = Modifier.height(8.dp)) }
                 }
 
-                item { Spacer(modifier = Modifier.height(80.dp)) }
+                item { Spacer(modifier = Modifier.height(72.dp)) }
             }
         }
     }
@@ -116,6 +149,17 @@ fun ShoppingListScreen(
             onCreate = { name -> viewModel.createList(name) }
         )
     }
+}
+
+@Composable
+private fun TimePeriodHeader(period: TimePeriod) {
+    Text(
+        text = period.displayName(),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        letterSpacing = MaterialTheme.typography.labelLarge.letterSpacing * 1.5f,
+        modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+    )
 }
 
 @Composable
@@ -140,7 +184,6 @@ private fun ShoppingListCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Icon bubble — like the avatars in the mock
             Box(
                 modifier = Modifier
                     .size(48.dp)

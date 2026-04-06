@@ -2,11 +2,10 @@ package com.babegetthis.android.feature.shoppingitems.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -20,6 +19,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,16 +35,29 @@ import com.babegetthis.android.core.model.Category
 fun AddItemDialog(
     categories: List<Category>,
     onDismiss: () -> Unit,
-    onAdd: (name: String, quantity: String, categoryId: String?) -> Unit,
+    onAdd: (name: String, quantity: String, categoryId: String?, shop: String?) -> Unit,
     onCreateCategory: (name: String, onCreated: (Category) -> Unit) -> Unit = { _, _ -> },
 ) {
     var itemName by remember { mutableStateOf("") }
     var quantity by remember { mutableStateOf("") }
+    var shop by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<Category?>(null) }
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
-    // "Other" flow — when user wants to create a new category
-    var showNewCategoryField by remember { mutableStateOf(false) }
+    var categorySearchText by remember { mutableStateOf("") }
+    var isCreatingNewCategory by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
+
+    val filteredCategories by remember(categorySearchText, categories) {
+        derivedStateOf {
+            if (categorySearchText.isBlank()) {
+                categories
+            } else {
+                categories.filter {
+                    it.name.contains(categorySearchText, ignoreCase = true)
+                }
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -76,29 +89,48 @@ fun AddItemDialog(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Category dropdown
+                // Shop field — simple text input, nullable
+                OutlinedTextField(
+                    value = shop,
+                    onValueChange = { shop = it },
+                    label = { Text("Shop (optional)") },
+                    placeholder = { Text("e.g. Whole Foods, Costco") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Searchable category dropdown
                 ExposedDropdownMenuBox(
                     expanded = categoryDropdownExpanded,
                     onExpandedChange = { categoryDropdownExpanded = it },
                 ) {
                     OutlinedTextField(
-                        value = selectedCategory?.name ?: "",
-                        onValueChange = {},
-                        readOnly = true,
+                        value = if (isCreatingNewCategory) "Other" else categorySearchText,
+                        onValueChange = { newValue ->
+                            categorySearchText = newValue
+                            selectedCategory = null
+                            isCreatingNewCategory = false
+                            categoryDropdownExpanded = true
+                        },
                         label = { Text(stringResource(R.string.shopping_items_category)) },
+                        placeholder = { Text("Search or select category") },
                         trailingIcon = {
                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded)
                         },
+                        singleLine = true,
+                        readOnly = isCreatingNewCategory,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                            .menuAnchor(MenuAnchorType.PrimaryEditable),
                         shape = RoundedCornerShape(12.dp),
                     )
                     ExposedDropdownMenu(
                         expanded = categoryDropdownExpanded,
                         onDismissRequest = { categoryDropdownExpanded = false },
+                        modifier = Modifier.heightIn(max = 250.dp),
                     ) {
-                        // "None" option
                         DropdownMenuItem(
                             text = {
                                 Text(
@@ -108,71 +140,70 @@ fun AddItemDialog(
                             },
                             onClick = {
                                 selectedCategory = null
-                                showNewCategoryField = false
+                                categorySearchText = ""
+                                isCreatingNewCategory = false
                                 categoryDropdownExpanded = false
                             }
                         )
 
-                        categories.forEach { category ->
+                        filteredCategories.forEach { category ->
                             DropdownMenuItem(
                                 text = { Text(category.name) },
                                 onClick = {
                                     selectedCategory = category
-                                    showNewCategoryField = false
+                                    categorySearchText = category.name
+                                    isCreatingNewCategory = false
                                     categoryDropdownExpanded = false
                                 }
                             )
                         }
 
-                        // Divider before "Other"
+                        if (filteredCategories.isEmpty() && categorySearchText.isNotBlank()) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "No categories match \"$categorySearchText\"",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                },
+                                onClick = {},
+                                enabled = false,
+                            )
+                        }
+
                         HorizontalDivider()
 
-                        // "Other" option — opens a text field to create a new category
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    "Other (create new)",
+                                    "Other",
                                     color = MaterialTheme.colorScheme.primary,
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             },
                             onClick = {
-                                showNewCategoryField = true
+                                isCreatingNewCategory = true
+                                selectedCategory = null
+                                categorySearchText = ""
                                 categoryDropdownExpanded = false
                             }
                         )
                     }
                 }
 
-                // New category text field — shows when "Other" is selected
-                AnimatedVisibility(visible = showNewCategoryField) {
+                // New category name field
+                AnimatedVisibility(visible = isCreatingNewCategory) {
                     Column {
                         Spacer(modifier = Modifier.height(12.dp))
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedTextField(
-                                value = newCategoryName,
-                                onValueChange = { newCategoryName = it },
-                                label = { Text("New category name") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            TextButton(
-                                onClick = {
-                                    if (newCategoryName.isNotBlank()) {
-                                        onCreateCategory(newCategoryName.trim()) { createdCategory ->
-                                            selectedCategory = createdCategory
-                                            showNewCategoryField = false
-                                            newCategoryName = ""
-                                        }
-                                    }
-                                },
-                                enabled = newCategoryName.isNotBlank(),
-                            ) {
-                                Text("Save")
-                            }
-                        }
+                        OutlinedTextField(
+                            value = newCategoryName,
+                            onValueChange = { newCategoryName = it },
+                            label = { Text("New category name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                        )
                     }
                 }
             }
@@ -181,7 +212,14 @@ fun AddItemDialog(
             TextButton(
                 onClick = {
                     if (itemName.isNotBlank()) {
-                        onAdd(itemName.trim(), quantity.trim(), selectedCategory?.id)
+                        val shopValue = shop.trim().ifBlank { null }
+                        if (isCreatingNewCategory && newCategoryName.isNotBlank()) {
+                            onCreateCategory(newCategoryName.trim()) { createdCategory ->
+                                onAdd(itemName.trim(), quantity.trim(), createdCategory.id, shopValue)
+                            }
+                        } else {
+                            onAdd(itemName.trim(), quantity.trim(), selectedCategory?.id, shopValue)
+                        }
                     }
                 },
                 enabled = itemName.isNotBlank(),

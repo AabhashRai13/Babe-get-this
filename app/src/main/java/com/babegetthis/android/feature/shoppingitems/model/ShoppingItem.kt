@@ -7,8 +7,8 @@ data class ShoppingItem(
     val quantity: String,
     val isPickedUp: Boolean = false,
     val categoryId: String? = null,
-    // Resolved from the category table — so the UI can display the name
     val categoryName: String? = null,
+    val shop: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
 )

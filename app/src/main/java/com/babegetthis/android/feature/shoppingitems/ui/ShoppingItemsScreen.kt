@@ -1,9 +1,5 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +22,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
@@ -33,11 +30,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,8 +62,18 @@ fun ShoppingItemsScreen(
 
     val activeItems = items.filter { !it.isPickedUp }
     val completedItems = items.filter { it.isPickedUp }
+    val activeByShop = activeItems.groupBy { it.shop ?: "" }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.errorMessage.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             BgtTopAppBar(
                 title = viewModel.listName,
@@ -72,7 +83,6 @@ fun ShoppingItemsScreen(
             )
         },
         floatingActionButton = {
-            // Only show FAB when there are already items
             if (items.isNotEmpty()) {
                 FloatingActionButton(
                     onClick = { viewModel.onAddItemClick() },
@@ -86,7 +96,6 @@ fun ShoppingItemsScreen(
         }
     ) { padding ->
         if (items.isEmpty()) {
-            // New list or empty list — show the first item prompt
             FirstItemPrompt(
                 modifier = Modifier
                     .padding(padding)
@@ -100,7 +109,7 @@ fun ShoppingItemsScreen(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
             ) {
-                // -- ACTIVE ITEMS section --
+                // -- ACTIVE ITEMS header --
                 if (activeItems.isNotEmpty()) {
                     item {
                         SectionHeader(
@@ -108,13 +117,29 @@ fun ShoppingItemsScreen(
                             count = stringResource(R.string.shopping_items_count, activeItems.size),
                         )
                     }
-                    items(activeItems, key = { it.id }) { shoppingItem ->
-                        ShoppingItemCard(
-                            item = shoppingItem,
-                            onTogglePickedUp = { viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp) },
-                            onDelete = { viewModel.deleteItem(shoppingItem.id) },
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+
+                    // Group by shop, then render items under each shop
+                    activeByShop.forEach { (shopName, shopItems) ->
+                        // Shop sub-header — only show if at least one item has a shop
+                        if (shopName.isNotBlank()) {
+                            item(key = "shop-$shopName") {
+                                ShopSubHeader(shopName = shopName)
+                            }
+                        } else if (activeByShop.size > 1) {
+                            // Only show "General" if there are also shop-grouped items
+                            item(key = "shop-general") {
+                                ShopSubHeader(shopName = "General")
+                            }
+                        }
+
+                        items(shopItems, key = { it.id }) { shoppingItem ->
+                            ShoppingItemCard(
+                                item = shoppingItem,
+                                onTogglePickedUp = { viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp) },
+                                onDelete = { viewModel.deleteItem(shoppingItem.id) },
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                 }
 
@@ -146,8 +171,8 @@ fun ShoppingItemsScreen(
         AddItemDialog(
             categories = categories,
             onDismiss = { viewModel.onDismissAddItemDialog() },
-            onAdd = { name, quantity, categoryId ->
-                viewModel.addItem(name, quantity, categoryId)
+            onAdd = { name, quantity, categoryId, shop ->
+                viewModel.addItem(name, quantity, categoryId, shop)
             },
             onCreateCategory = { name, onCreated ->
                 viewModel.addCategory(name, onCreated)
@@ -166,7 +191,6 @@ private fun FirstItemPrompt(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        // Shopping cart icon with a styled background
         Box(
             modifier = Modifier
                 .size(80.dp)
@@ -194,8 +218,6 @@ private fun FirstItemPrompt(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(32.dp))
-
-        // Big add button instead of FAB
         Surface(
             onClick = onAddItem,
             shape = RoundedCornerShape(16.dp),
@@ -252,6 +274,29 @@ private fun SectionHeader(
 }
 
 @Composable
+private fun ShopSubHeader(shopName: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Place,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.secondary,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = shopName,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.secondary,
+        )
+    }
+}
+
+@Composable
 private fun ShoppingItemCard(
     item: ShoppingItem,
     onTogglePickedUp: () -> Unit,
@@ -276,7 +321,7 @@ private fun ShoppingItemCard(
                 .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Custom checkbox — circle with check icon, matching the mock
+            // Custom circular checkbox
             Surface(
                 onClick = onTogglePickedUp,
                 shape = CircleShape,
@@ -329,18 +374,36 @@ private fun ShoppingItemCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                if (item.categoryName != null && !item.isPickedUp) {
+                // Category and shop chips
+                if (!item.isPickedUp && (item.categoryName != null || item.shop != null)) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                    ) {
-                        Text(
-                            text = item.categoryName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                        )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (item.categoryName != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                            ) {
+                                Text(
+                                    text = item.categoryName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                        if (item.shop != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                            ) {
+                                Text(
+                                    text = item.shop,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -3,6 +3,8 @@ package com.babegetthis.android.core.data.repository
 import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.data.mapper.toDomain
 import com.babegetthis.android.core.data.mapper.toEntity
+import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.core.model.Category
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,7 +22,7 @@ class CategoryRepository @Inject constructor(
         }
     }
 
-    suspend fun addCategory(name: String): String {
+    suspend fun addCategory(name: String): Result<String> = safeCall {
         val id = UUID.randomUUID().toString()
         val category = Category(
             id = id,
@@ -28,11 +30,10 @@ class CategoryRepository @Inject constructor(
             isDefault = false,
         )
         categoryDao.insertCategory(category.toEntity())
-        return id
+        id
     }
 
-    // Only deletes user-created categories — the DAO query enforces this
-    suspend fun deleteCategory(id: String) {
+    suspend fun deleteCategory(id: String): Result<Unit> = safeCall {
         categoryDao.deleteCategory(id)
     }
 }

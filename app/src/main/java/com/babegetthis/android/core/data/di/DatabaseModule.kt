@@ -17,6 +17,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Module
@@ -25,22 +26,26 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
+    fun provideDatabase(
+        @ApplicationContext context: Context,
+        // Provider<AppDatabase> = lazy reference to the database being created.
+        // We can't use AppDatabase directly here because it hasn't been built yet
+        // when the callback fires. Provider delays access until it's ready.
+        // Like a late final in Dart — it exists but isn't initialized yet.
+        databaseProvider: Provider<AppDatabase>,
+    ): AppDatabase {
         return Room.databaseBuilder(
             context,
             AppDatabase::class.java,
             "babe_get_this.db"
         )
+            .fallbackToDestructiveMigration()
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
                     CoroutineScope(Dispatchers.IO).launch {
-                        val database = Room.databaseBuilder(
-                            context,
-                            AppDatabase::class.java,
-                            "babe_get_this.db"
-                        ).build()
-                        database.categoryDao().insertAll(DEFAULT_CATEGORIES)
+                        // Use the SAME database instance, not a new one
+                        databaseProvider.get().categoryDao().insertAll(DEFAULT_CATEGORIES)
                     }
                 }
             })
