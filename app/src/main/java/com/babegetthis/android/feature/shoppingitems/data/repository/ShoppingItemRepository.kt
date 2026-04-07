@@ -37,6 +37,7 @@ class ShoppingItemRepository @Inject constructor(
         quantity: String,
         categoryId: String? = null,
         shop: String? = null,
+        note: String? = null,
     ): Result<String> = safeCall {
         val now = System.currentTimeMillis()
         val id = UUID.randomUUID().toString()
@@ -46,6 +47,7 @@ class ShoppingItemRepository @Inject constructor(
             name = name,
             quantity = quantity,
             categoryId = categoryId,
+            note = note,
             shop = shop,
             createdAt = now,
             updatedAt = now,

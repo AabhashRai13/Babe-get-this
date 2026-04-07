@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -135,7 +136,12 @@ fun ShoppingItemsScreen(
                         items(shopItems, key = { it.id }) { shoppingItem ->
                             ShoppingItemCard(
                                 item = shoppingItem,
-                                onTogglePickedUp = { viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp) },
+                                onTogglePickedUp = {
+                                    viewModel.togglePickedUp(
+                                        shoppingItem.id,
+                                        !shoppingItem.isPickedUp
+                                    )
+                                },
                                 onDelete = { viewModel.deleteItem(shoppingItem.id) },
                             )
                             Spacer(modifier = Modifier.height(8.dp))
@@ -155,7 +161,12 @@ fun ShoppingItemsScreen(
                     items(completedItems, key = { it.id }) { shoppingItem ->
                         ShoppingItemCard(
                             item = shoppingItem,
-                            onTogglePickedUp = { viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp) },
+                            onTogglePickedUp = {
+                                viewModel.togglePickedUp(
+                                    shoppingItem.id,
+                                    !shoppingItem.isPickedUp
+                                )
+                            },
                             onDelete = { viewModel.deleteItem(shoppingItem.id) },
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -171,8 +182,8 @@ fun ShoppingItemsScreen(
         AddItemDialog(
             categories = categories,
             onDismiss = { viewModel.onDismissAddItemDialog() },
-            onAdd = { name, quantity, categoryId, shop ->
-                viewModel.addItem(name, quantity, categoryId, shop)
+            onAdd = { name, quantity, categoryId, shop, note ->
+                viewModel.addItem(name, quantity, categoryId, shop, note)
             },
             onCreateCategory = { name, onCreated ->
                 viewModel.addCategory(name, onCreated)
@@ -245,6 +256,7 @@ private fun FirstItemPrompt(
     }
 }
 
+
 @Composable
 private fun SectionHeader(
     title: String,
@@ -264,11 +276,17 @@ private fun SectionHeader(
             letterSpacing = MaterialTheme.typography.labelLarge.letterSpacing * 1.5f,
         )
         if (count != null) {
-            Text(
-                text = count,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+            ) {
+                Text(
+                    text = count,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
         }
     }
 }
@@ -279,22 +297,31 @@ private fun ShopSubHeader(shopName: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = Icons.Outlined.Place,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.secondary,
+            tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = shopName,
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.secondary,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.primary,
         )
     }
 }
+
 
 @Composable
 private fun ShoppingItemCard(
@@ -309,10 +336,10 @@ private fun ShoppingItemCard(
             containerColor = if (item.isPickedUp)
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
             else
-                MaterialTheme.colorScheme.surface,
+                MaterialTheme.colorScheme.background,
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (item.isPickedUp) 0.dp else 1.dp,
+            defaultElevation = if (item.isPickedUp) 0.dp else 2.dp,
         ),
     ) {
         Row(
@@ -321,12 +348,12 @@ private fun ShoppingItemCard(
                 .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Custom circular checkbox
+            // Circular checkbox
             Surface(
                 onClick = onTogglePickedUp,
                 shape = CircleShape,
                 color = if (item.isPickedUp)
-                    MaterialTheme.colorScheme.primary
+                    MaterialTheme.colorScheme.secondary
                 else
                     MaterialTheme.colorScheme.surface,
                 border = if (!item.isPickedUp)
@@ -341,7 +368,7 @@ private fun ShoppingItemCard(
                             imageVector = Icons.Default.Check,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(16.dp),
                         )
                     }
                 }
@@ -362,22 +389,38 @@ private fun ShoppingItemCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (item.quantity.isNotBlank()) {
+                println("note: ${item.note}");
+                if (!item.note.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = item.quantity,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = item.note,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,                        ),
                         color = if (item.isPickedUp)
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                // Category and shop chips
-                if (!item.isPickedUp && (item.categoryName != null || item.shop != null)) {
-                    Spacer(modifier = Modifier.height(4.dp))
+
+                if (!item.isPickedUp) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (item.quantity.isNotBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                            ) {
+                                Text(
+                                    text = "Qty: ${item.quantity}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
                         if (item.categoryName != null) {
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
@@ -387,19 +430,6 @@ private fun ShoppingItemCard(
                                     text = item.categoryName,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                )
-                            }
-                        }
-                        if (item.shop != null) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
-                            ) {
-                                Text(
-                                    text = item.shop,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                 )
                             }

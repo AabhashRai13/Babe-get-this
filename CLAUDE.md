@@ -89,3 +89,8 @@ Everything we build should serve this core or be deferred to v2.
 
 ## Running the App
 [Add your build/run commands here]
+
+
+## for v2
+1) Voice to list
+2) open camera or gallery to add image.

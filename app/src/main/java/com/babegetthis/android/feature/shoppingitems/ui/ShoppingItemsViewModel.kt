@@ -56,7 +56,7 @@ class ShoppingItemsViewModel @Inject constructor(
         showAddItemDialog.value = false
     }
 
-    fun addItem(name: String, quantity: String, categoryId: String?, shop: String?) {
+    fun addItem(name: String, quantity: String, categoryId: String?, shop: String?, note: String?) {
         viewModelScope.launch {
             when (val result = itemRepository.addItem(
                 listId = listId,
@@ -64,6 +64,7 @@ class ShoppingItemsViewModel @Inject constructor(
                 quantity = quantity,
                 categoryId = categoryId,
                 shop = shop,
+                note = note,
             )) {
                 is Result.Success -> {
                     showAddItemDialog.value = false

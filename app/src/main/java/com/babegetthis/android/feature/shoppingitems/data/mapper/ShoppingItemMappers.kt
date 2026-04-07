@@ -13,6 +13,7 @@ fun ShoppingItemEntity.toDomain(categoryName: String? = null): ShoppingItem =
         categoryId = categoryId,
         categoryName = categoryName,
         shop = shop,
+        note = note,
         createdAt = createdAt,
         updatedAt = updatedAt,
     )
@@ -26,6 +27,7 @@ fun ShoppingItem.toEntity(): ShoppingItemEntity =
         isPickedUp = isPickedUp,
         categoryId = categoryId,
         shop = shop,
+        note = note,
         createdAt = createdAt,
         updatedAt = updatedAt,
     )

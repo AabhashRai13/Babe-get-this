@@ -27,6 +27,7 @@ data class ShoppingItemEntity(
     val categoryId: String? = null,
     // Nullable — user can optionally assign a shop (e.g. "Whole Foods", "Costco")
     val shop: String? = null,
+    val note: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
 )
