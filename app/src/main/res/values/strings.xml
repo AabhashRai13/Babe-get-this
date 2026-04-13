@@ -25,4 +25,22 @@
     <string name="shopping_items_quantity_hint">Quantity or notes (e.g. 2 large, slightly firm)</string>
     <string name="shopping_items_category">Category (optional)</string>
     <string name="add">Add</string>
+    <string name="save">Save</string>
+    <string name="shopping_items_edit_title">Edit Item</string>
+    <string name="shopping_list_edit_title">Rename List</string>
+
+    <!-- Auth Screens -->
+    <string name="auth_welcome">Welcome to</string>
+    <string name="auth_login_subtitle">Sign in to sync your lists with your partner</string>
+    <string name="auth_register_subtitle">Create an account to start sharing lists</string>
+    <string name="auth_email">Email</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_confirm_password">Confirm password</string>
+    <string name="auth_name">Your name</string>
+    <string name="auth_login">Sign in</string>
+    <string name="auth_register">Create account</string>
+    <string name="auth_no_account">Don\'t have an account?</string>
+    <string name="auth_has_account">Already have an account?</string>
+    <string name="auth_sign_up">Sign up</string>
+    <string name="auth_sign_in">Sign in</string>
 </resources>

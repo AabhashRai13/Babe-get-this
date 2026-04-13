@@ -93,4 +93,4 @@ Everything we build should serve this core or be deferred to v2.
 
 ## for v2
 1) Voice to list
-2) open camera or gallery to add image.
+2) open camera or gallery to add image.(Auto fill form from image)

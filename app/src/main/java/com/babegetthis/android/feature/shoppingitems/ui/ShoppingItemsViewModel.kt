@@ -45,8 +45,18 @@ class ShoppingItemsViewModel @Inject constructor(
 
     val showAddItemDialog = MutableStateFlow(false)
 
+    // When non-null, the edit dialog is shown pre-filled with this item's data
+    val editingItem = MutableStateFlow<ShoppingItem?>(null)
+
+    // Undo delete — temporarily stores the deleted item so it can be restored
+    private var pendingDeleteItem: ShoppingItem? = null
+
+    // Events for the UI to show snackbars (errors + undo)
     private val _errorMessage = MutableSharedFlow<String>()
     val errorMessage = _errorMessage.asSharedFlow()
+
+    private val _undoDeleteEvent = MutableSharedFlow<String>() // emits item name
+    val undoDeleteEvent = _undoDeleteEvent.asSharedFlow()
 
     fun onAddItemClick() {
         showAddItemDialog.value = true
@@ -54,6 +64,14 @@ class ShoppingItemsViewModel @Inject constructor(
 
     fun onDismissAddItemDialog() {
         showAddItemDialog.value = false
+    }
+
+    fun onEditItemClick(item: ShoppingItem) {
+        editingItem.value = item
+    }
+
+    fun onDismissEditItemDialog() {
+        editingItem.value = null
     }
 
     fun addItem(name: String, quantity: String, categoryId: String?, shop: String?, note: String?) {
@@ -68,6 +86,35 @@ class ShoppingItemsViewModel @Inject constructor(
             )) {
                 is Result.Success -> {
                     showAddItemDialog.value = false
+                }
+                is Result.Error -> {
+                    _errorMessage.emit(result.error.message)
+                }
+            }
+        }
+    }
+
+    fun editItem(
+        itemId: String,
+        name: String,
+        quantity: String,
+        categoryId: String?,
+        shop: String?,
+        note: String?,
+    ) {
+        viewModelScope.launch {
+            // Find the current item so we preserve fields like listId, createdAt, isPickedUp
+            val currentItem = items.value.find { it.id == itemId } ?: return@launch
+            val updatedItem = currentItem.copy(
+                name = name,
+                quantity = quantity,
+                categoryId = categoryId,
+                shop = shop,
+                note = note,
+            )
+            when (val result = itemRepository.updateItem(updatedItem)) {
+                is Result.Success -> {
+                    editingItem.value = null
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
@@ -102,8 +149,26 @@ class ShoppingItemsViewModel @Inject constructor(
 
     fun deleteItem(itemId: String) {
         viewModelScope.launch {
+            // Cache the item before deleting so we can restore on undo
+            val itemToDelete = items.value.find { it.id == itemId }
             when (val result = itemRepository.deleteItem(itemId)) {
-                is Result.Success -> { /* UI auto-updates via Flow */ }
+                is Result.Success -> {
+                    pendingDeleteItem = itemToDelete
+                    _undoDeleteEvent.emit(itemToDelete?.name ?: "Item")
+                }
+                is Result.Error -> {
+                    _errorMessage.emit(result.error.message)
+                }
+            }
+        }
+    }
+
+    fun undoDeleteItem() {
+        viewModelScope.launch {
+            val item = pendingDeleteItem ?: return@launch
+            pendingDeleteItem = null
+            when (val result = itemRepository.restoreItem(item)) {
+                is Result.Success -> { /* item reappears via Flow */ }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
                 }

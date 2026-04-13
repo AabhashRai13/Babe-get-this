@@ -56,6 +56,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.babegetthis.android.R
 import com.babegetthis.android.core.model.Category
+import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,14 +65,28 @@ fun AddItemDialog(
     onDismiss: () -> Unit,
     onAdd: (name: String, quantity: String, categoryId: String?, shop: String?, note: String?) -> Unit,
     onCreateCategory: (name: String, onCreated: (Category) -> Unit) -> Unit = { _, _ -> },
+    // Edit mode: when non-null, the dialog pre-fills with this item's data
+    editingItem: ShoppingItem? = null,
+    onEdit: (itemId: String, name: String, quantity: String, categoryId: String?, shop: String?, note: String?) -> Unit = { _, _, _, _, _, _ -> },
 ) {
-    var itemName by remember { mutableStateOf("") }
-    var quantity by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var shop by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf<Category?>(null) }
+    val isEditMode = editingItem != null
+
+    // Pre-fill fields when editing, empty when adding
+    var itemName by remember { mutableStateOf(editingItem?.name ?: "") }
+    var quantity by remember { mutableStateOf(editingItem?.quantity ?: "") }
+    var note by remember { mutableStateOf(editingItem?.note ?: "") }
+    var shop by remember { mutableStateOf(editingItem?.shop ?: "") }
+    var selectedCategory by remember {
+        mutableStateOf(editingItem?.categoryId?.let { catId ->
+            categories.find { it.id == catId }
+        })
+    }
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
-    var categorySearchText by remember { mutableStateOf("") }
+    var categorySearchText by remember {
+        mutableStateOf(editingItem?.categoryId?.let { catId ->
+            categories.find { it.id == catId }?.name
+        } ?: "")
+    }
     var isCreatingNewCategory by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
 
@@ -113,7 +128,8 @@ fun AddItemDialog(
                     .padding(horizontal = 24.dp, vertical = 20.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.shopping_items_add_title),
+                    text = if (isEditMode) stringResource(R.string.shopping_items_edit_title)
+                           else stringResource(R.string.shopping_items_add_title),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -121,7 +137,7 @@ fun AddItemDialog(
                 // Item name
                 OutlinedTextField(
                     value = itemName,
-                    onValueChange = { itemName = it },
+                    onValueChange = { if (it.length <= 60) itemName = it },
                     label = { Text(stringResource(R.string.shopping_items_name_hint)) },
                     leadingIcon = {
                         Icon(
@@ -131,6 +147,9 @@ fun AddItemDialog(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     },
+                    supportingText = if (itemName.length >= 60) {
+                        { Text("${itemName.length}/60") }
+                    } else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -139,7 +158,7 @@ fun AddItemDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Quantity
+                // Quantity (required)
                 OutlinedTextField(
                     value = quantity,
                     onValueChange = { quantity = it },
@@ -174,13 +193,9 @@ fun AddItemDialog(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     },
-                    supportingText = {
-                        Text(
-                            "${note.length}/80",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
+                    supportingText = if (note.length >= 80) {
+                        { Text("${note.length}/80") }
+                    } else null,
                     singleLine = false,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -192,7 +207,7 @@ fun AddItemDialog(
                 // Shop
                 OutlinedTextField(
                     value = shop,
-                    onValueChange = { shop = it },
+                    onValueChange = { if (it.length <= 40) shop = it },
                     label = { Text("Shop (optional)") },
                     placeholder = { Text("e.g. Whole Foods, Costco") },
                     leadingIcon = {
@@ -203,6 +218,9 @@ fun AddItemDialog(
                             tint = MaterialTheme.colorScheme.primary,
                         )
                     },
+                    supportingText = if (shop.length >= 40) {
+                        { Text("${shop.length}/40") }
+                    } else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -338,32 +356,58 @@ fun AddItemDialog(
 
                     Button(
                         onClick = {
-                            if (itemName.isNotBlank()) {
+                            if (itemName.isNotBlank() && quantity.isNotBlank()) {
                                 val shopValue = shop.trim().ifBlank { null }
                                 val noteValue = note.trim().ifBlank { null }
 
-                                if (isCreatingNewCategory && newCategoryName.isNotBlank()) {
-                                    onCreateCategory(newCategoryName.trim()) { createdCategory ->
-                                        onAdd(
+                                if (isEditMode) {
+                                    // Edit mode: determine category (new or existing)
+                                    if (isCreatingNewCategory && newCategoryName.isNotBlank()) {
+                                        onCreateCategory(newCategoryName.trim()) { createdCategory ->
+                                            onEdit(
+                                                editingItem!!.id,
+                                                itemName.trim(),
+                                                quantity.trim(),
+                                                createdCategory.id,
+                                                shopValue,
+                                                noteValue,
+                                            )
+                                        }
+                                    } else {
+                                        onEdit(
+                                            editingItem!!.id,
                                             itemName.trim(),
                                             quantity.trim(),
-                                            createdCategory.id,
+                                            selectedCategory?.id,
                                             shopValue,
-                                            noteValue
+                                            noteValue,
                                         )
                                     }
                                 } else {
-                                    onAdd(
-                                        itemName.trim(),
-                                        quantity.trim(),
-                                        selectedCategory?.id,
-                                        shopValue,
-                                        noteValue
-                                    )
+                                    // Add mode
+                                    if (isCreatingNewCategory && newCategoryName.isNotBlank()) {
+                                        onCreateCategory(newCategoryName.trim()) { createdCategory ->
+                                            onAdd(
+                                                itemName.trim(),
+                                                quantity.trim(),
+                                                createdCategory.id,
+                                                shopValue,
+                                                noteValue,
+                                            )
+                                        }
+                                    } else {
+                                        onAdd(
+                                            itemName.trim(),
+                                            quantity.trim(),
+                                            selectedCategory?.id,
+                                            shopValue,
+                                            noteValue,
+                                        )
+                                    }
                                 }
                             }
                         },
-                        enabled = itemName.isNotBlank(),
+                        enabled = itemName.isNotBlank() && quantity.isNotBlank(),
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -372,13 +416,14 @@ fun AddItemDialog(
                         ),
                     ) {
                         Icon(
-                            Icons.Outlined.Add,
+                            if (isEditMode) Icons.Outlined.Edit else Icons.Outlined.Add,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = stringResource(R.string.add),
+                            text = if (isEditMode) stringResource(R.string.save)
+                                   else stringResource(R.string.add),
                             fontWeight = FontWeight.SemiBold,
                         )
                     }

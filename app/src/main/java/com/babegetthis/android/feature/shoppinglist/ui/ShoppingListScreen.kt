@@ -1,7 +1,9 @@
 package com.babegetthis.android.feature.shoppinglist.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,8 +30,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
+import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
 import com.babegetthis.android.core.util.getTimePeriod
@@ -57,6 +62,7 @@ fun ShoppingListScreen(
 ) {
     val lists by viewModel.shoppingLists.collectAsState()
     val showDialog by viewModel.showCreateDialog.collectAsState()
+    val editingList by viewModel.editingList.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Group lists by time period (Today, Yesterday, Last 7 Days, etc.)
@@ -81,6 +87,19 @@ fun ShoppingListScreen(
     LaunchedEffect(Unit) {
         viewModel.errorMessage.collect { message ->
             snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.undoDeleteEvent.collect { listName ->
+            val result = snackbarHostState.showSnackbar(
+                message = "$listName deleted",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.undoDeleteList()
+            }
         }
     }
 
@@ -127,11 +146,16 @@ fun ShoppingListScreen(
                     }
 
                     items(periodLists, key = { it.id }) { list ->
-                        ShoppingListCard(
-                            list = list,
-                            onClick = { onNavigateToList(list.id, list.name) },
-                            onDelete = { viewModel.deleteList(list.id) }
-                        )
+                        SwipeableCard(
+                            onSwipeLeft = { viewModel.deleteList(list.id) },
+                        ) {
+                            ShoppingListCard(
+                                list = list,
+                                onClick = { onNavigateToList(list.id, list.name) },
+                                onLongPress = { viewModel.onEditListClick(list) },
+                                onDelete = { viewModel.deleteList(list.id) }
+                            )
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
@@ -149,6 +173,16 @@ fun ShoppingListScreen(
             onCreate = { name -> viewModel.createList(name) }
         )
     }
+
+    // Edit list dialog — reuses CreateListDialog with pre-filled name
+    editingList?.let { list ->
+        CreateListDialog(
+            currentName = list.name,
+            onDismiss = { viewModel.onDismissEditListDialog() },
+            onCreate = {}, // Not used in edit mode
+            onRename = { newName -> viewModel.editList(list.id, newName) }
+        )
+    }
 }
 
 @Composable
@@ -162,16 +196,21 @@ private fun TimePeriodHeader(period: TimePeriod) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ShoppingListCard(
     list: ShoppingList,
     onClick: () -> Unit,
+    onLongPress: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongPress,
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,

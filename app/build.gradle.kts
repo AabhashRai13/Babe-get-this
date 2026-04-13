@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android.plugin)
 }
@@ -22,6 +23,34 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Product flavors for environment switching.
+    // Like Flutter's --dart-define or --flavor flag.
+    // Each flavor gets its own BASE_URL, WS_URL, and app ID suffix
+    // so dev/staging/prod can be installed side-by-side on the same device.
+    flavorDimensions += "environment"
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            // 10.0.2.2 = host machine's localhost from the Android emulator
+            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/api/\"")
+            buildConfigField("String", "WS_URL", "\"ws://10.0.2.2:8080/ws\"")
+        }
+        create("staging") {
+            dimension = "environment"
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+            buildConfigField("String", "BASE_URL", "\"https://staging-api.babegetthis.com/api/\"")
+            buildConfigField("String", "WS_URL", "\"wss://staging-api.babegetthis.com/ws\"")
+        }
+        create("prod") {
+            dimension = "environment"
+            buildConfigField("String", "BASE_URL", "\"https://api.babegetthis.com/api/\"")
+            buildConfigField("String", "WS_URL", "\"wss://api.babegetthis.com/ws\"")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -40,6 +69,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -66,4 +96,16 @@ dependencies {
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.navigation.compose)
+
+    // Networking — Retrofit + OkHttp (like Dio in Flutter)
+    implementation(libs.retrofit.core)
+    implementation(libs.okhttp.core)
+    implementation(libs.okhttp.logging)
+
+    // Serialization — kotlinx.serialization (like json_serializable in Flutter)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.retrofit.kotlinx.serialization)
+
+    // Secure token storage — EncryptedSharedPreferences (like flutter_secure_storage)
+    implementation(libs.security.crypto)
 }

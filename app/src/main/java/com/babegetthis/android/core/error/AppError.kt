@@ -34,6 +34,15 @@ sealed class AppError(val message: String) {
     data class NotFoundError(val details: String = "Item not found.") :
         AppError(details)
 
+    // -- Auth errors --
+    // Login/register failed (wrong credentials, email taken, etc.)
+    data class AuthError(val details: String = "Authentication failed.") :
+        AppError(details)
+
+    // Server returned 401 — token expired or invalid
+    data class UnauthorizedError(val details: String = "Session expired. Please log in again.") :
+        AppError(details)
+
     // -- Unknown / unexpected --
     data class UnknownError(val details: String = "An unexpected error occurred.") :
         AppError(details)

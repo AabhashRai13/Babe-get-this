@@ -72,4 +72,9 @@ class ShoppingItemRepository @Inject constructor(
     suspend fun deleteItem(itemId: String): Result<Unit> = safeCall {
         shoppingItemDao.deleteItem(itemId)
     }
+
+    // Re-insert a previously deleted item with its original ID (for undo)
+    suspend fun restoreItem(item: ShoppingItem): Result<Unit> = safeCall {
+        shoppingItemDao.insertItem(item.toEntity())
+    }
 }

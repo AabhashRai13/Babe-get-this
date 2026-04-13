@@ -31,8 +31,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
+import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 
 @Composable
@@ -60,6 +63,7 @@ fun ShoppingItemsScreen(
     val items by viewModel.items.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val showDialog by viewModel.showAddItemDialog.collectAsState()
+    val editingItem by viewModel.editingItem.collectAsState()
 
     val activeItems = items.filter { !it.isPickedUp }
     val completedItems = items.filter { it.isPickedUp }
@@ -70,6 +74,20 @@ fun ShoppingItemsScreen(
     LaunchedEffect(Unit) {
         viewModel.errorMessage.collect { message ->
             snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    // Undo delete snackbar
+    LaunchedEffect(Unit) {
+        viewModel.undoDeleteEvent.collect { itemName ->
+            val result = snackbarHostState.showSnackbar(
+                message = "$itemName deleted",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                viewModel.undoDeleteItem()
+            }
         }
     }
 
@@ -134,16 +152,24 @@ fun ShoppingItemsScreen(
                         }
 
                         items(shopItems, key = { it.id }) { shoppingItem ->
-                            ShoppingItemCard(
-                                item = shoppingItem,
-                                onTogglePickedUp = {
-                                    viewModel.togglePickedUp(
-                                        shoppingItem.id,
-                                        !shoppingItem.isPickedUp
-                                    )
+                            SwipeableCard(
+                                onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
+                                onSwipeRight = {
+                                    viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp)
                                 },
-                                onDelete = { viewModel.deleteItem(shoppingItem.id) },
-                            )
+                            ) {
+                                ShoppingItemCard(
+                                    item = shoppingItem,
+                                    onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                    onTogglePickedUp = {
+                                        viewModel.togglePickedUp(
+                                            shoppingItem.id,
+                                            !shoppingItem.isPickedUp
+                                        )
+                                    },
+                                    onDelete = { viewModel.deleteItem(shoppingItem.id) },
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
@@ -159,16 +185,24 @@ fun ShoppingItemsScreen(
                         )
                     }
                     items(completedItems, key = { it.id }) { shoppingItem ->
-                        ShoppingItemCard(
-                            item = shoppingItem,
-                            onTogglePickedUp = {
-                                viewModel.togglePickedUp(
-                                    shoppingItem.id,
-                                    !shoppingItem.isPickedUp
-                                )
+                        SwipeableCard(
+                            onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
+                            onSwipeRight = {
+                                viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp)
                             },
-                            onDelete = { viewModel.deleteItem(shoppingItem.id) },
-                        )
+                        ) {
+                            ShoppingItemCard(
+                                item = shoppingItem,
+                                onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                onTogglePickedUp = {
+                                    viewModel.togglePickedUp(
+                                        shoppingItem.id,
+                                        !shoppingItem.isPickedUp
+                                    )
+                                },
+                                onDelete = { viewModel.deleteItem(shoppingItem.id) },
+                            )
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
@@ -184,6 +218,22 @@ fun ShoppingItemsScreen(
             onDismiss = { viewModel.onDismissAddItemDialog() },
             onAdd = { name, quantity, categoryId, shop, note ->
                 viewModel.addItem(name, quantity, categoryId, shop, note)
+            },
+            onCreateCategory = { name, onCreated ->
+                viewModel.addCategory(name, onCreated)
+            }
+        )
+    }
+
+    // Edit dialog — reuses AddItemDialog with pre-filled data
+    editingItem?.let { item ->
+        AddItemDialog(
+            categories = categories,
+            editingItem = item,
+            onDismiss = { viewModel.onDismissEditItemDialog() },
+            onAdd = { _, _, _, _, _ -> }, // Not used in edit mode
+            onEdit = { itemId, name, quantity, categoryId, shop, note ->
+                viewModel.editItem(itemId, name, quantity, categoryId, shop, note)
             },
             onCreateCategory = { name, onCreated ->
                 viewModel.addCategory(name, onCreated)
@@ -326,10 +376,12 @@ private fun ShopSubHeader(shopName: String) {
 @Composable
 private fun ShoppingItemCard(
     item: ShoppingItem,
+    onClick: () -> Unit,
     onTogglePickedUp: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(

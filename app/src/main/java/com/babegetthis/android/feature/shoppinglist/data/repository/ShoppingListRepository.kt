@@ -53,4 +53,9 @@ class ShoppingListRepository @Inject constructor(
     suspend fun deleteList(listId: String): Result<Unit> = safeCall {
         shoppingListDao.deleteList(listId)
     }
+
+    // Re-insert a previously deleted list with its original ID (for undo)
+    suspend fun restoreList(list: ShoppingList): Result<Unit> = safeCall {
+        shoppingListDao.insertList(list.toEntity())
+    }
 }

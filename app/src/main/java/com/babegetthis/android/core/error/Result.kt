@@ -39,9 +39,26 @@ suspend fun <T> safeCall(
     } catch (e: Exception) {
         // Map the exception to the right AppError type
         val error = when (e) {
+            // Database errors
             is android.database.sqlite.SQLiteException -> AppError.DatabaseError()
+
+            // Network errors — no internet, DNS failure, connection refused
             is java.net.UnknownHostException -> AppError.NetworkError()
+            is java.net.ConnectException -> AppError.NetworkError("Cannot reach server.")
+            is javax.net.ssl.SSLException -> AppError.NetworkError("Secure connection failed.")
+
+            // Timeout
             is java.net.SocketTimeoutException -> AppError.TimeoutError()
+
+            // HTTP errors from Retrofit — server returned an error status code
+            is retrofit2.HttpException -> when (e.code()) {
+                401 -> AppError.UnauthorizedError()
+                in 400..499 -> AppError.AuthError(e.message ?: "Request failed.")
+                in 500..599 -> AppError.ServerError(e.code(), "Server error. Please try later.")
+                else -> AppError.ServerError(e.code(), e.message ?: "Unexpected server response.")
+            }
+
+            // Everything else
             else -> AppError.UnknownError(e.message ?: "An unexpected error occurred.")
         }
         Result.Error(error)

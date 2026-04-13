@@ -21,24 +21,32 @@ import com.babegetthis.android.R
 fun CreateListDialog(
     onDismiss: () -> Unit,
     onCreate: (String) -> Unit,
+    // Edit mode: when non-null, pre-fills with current name and changes button text
+    currentName: String? = null,
+    onRename: (String) -> Unit = {},
 ) {
-    var listName by remember { mutableStateOf("") }
+    val isEditMode = currentName != null
+    var listName by remember { mutableStateOf(currentName ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(20.dp),
         title = {
             Text(
-                text = stringResource(R.string.shopping_list_create_title),
+                text = if (isEditMode) stringResource(R.string.shopping_list_edit_title)
+                       else stringResource(R.string.shopping_list_create_title),
                 style = MaterialTheme.typography.titleLarge,
             )
         },
         text = {
             OutlinedTextField(
                 value = listName,
-                onValueChange = { listName = it },
+                onValueChange = { if (it.length <= 40) listName = it },
                 label = { Text(stringResource(R.string.shopping_list_name_hint)) },
                 placeholder = { Text("e.g. Weekly Groceries") },
+                supportingText = if (listName.length >= 40) {
+                    { Text("${listName.length}/40") }
+                } else null,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -46,10 +54,17 @@ fun CreateListDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { if (listName.isNotBlank()) onCreate(listName.trim()) },
+                onClick = {
+                    if (listName.isNotBlank()) {
+                        if (isEditMode) onRename(listName.trim()) else onCreate(listName.trim())
+                    }
+                },
                 enabled = listName.isNotBlank(),
             ) {
-                Text(stringResource(R.string.create))
+                Text(
+                    if (isEditMode) stringResource(R.string.save)
+                    else stringResource(R.string.create)
+                )
             }
         },
         dismissButton = {
