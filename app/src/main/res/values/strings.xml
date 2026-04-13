@@ -1,7 +1,46 @@
 <resources>
     <string name="app_name">Babe, Get This</string>
-    <string name="home_empty_title">No lists yet</string>
-    <string name="home_empty_subtitle">Create a list and share it so you can shop together.</string>
-    <string name="home_empty_cta">Create your first list</string>
-    <string name="action_create_list">Create list</string>
+
+    <!-- Shopping List Screen -->
+    <string name="shopping_list_empty_title">No lists yet</string>
+    <string name="shopping_list_empty_subtitle">Create a list and share it so you can shop together.</string>
+    <string name="shopping_list_empty_cta">Create your first list</string>
+    <string name="shopping_list_create">Create list</string>
+    <string name="shopping_list_items_count">%d items</string>
+    <string name="shopping_list_delete">Delete</string>
+    <string name="shopping_list_name_hint">List name</string>
+    <string name="shopping_list_create_title">New List</string>
+    <string name="cancel">Cancel</string>
+    <string name="create">Create</string>
+
+    <!-- Shopping Items Screen -->
+    <string name="shopping_items_active">ACTIVE ITEMS</string>
+    <string name="shopping_items_completed">COMPLETED</string>
+    <string name="shopping_items_count">%d Items</string>
+    <string name="shopping_items_list_created">List created!</string>
+    <string name="shopping_items_add_first">Add your first item to get started</string>
+    <string name="shopping_items_add_first_button">Add first item</string>
+    <string name="shopping_items_add_title">Add Item</string>
+    <string name="shopping_items_name_hint">Item name</string>
+    <string name="shopping_items_quantity_hint">Quantity or notes (e.g. 2 large, slightly firm)</string>
+    <string name="shopping_items_category">Category (optional)</string>
+    <string name="add">Add</string>
+    <string name="save">Save</string>
+    <string name="shopping_items_edit_title">Edit Item</string>
+    <string name="shopping_list_edit_title">Rename List</string>
+
+    <!-- Auth Screens -->
+    <string name="auth_welcome">Welcome to</string>
+    <string name="auth_login_subtitle">Sign in to sync your lists with your partner</string>
+    <string name="auth_register_subtitle">Create an account to start sharing lists</string>
+    <string name="auth_email">Email</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_confirm_password">Confirm password</string>
+    <string name="auth_name">Your name</string>
+    <string name="auth_login">Sign in</string>
+    <string name="auth_register">Create account</string>
+    <string name="auth_no_account">Don\'t have an account?</string>
+    <string name="auth_has_account">Already have an account?</string>
+    <string name="auth_sign_up">Sign up</string>
+    <string name="auth_sign_in">Sign in</string>
 </resources>

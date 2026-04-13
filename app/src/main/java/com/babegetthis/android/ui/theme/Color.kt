@@ -2,22 +2,22 @@ package com.babegetthis.android.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Primary = Color(0xFF4A6D8C)
-val Secondary = Color(0xFFE8F0F5)
-
+// Light theme colors
+val Primary = Color(0xFF607D8B)
+val DarkPrimary = Color(0xFF455A64)
+val LightPrimary = Color(0xFFCFD8DC)
+val Accent = Color(0xFF795548)
 val Background = Color(0xFFFFFFFF)
 val Surface = Color(0xFFFFFFFF)
+val PrimaryText = Color(0xFF212121)
+val SecondaryText = Color(0xFF757575)
+val Divider = Color(0xFFBDBDBD)
 
-val OnPrimary = Color.White
-val OnSecondary = Color(0xFF1A1A1A)
-val OnBackground = Color(0xFF1A1A1A)
-val OnSurface = Color(0xFF1A1A1A)
-
-val DarkPrimary = Color(0xFFB0C4DE)
-val DarkOnPrimary = Color(0xFF1C2A38)
-val DarkSecondary = Color(0xFF526370)
-val DarkOnSecondary = Color(0xFFE8F0F5)
-val DarkBackground = Color(0xFF1A1A1A)
-val DarkOnBackground = Color(0xFFFFFFFF)
-val DarkSurface = Color(0xFF1A1A1A)
-val DarkOnSurface = Color(0xFFFFFFFF)
+// Dark theme colors — lighter versions so they're readable on dark backgrounds
+val DarkThemePrimary = Color(0xFF90A4AE)
+val DarkThemeAccent = Color(0xFFA1887F)
+val DarkThemeBackground = Color(0xFF121212)
+val DarkThemeSurface = Color(0xFF1E1E1E)
+val DarkThemePrimaryText = Color(0xFFFFFFFF)
+val DarkThemeSecondaryText = Color(0xFFB0B0B0)
+val DarkThemeDivider = Color(0xFF424242)
