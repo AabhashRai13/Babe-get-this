@@ -19,6 +19,13 @@ private val LightColorScheme = lightColorScheme(
 
     secondary = Accent,
     onSecondary = Background,
+    secondaryContainer = SecondaryContainer,
+    onSecondaryContainer = OnSecondaryContainer,
+
+    tertiary = Tertiary,
+    onTertiary = OnTertiary,
+    tertiaryContainer = TertiaryContainer,
+    onTertiaryContainer = OnTertiaryContainer,
 
     background = Background,
     onBackground = PrimaryText,
@@ -27,7 +34,16 @@ private val LightColorScheme = lightColorScheme(
     onSurface = PrimaryText,
     onSurfaceVariant = SecondaryText,
 
-    outline = Divider
+    // Surface container levels — MD3's layering system.
+    // Cards, dialogs, and containers use these to sit "above" the background
+    // without relying on heavy shadows.
+    surfaceContainerLowest = SurfaceContainerLowest,
+    surfaceContainerLow = SurfaceContainerLow,
+    surfaceContainer = SurfaceContainer,
+    surfaceContainerHigh = SurfaceContainerHigh,
+    surfaceContainerHighest = SurfaceContainerHighest,
+
+    outline = Divider,
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -38,6 +54,13 @@ private val DarkColorScheme = darkColorScheme(
 
     secondary = DarkThemeAccent,
     onSecondary = DarkThemeBackground,
+    secondaryContainer = DarkSecondaryContainer,
+    onSecondaryContainer = DarkOnSecondaryContainer,
+
+    tertiary = DarkTertiary,
+    onTertiary = DarkOnTertiary,
+    tertiaryContainer = DarkTertiaryContainer,
+    onTertiaryContainer = DarkOnTertiaryContainer,
 
     background = DarkThemeBackground,
     onBackground = DarkThemePrimaryText,
@@ -46,7 +69,13 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = DarkThemePrimaryText,
     onSurfaceVariant = DarkThemeSecondaryText,
 
-    outline = DarkThemeDivider
+    surfaceContainerLowest = DarkSurfaceContainerLowest,
+    surfaceContainerLow = DarkSurfaceContainerLow,
+    surfaceContainer = DarkSurfaceContainer,
+    surfaceContainerHigh = DarkSurfaceContainerHigh,
+    surfaceContainerHighest = DarkSurfaceContainerHighest,
+
+    outline = DarkThemeDivider,
 )
 
 @Composable

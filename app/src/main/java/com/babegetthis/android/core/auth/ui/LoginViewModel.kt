@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.error.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -27,6 +29,11 @@ class LoginViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
+    // One-shot event that fires after a successful login.
+    // The screen observes this to trigger navigation (e.g., popBackStack).
+    private val _loginSuccess = MutableSharedFlow<Unit>()
+    val loginSuccess = _loginSuccess.asSharedFlow()
+
     fun login(email: String, password: String) {
         // Basic validation before making the call
         if (email.isBlank() || password.isBlank()) {
@@ -39,9 +46,8 @@ class LoginViewModel @Inject constructor(
 
             when (val result = authRepository.login(email, password)) {
                 is Result.Success -> {
-                    // AuthStateManager is updated inside the repository.
-                    // Navigation reacts to AuthState change automatically — nothing to do here.
                     _uiState.value = _uiState.value.copy(isLoading = false)
+                    _loginSuccess.emit(Unit)
                 }
                 is Result.Error -> {
                     _uiState.value = _uiState.value.copy(

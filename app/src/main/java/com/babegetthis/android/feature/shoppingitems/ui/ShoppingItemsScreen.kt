@@ -1,5 +1,7 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,16 +21,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -41,23 +43,30 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
+import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShoppingItemsScreen(
     onNavigateBack: () -> Unit = {},
+    onNavigateToLogin: () -> Unit = {},
+    onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingItemsViewModel = hiltViewModel()
 ) {
     val items by viewModel.items.collectAsState()
@@ -69,18 +78,20 @@ fun ShoppingItemsScreen(
     val completedItems = items.filter { it.isPickedUp }
     val activeByShop = activeItems.groupBy { it.shop ?: "" }
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackBarHostState = remember { SnackbarHostState() }
+
+    // Auth prompt dialog — shown when an unauthenticated user taps Share
+    var showAuthPrompt by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.errorMessage.collect { message ->
-            snackbarHostState.showSnackbar(message)
+            snackBarHostState.showSnackbar(message)
         }
     }
 
-    // Undo delete snackbar
     LaunchedEffect(Unit) {
         viewModel.undoDeleteEvent.collect { itemName ->
-            val result = snackbarHostState.showSnackbar(
+            val result = snackBarHostState.showSnackbar(
                 message = "$itemName deleted",
                 actionLabel = "Undo",
                 duration = SnackbarDuration.Short,
@@ -92,24 +103,39 @@ fun ShoppingItemsScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SnackbarHost(snackBarHostState) },
         topBar = {
             BgtTopAppBar(
                 title = viewModel.listName,
                 navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
                 onNavigationClick = onNavigateBack,
-                showActionIcon = false,
+                // Share button — gates behind auth check
+                showActionIcon = true,
+                onActionClick = {
+                    if (viewModel.isAuthenticated()) {
+                        // User is logged in — sharing not built yet (v2)
+                        viewModel.showComingSoonMessage()
+                    } else {
+                        // Not logged in — prompt to sign in
+                        showAuthPrompt = true
+                    }
+                },
             )
         },
         floatingActionButton = {
             if (items.isNotEmpty()) {
-                FloatingActionButton(
+                ExtendedFloatingActionButton(
                     onClick = { viewModel.onAddItemClick() },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = RoundedCornerShape(16.dp),
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.add),
+                        fontWeight = FontWeight.SemiBold,
+                    )
                 }
             }
         }
@@ -128,7 +154,16 @@ fun ShoppingItemsScreen(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
             ) {
-                // -- ACTIVE ITEMS header --
+                // Progress summary card at the top
+                item(key = "progress") {
+                    ProgressCard(
+                        totalItems = items.size,
+                        completedCount = completedItems.size,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // -- ACTIVE ITEMS --
                 if (activeItems.isNotEmpty()) {
                     item {
                         SectionHeader(
@@ -137,15 +172,12 @@ fun ShoppingItemsScreen(
                         )
                     }
 
-                    // Group by shop, then render items under each shop
                     activeByShop.forEach { (shopName, shopItems) ->
-                        // Shop sub-header — only show if at least one item has a shop
                         if (shopName.isNotBlank()) {
                             item(key = "shop-$shopName") {
                                 ShopSubHeader(shopName = shopName)
                             }
                         } else if (activeByShop.size > 1) {
-                            // Only show "General" if there are also shop-grouped items
                             item(key = "shop-general") {
                                 ShopSubHeader(shopName = "General")
                             }
@@ -167,7 +199,6 @@ fun ShoppingItemsScreen(
                                             !shoppingItem.isPickedUp
                                         )
                                     },
-                                    onDelete = { viewModel.deleteItem(shoppingItem.id) },
                                 )
                             }
                             Spacer(modifier = Modifier.height(8.dp))
@@ -175,7 +206,7 @@ fun ShoppingItemsScreen(
                     }
                 }
 
-                // -- COMPLETED section --
+                // -- COMPLETED --
                 if (completedItems.isNotEmpty()) {
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -200,14 +231,13 @@ fun ShoppingItemsScreen(
                                         !shoppingItem.isPickedUp
                                     )
                                 },
-                                onDelete = { viewModel.deleteItem(shoppingItem.id) },
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
 
-                item { Spacer(modifier = Modifier.height(80.dp)) }
+                item { Spacer(modifier = Modifier.height(88.dp)) }
             }
         }
     }
@@ -225,13 +255,12 @@ fun ShoppingItemsScreen(
         )
     }
 
-    // Edit dialog — reuses AddItemDialog with pre-filled data
     editingItem?.let { item ->
         AddItemDialog(
             categories = categories,
             editingItem = item,
             onDismiss = { viewModel.onDismissEditItemDialog() },
-            onAdd = { _, _, _, _, _ -> }, // Not used in edit mode
+            onAdd = { _, _, _, _, _ -> },
             onEdit = { itemId, name, quantity, categoryId, shop, note ->
                 viewModel.editItem(itemId, name, quantity, categoryId, shop, note)
             },
@@ -239,6 +268,96 @@ fun ShoppingItemsScreen(
                 viewModel.addCategory(name, onCreated)
             }
         )
+    }
+
+    // Auth prompt — shown when unauthenticated user taps Share
+    if (showAuthPrompt) {
+        AuthPromptDialog(
+            onLogin = onNavigateToLogin,
+            onRegister = onNavigateToRegister,
+            onDismiss = { showAuthPrompt = false },
+        )
+    }
+}
+
+// Progress card — shows how far along the shopping trip is.
+// A visual focal point that gives the screen character.
+@Composable
+private fun ProgressCard(
+    totalItems: Int,
+    completedCount: Int,
+) {
+    val progress = if (totalItems > 0) completedCount.toFloat() / totalItems else 0f
+    val allDone = completedCount == totalItems && totalItems > 0
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (allDone)
+                MaterialTheme.colorScheme.primaryContainer
+            else
+                MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = if (!allDone) BorderStroke(
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        ) else null,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (allDone) "All done!"
+                           else "$completedCount of $totalItems picked up",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (allDone)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onSurface,
+                )
+                // Percentage badge
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (allDone)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (allDone)
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            // Progress bar — animates smoothly as items get checked off.
+            // Uses the primary color so it ties into the overall theme.
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            )
+        }
     }
 }
 
@@ -252,56 +371,64 @@ private fun FirstItemPrompt(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.ShoppingCart,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+        // Layered circle — matching the empty state style from the list screen
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(104.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
             )
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ShoppingCart,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
         }
         Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = stringResource(R.string.shopping_items_list_created),
             style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.shopping_items_add_first),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.height(32.dp))
-        Surface(
+        androidx.compose.material3.Button(
             onClick = onAddItem,
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.fillMaxWidth(),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.shopping_items_add_first_button),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = stringResource(R.string.shopping_items_add_first_button),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -319,12 +446,21 @@ private fun SectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            letterSpacing = MaterialTheme.typography.labelLarge.letterSpacing * 1.5f,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+        }
         if (count != null) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
@@ -333,8 +469,9 @@ private fun SectionHeader(
                 Text(
                     text = count,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                 )
             }
         }
@@ -361,13 +498,13 @@ private fun ShopSubHeader(shopName: String) {
             text = shopName,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
         )
-        Spacer(modifier = Modifier.width(6.dp))
-
+        Spacer(modifier = Modifier.width(8.dp))
         HorizontalDivider(
             modifier = Modifier.weight(1f),
             thickness = 0.5.dp,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.outlineVariant,
         )
     }
 }
@@ -378,41 +515,48 @@ private fun ShoppingItemCard(
     item: ShoppingItem,
     onClick: () -> Unit,
     onTogglePickedUp: () -> Unit,
-    onDelete: () -> Unit,
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
+            // Active items pop on white; picked-up items recede into the
+            // grey field, giving the list a clear hierarchy at a glance.
             containerColor = if (item.isPickedUp)
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                MaterialTheme.colorScheme.surfaceContainer
             else
-                MaterialTheme.colorScheme.background,
+                MaterialTheme.colorScheme.surfaceContainerLow,
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (item.isPickedUp) 0.dp else 2.dp,
         ),
+        border = if (!item.isPickedUp) BorderStroke(
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        ) else null,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Circular checkbox
+            // Circular checkbox — filled green when picked up, outlined when active.
             Surface(
                 onClick = onTogglePickedUp,
                 shape = CircleShape,
                 color = if (item.isPickedUp)
-                    MaterialTheme.colorScheme.secondary
+                    MaterialTheme.colorScheme.primary
                 else
                     MaterialTheme.colorScheme.surface,
                 border = if (!item.isPickedUp)
                     CardDefaults.outlinedCardBorder()
                 else
                     null,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(30.dp),
             ) {
                 if (item.isPickedUp) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -431,9 +575,9 @@ private fun ShoppingItemCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        textDecoration = if (item.isPickedUp) TextDecoration.LineThrough else TextDecoration.None,
-                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (item.isPickedUp) FontWeight.Normal else FontWeight.Medium,
+                    textDecoration = if (item.isPickedUp) TextDecoration.LineThrough else TextDecoration.None,
                     color = if (item.isPickedUp)
                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
                     else
@@ -441,13 +585,13 @@ private fun ShoppingItemCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                println("note: ${item.note}");
+
                 if (!item.note.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = item.note,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                         color = if (item.isPickedUp)
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
                         else
@@ -457,46 +601,48 @@ private fun ShoppingItemCard(
                     )
                 }
 
-                if (!item.isPickedUp) {
+                // Chips for quantity and category — only on active items
+                if (!item.isPickedUp && (item.quantity.isNotBlank() || item.categoryName != null)) {
                     Spacer(modifier = Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (item.quantity.isNotBlank()) {
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                border = BorderStroke(
+                                    width = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.15f),
+                                ),
                             ) {
                                 Text(
                                     text = "Qty: ${item.quantity}",
                                     style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                                 )
                             }
                         }
                         if (item.categoryName != null) {
                             Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                border = BorderStroke(
+                                    width = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.15f),
+                                ),
                             ) {
                                 Text(
                                     text = item.categoryName,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                                 )
                             }
                         }
                     }
                 }
-            }
-
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                    modifier = Modifier.size(20.dp),
-                )
             }
         }
     }

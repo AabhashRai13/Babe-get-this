@@ -17,6 +17,7 @@ import javax.inject.Inject
 
 class FakeAuthRepository @Inject constructor(
     private val authStateManager: AuthStateManager,
+    private val tokenManager: TokenManager,
 ) : AuthRepository {
 
     override suspend fun register(email: String, password: String, name: String): Result<User> {
@@ -28,7 +29,12 @@ class FakeAuthRepository @Inject constructor(
             else -> {
                 val userId = UUID.randomUUID().toString()
                 val fakeToken = "fake-token-${UUID.randomUUID()}"
-                authStateManager.login(token = fakeToken, userId = userId)
+                authStateManager.login(
+                    token = fakeToken,
+                    userId = userId,
+                    userName = name,
+                    userEmail = email,
+                )
 
                 Result.Success(
                     User(id = userId, email = email, name = name)
@@ -46,7 +52,12 @@ class FakeAuthRepository @Inject constructor(
             else -> {
                 val userId = UUID.randomUUID().toString()
                 val fakeToken = "fake-token-${UUID.randomUUID()}"
-                authStateManager.login(token = fakeToken, userId = userId)
+                authStateManager.login(
+                    token = fakeToken,
+                    userId = userId,
+                    userName = "Dev User",
+                    userEmail = email,
+                )
 
                 Result.Success(
                     User(id = userId, email = email, name = "Dev User")
@@ -58,5 +69,14 @@ class FakeAuthRepository @Inject constructor(
     override suspend fun logout(): Result<Unit> {
         authStateManager.logout()
         return Result.Success(Unit)
+    }
+
+    override suspend fun updateUserName(name: String): Result<User> {
+        delay(500) // Simulate network delay
+        // Persist locally so the UI reflects the change
+        tokenManager.saveUserName(name)
+        val userId = tokenManager.getUserId() ?: "fake-id"
+        val email = tokenManager.getUserEmail() ?: "dev@test.com"
+        return Result.Success(User(id = userId, email = email, name = name))
     }
 }

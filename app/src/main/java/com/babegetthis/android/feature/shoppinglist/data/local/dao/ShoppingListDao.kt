@@ -11,11 +11,13 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ShoppingListDao {
 
-    // Returns all lists with their item counts.
-    // The item count isn't stored in the list table — it's calculated live
-    // by counting rows in shopping_items. This way it's always accurate.
+    // Returns all lists with their item counts and completion counts.
+    // Both counts are calculated live by counting rows in shopping_items.
+    // A list is "completed" when itemCount > 0 and completedItemCount == itemCount.
     @Query("""
-        SELECT l.*, COUNT(i.id) AS itemCount
+        SELECT l.*,
+               COUNT(i.id) AS itemCount,
+               SUM(CASE WHEN i.isPickedUp = 1 THEN 1 ELSE 0 END) AS completedItemCount
         FROM shopping_lists l
         LEFT JOIN shopping_items i ON l.id = i.listId
         GROUP BY l.id
@@ -45,4 +47,5 @@ data class ShoppingListWithItemCount(
     val createdAt: Long,
     val updatedAt: Long,
     val itemCount: Int,
+    val completedItemCount: Int,
 )

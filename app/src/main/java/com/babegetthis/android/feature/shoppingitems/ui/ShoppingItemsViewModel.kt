@@ -3,6 +3,8 @@ package com.babegetthis.android.feature.shoppingitems.ui
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.model.Category
@@ -23,11 +25,17 @@ class ShoppingItemsViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val itemRepository: ShoppingItemRepository,
     private val categoryRepository: CategoryRepository,
+    private val authStateManager: AuthStateManager,
 ) : ViewModel() {
 
     val listId: String = savedStateHandle.get<String>("listId") ?: ""
     val listName: String = savedStateHandle.get<String>("listName") ?: ""
     val isNewList: Boolean = savedStateHandle.get<Boolean>("isNew") ?: false
+
+    // Check if the user is logged in — used to gate the share feature.
+    fun isAuthenticated(): Boolean {
+        return authStateManager.authState.value is AuthState.Authenticated
+    }
 
     val items: StateFlow<List<ShoppingItem>> = itemRepository.getItemsByListId(listId)
         .stateIn(
@@ -160,6 +168,13 @@ class ShoppingItemsViewModel @Inject constructor(
                     _errorMessage.emit(result.error.message)
                 }
             }
+        }
+    }
+
+    // Placeholder — sharing is a v2 feature
+    fun showComingSoonMessage() {
+        viewModelScope.launch {
+            _errorMessage.emit("Sharing is coming soon!")
         }
     }
 

@@ -14,6 +14,7 @@ import javax.inject.Inject
 class RealAuthRepository @Inject constructor(
     private val authApiService: AuthApiService,
     private val authStateManager: AuthStateManager,
+    private val tokenManager: TokenManager,
 ) : AuthRepository {
 
     override suspend fun register(email: String, password: String, name: String): Result<User> =
@@ -21,8 +22,13 @@ class RealAuthRepository @Inject constructor(
             val response = authApiService.register(
                 RegisterRequest(email = email, password = password, name = name)
             )
-            // Save token + update auth state so the app navigates to main screen
-            authStateManager.login(token = response.token, userId = response.user.id)
+            // Save token + user info so the profile screen can display them later
+            authStateManager.login(
+                token = response.token,
+                userId = response.user.id,
+                userName = response.user.name,
+                userEmail = response.user.email,
+            )
 
             User(
                 id = response.user.id,
@@ -36,7 +42,12 @@ class RealAuthRepository @Inject constructor(
             val response = authApiService.login(
                 LoginRequest(email = email, password = password)
             )
-            authStateManager.login(token = response.token, userId = response.user.id)
+            authStateManager.login(
+                token = response.token,
+                userId = response.user.id,
+                userName = response.user.name,
+                userEmail = response.user.email,
+            )
 
             User(
                 id = response.user.id,
@@ -47,5 +58,14 @@ class RealAuthRepository @Inject constructor(
 
     override suspend fun logout(): Result<Unit> = safeCall {
         authStateManager.logout()
+    }
+
+    override suspend fun updateUserName(name: String): Result<User> = safeCall {
+        val response = authApiService.updateUserName(
+            com.babegetthis.android.core.data.network.dto.UpdateNameRequest(name)
+        )
+        // Persist the updated name locally
+        tokenManager.saveUserName(response.name)
+        User(id = response.id, email = response.email, name = response.name)
     }
 }

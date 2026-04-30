@@ -11,6 +11,7 @@ fun ShoppingListWithItemCount.toDomain(): ShoppingList =
         createdAt = createdAt,
         updatedAt = updatedAt,
         itemCount = itemCount,
+        completedItemCount = completedItemCount,
     )
 
 fun ShoppingListEntity.toDomain(): ShoppingList =

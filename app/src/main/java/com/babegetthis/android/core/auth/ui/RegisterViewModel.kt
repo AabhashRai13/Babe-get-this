@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.error.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -23,6 +25,10 @@ class RegisterViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
+
+    // One-shot event that fires after a successful registration.
+    private val _registerSuccess = MutableSharedFlow<Unit>()
+    val registerSuccess = _registerSuccess.asSharedFlow()
 
     fun register(name: String, email: String, password: String, confirmPassword: String) {
         if (name.isBlank() || email.isBlank() || password.isBlank()) {
@@ -44,6 +50,7 @@ class RegisterViewModel @Inject constructor(
             when (val result = authRepository.register(email, password, name)) {
                 is Result.Success -> {
                     _uiState.value = _uiState.value.copy(isLoading = false)
+                    _registerSuccess.emit(Unit)
                 }
                 is Result.Error -> {
                     _uiState.value = _uiState.value.copy(
