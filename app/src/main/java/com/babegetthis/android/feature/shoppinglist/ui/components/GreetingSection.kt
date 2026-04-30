@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -30,29 +32,32 @@ internal fun GreetingSection(
     listCount: Int,
     itemsToGet: Int,
 ) {
-    Column(
+    val summary = when {
+        itemsToGet == 0 -> "$listCount lists — nothing to pick up yet"
+        listCount == 1 -> "1 list · $itemsToGet items to get"
+        else -> "$listCount lists · $itemsToGet items to get"
+    }
+
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 8.dp, start = 4.dp),
+            .padding(top = 4.dp, bottom = 12.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
     ) {
-        Text(
-            text = getGreeting(),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Summary line — shows remaining items to pick up
-        val summary = when {
-            itemsToGet == 0 -> "$listCount lists — nothing to pick up yet"
-            listCount == 1 -> "1 list · $itemsToGet items to get"
-            else -> "$listCount lists · $itemsToGet items to get"
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            Text(
+                text = getGreeting(),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+            )
         }
-        Text(
-            text = summary,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

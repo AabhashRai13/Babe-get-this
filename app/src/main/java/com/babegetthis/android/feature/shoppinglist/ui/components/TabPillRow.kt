@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -52,46 +53,60 @@ internal fun TabPillRow(
         tabs.forEachIndexed { index, tab ->
             val isSelected = index == selectedIndex
 
-            // Animate the background color for a smooth transition
-            val backgroundColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-            else Color.Transparent
+            // M3: selected state uses the primary role for high emphasis,
+            // animated so the change reads as a transition not a swap.
+            val backgroundColor by animateColorAsState(
+                targetValue = if (isSelected)
+                    MaterialTheme.colorScheme.primary
+                else
+                    Color.Transparent,
+                animationSpec = tween(durationMillis = 200),
+                label = "tabBackground",
+            )
             val contentColor by animateColorAsState(
                 targetValue = if (isSelected)
-                    MaterialTheme.colorScheme.onSurface
+                    MaterialTheme.colorScheme.onPrimary
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(durationMillis = 200),
                 label = "tabContent",
             )
 
-            Row (
+            Surface(
                 modifier = Modifier
                     .weight(1f)
                     .clip(CircleShape)
-                    .background(backgroundColor)
                     .clickable(
-                        interactionSource = remember { MutableInteractionSource()
-                        },
-                        indication = ripple(bounded = true),
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                        ),
                         onClick = { onTabSelected(index) },
+                    ),
+                shape = CircleShape,
+                color = backgroundColor,
+                shadowElevation = if (isSelected) 2.dp else 0.dp,
+                tonalElevation = 0.dp,
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = tab.icon,
+                        contentDescription = null,
+                        tint = contentColor,
+                        modifier = Modifier.size(18.dp)
                     )
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ){
-                Icon(
-                    imageVector = tab.icon,
-                    contentDescription = null,
-                    tint = contentColor,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text =tab.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if(isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                    color = contentColor,
-                )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = tab.label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                        color = contentColor,
+                    )
+                }
             }
         }
     }

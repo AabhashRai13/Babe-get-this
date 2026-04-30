@@ -19,6 +19,13 @@ private val LightColorScheme = lightColorScheme(
 
     secondary = Accent,
     onSecondary = Background,
+    secondaryContainer = SecondaryContainer,
+    onSecondaryContainer = OnSecondaryContainer,
+
+    tertiary = Tertiary,
+    onTertiary = OnTertiary,
+    tertiaryContainer = TertiaryContainer,
+    onTertiaryContainer = OnTertiaryContainer,
 
     background = Background,
     onBackground = PrimaryText,
@@ -47,6 +54,13 @@ private val DarkColorScheme = darkColorScheme(
 
     secondary = DarkThemeAccent,
     onSecondary = DarkThemeBackground,
+    secondaryContainer = DarkSecondaryContainer,
+    onSecondaryContainer = DarkOnSecondaryContainer,
+
+    tertiary = DarkTertiary,
+    onTertiary = DarkOnTertiary,
+    tertiaryContainer = DarkTertiaryContainer,
+    onTertiaryContainer = DarkOnTertiaryContainer,
 
     background = DarkThemeBackground,
     onBackground = DarkThemePrimaryText,

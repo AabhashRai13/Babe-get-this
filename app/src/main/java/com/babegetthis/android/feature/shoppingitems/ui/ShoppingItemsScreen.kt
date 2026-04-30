@@ -1,6 +1,7 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -298,7 +299,11 @@ private fun ProgressCard(
             else
                 MaterialTheme.colorScheme.surfaceContainerLow,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = if (!allDone) BorderStroke(
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        ) else null,
     ) {
         Column(
             modifier = Modifier
@@ -322,11 +327,11 @@ private fun ProgressCard(
                 )
                 // Percentage badge
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = if (allDone)
                         MaterialTheme.colorScheme.primary
                     else
-                        MaterialTheme.colorScheme.surfaceContainerHigh,
+                        MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Text(
                         text = "${(progress * 100).toInt()}%",
@@ -335,8 +340,8 @@ private fun ProgressCard(
                         color = if (allDone)
                             MaterialTheme.colorScheme.onPrimary
                         else
-                            MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                     )
                 }
             }
@@ -441,12 +446,21 @@ private fun SectionHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+        }
         if (count != null) {
             Surface(
                 shape = RoundedCornerShape(12.dp),
@@ -509,12 +523,20 @@ private fun ShoppingItemCard(
             .animateContentSize(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
+            // Active items pop on white; picked-up items recede into the
+            // grey field, giving the list a clear hierarchy at a glance.
             containerColor = if (item.isPickedUp)
-                MaterialTheme.colorScheme.surfaceContainerLow
+                MaterialTheme.colorScheme.surfaceContainer
             else
                 MaterialTheme.colorScheme.surfaceContainerLow,
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (item.isPickedUp) 0.dp else 2.dp,
+        ),
+        border = if (!item.isPickedUp) BorderStroke(
+            width = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        ) else null,
     ) {
         Row(
             modifier = Modifier
@@ -586,28 +608,36 @@ private fun ShoppingItemCard(
                         if (item.quantity.isNotBlank()) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                border = BorderStroke(
+                                    width = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.15f),
+                                ),
                             ) {
                                 Text(
                                     text = "Qty: ${item.quantity}",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                                 )
                             }
                         }
                         if (item.categoryName != null) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                border = BorderStroke(
+                                    width = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.15f),
+                                ),
                             ) {
                                 Text(
                                     text = item.categoryName,
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
                                 )
                             }
                         }

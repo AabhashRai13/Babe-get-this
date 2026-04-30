@@ -3,28 +3,49 @@ package com.babegetthis.android.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // Light theme colors
+// Primary (blue-grey) — high-emphasis: FAB family, active tab, selected states.
+// Secondary (brown) — supporting accents: quantity chips.
+// Tertiary (muted teal) — contrasting accent: category chips.
 val Primary = Color(0xFF607D8B)
 val DarkPrimary = Color(0xFF455A64)
 val LightPrimary = Color(0xFFCFD8DC)
 val Accent = Color(0xFF795548)
-val Background = Color(0xFFFBFCFD)
-val Surface = Color(0xFFFBFCFD)
+val SecondaryContainer = Color(0xFFEAD8CB)
+val OnSecondaryContainer = Color(0xFF3E2723)
+val Tertiary = Color(0xFF5F8B85)
+val OnTertiary = Color(0xFFFFFFFF)
+val TertiaryContainer = Color(0xFFC8DDDA)
+val OnTertiaryContainer = Color(0xFF1F3D38)
+// Background sits a step below the lowest container so cards visibly
+// "lift" off the screen instead of blending into a near-white field.
+val Background = Color(0xFFEDF1F4)
+val Surface = Color(0xFFEDF1F4)
 val PrimaryText = Color(0xFF212121)
 val SecondaryText = Color(0xFF757575)
-val Divider = Color(0xFFBDBDBD)
+val Divider = Color(0xFFC7CFD5)
 
 // MD3 surface container levels — these create subtle visual layers.
-// Think of them as different "elevations" of white, each slightly tinted
-// with the primary color. This is how MD3 creates depth without shadows.
+// Tonal range is widened from the default tight palette so the eye can
+// actually see the difference between background, cards, and chips.
 val SurfaceContainerLowest = Color(0xFFFFFFFF)
-val SurfaceContainerLow = Color(0xFFF5F7F8)
-val SurfaceContainer = Color(0xFFEFF2F3)
-val SurfaceContainerHigh = Color(0xFFE9ECEE)
-val SurfaceContainerHighest = Color(0xFFE3E7E9)
+// Card fill in light theme. Pushed near-white so cards lift visibly off
+// the slightly grey-blue background. Cards use this in both modes —
+// dark theme's DarkSurfaceContainerLow is correspondingly *lighter* than
+// the dark background, so the same token gives lift in either mode.
+val SurfaceContainerLow = Color(0xFFFCFDFE)
+val SurfaceContainer = Color(0xFFE6EBEF)
+val SurfaceContainerHigh = Color(0xFFDDE3E8)
+val SurfaceContainerHighest = Color(0xFFD4DBE0)
 
 // Dark theme colors — lighter versions so they're readable on dark backgrounds
 val DarkThemePrimary = Color(0xFF90A4AE)
 val DarkThemeAccent = Color(0xFFA1887F)
+val DarkSecondaryContainer = Color(0xFF5C4033)
+val DarkOnSecondaryContainer = Color(0xFFEAD8CB)
+val DarkTertiary = Color(0xFF8FB5AE)
+val DarkOnTertiary = Color(0xFF1F3D38)
+val DarkTertiaryContainer = Color(0xFF34534F)
+val DarkOnTertiaryContainer = Color(0xFFC8DDDA)
 val DarkThemeBackground = Color(0xFF121212)
 val DarkThemeSurface = Color(0xFF141718)
 val DarkThemePrimaryText = Color(0xFFFFFFFF)
@@ -33,10 +54,10 @@ val DarkThemeDivider = Color(0xFF424242)
 
 // Dark theme surface containers
 val DarkSurfaceContainerLowest = Color(0xFF0E1112)
-val DarkSurfaceContainerLow = Color(0xFF1A1D1F)
+val DarkSurfaceContainerLow = Color(0xFF1D2123)
 val DarkSurfaceContainer = Color(0xFF1E2224)
 val DarkSurfaceContainerHigh = Color(0xFF282C2E)
-val DarkSurfaceContainerHighest = Color(0xFF333739)
+val DarkSurfaceContainerHighest = Color(0xFF3A3F42)
 
 // List accent palette — dusty, muted tones that complement the blue-grey/brown theme.
 // Not neon or childish — these feel warm and premium.
