@@ -33,10 +33,13 @@ class AuthStateManager @Inject constructor(
         }
     }
 
-    // Called after successful login or register
-    fun login(token: String, userId: String) {
+    // Called after successful login or register.
+    // Persists token, user ID, name, and email so they survive app restarts.
+    fun login(token: String, userId: String, userName: String, userEmail: String) {
         tokenManager.saveToken(token)
         tokenManager.saveUserId(userId)
+        tokenManager.saveUserName(userName)
+        tokenManager.saveUserEmail(userEmail)
         _authState.value = AuthState.Authenticated(userId)
     }
 

@@ -7,6 +7,11 @@
     <string name="shopping_list_empty_cta">Create your first list</string>
     <string name="shopping_list_create">Create list</string>
     <string name="shopping_list_items_count">%d items</string>
+    <string name="shopping_list_items_progress">%1$d/%2$d items</string>
+    <string name="shopping_list_all_completed">All done! All your lists are completed.</string>
+    <string name="shopping_list_no_completed">No completed lists yet</string>
+    <string name="tab_active">Active</string>
+    <string name="tab_completed">Completed</string>
     <string name="shopping_list_delete">Delete</string>
     <string name="shopping_list_name_hint">List name</string>
     <string name="shopping_list_create_title">New List</string>
@@ -43,4 +48,13 @@
     <string name="auth_has_account">Already have an account?</string>
     <string name="auth_sign_up">Sign up</string>
     <string name="auth_sign_in">Sign in</string>
+
+    <!-- Share / Auth Prompt -->
+    <string name="share_auth_title">Sign in to share</string>
+    <string name="share_auth_body">Create an account to share lists with your partner and sync across devices.</string>
+    <string name="share_coming_soon">Sharing is coming soon!</string>
+
+    <!-- Profile -->
+    <string name="profile_logout">Log out</string>
+    <string name="profile_name_updated">Name updated</string>
 </resources>

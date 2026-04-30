@@ -58,6 +58,7 @@ Add use cases later only when a ViewModel gets complex enough to justify it.
 - ViewModels never talk directly to data sources — always go through a Repository
 - Repositories return Kotlin data classes, never raw API/DB models
 - Do NOT add use cases/interactors until a ViewModel is clearly getting too fat
+- Make UI dumb, as long as it is reasonable we will keep business logic in viewmodel.
 
 ## Coding Conventions
 - Use meaningful variable names — no abbreviations while I'm learning
@@ -90,6 +91,10 @@ Everything we build should serve this core or be deferred to v2.
 ## Running the App
 [Add your build/run commands here]
 
+
+## TODO
+- Shopping lists should show a "completed" status when all items in the list are checked/picked up
+- Greeting on the home screen should be time-aware (Good morning/afternoon/evening) — already implemented, keep it this way
 
 ## for v2
 1) Voice to list

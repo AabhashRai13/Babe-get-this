@@ -35,3 +35,9 @@ data class UserDto(
     val email: String,
     val name: String,
 )
+
+// Request body for updating the user's display name
+@Serializable
+data class UpdateNameRequest(
+    val name: String,
+)
