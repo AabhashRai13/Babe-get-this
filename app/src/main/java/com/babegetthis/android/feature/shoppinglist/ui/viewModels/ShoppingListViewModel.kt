@@ -3,6 +3,7 @@ package com.babegetthis.android.feature.shoppinglist.ui.viewModels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingListUiState
@@ -69,8 +70,12 @@ class ShoppingListViewModel @Inject constructor(
     // When non-null, the edit dialog is shown for this list
     val editingList = MutableStateFlow<ShoppingList?>(null)
 
-    // Undo delete
+    // Undo delete — cache both the list and its items, because the
+    // shopping_items CASCADE wipes items when the list row is deleted.
+    // Without caching items, undo would restore an empty list and the
+    // derived isCompleted flag would always come back as false.
     private var pendingDeleteList: ShoppingList? = null
+    private var pendingDeleteItems: List<ShoppingItemEntity> = emptyList()
 
     // One-time error events — like showing a snackBar.
     // SharedFlow fires once and is consumed, unlike StateFlow which replays.
@@ -136,9 +141,10 @@ class ShoppingListViewModel @Inject constructor(
     fun deleteList(listId: String) {
         viewModelScope.launch {
             val listToDelete = shoppingLists.value.find { it.id == listId }
-            when (val result = repository.deleteList(listId)) {
+            when (val result = repository.deleteListAndCaptureItems(listId)) {
                 is Result.Success -> {
                     pendingDeleteList = listToDelete
+                    pendingDeleteItems = result.data
                     _undoDeleteEvent.emit(listToDelete?.name ?: "List")
                 }
                 is Result.Error -> {
@@ -151,9 +157,11 @@ class ShoppingListViewModel @Inject constructor(
     fun undoDeleteList() {
         viewModelScope.launch {
             val list = pendingDeleteList ?: return@launch
+            val items = pendingDeleteItems
             pendingDeleteList = null
-            when (val result = repository.restoreList(list)) {
-                is Result.Success -> { /* list reappears via Flow */ }
+            pendingDeleteItems = emptyList()
+            when (val result = repository.restoreListWithItems(list, items)) {
+                is Result.Success -> { /* list + items reappear via Flow */ }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
                 }
