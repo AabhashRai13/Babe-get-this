@@ -95,7 +95,17 @@ Everything we build should serve this core or be deferred to v2.
 ## TODO
 - Shopping lists should show a "completed" status when all items in the list are checked/picked up
 - Greeting on the home screen should be time-aware (Good morning/afternoon/evening) — already implemented, keep it this way
+- Create a work manager that checks for any stale list (Yet to decide Criteria to define stale list) and move them to history list or something. Purpose is to one good ui and learning opportunity. And a way to move this stale list back to active or complete.
+- Use code magic for CI-CD (codemagic.yaml  not ui). Two work flows, for staging firebase Distribution and production on play store.
+- One live scenario, let's say someone deletes the item, user have to put in optional note on why they deleted the item. IDK i just want it to be easier for user to communicate.
+- What happens if user can't find the item? our user find the alternative. There should be a better way than chat app. Should solve a problem that call and chatting app doesn't do. Have to make it quick, just take image and may be just approve or reject message. 
+  and algorithm that provides suggestion based on history.
+- auto categorization of product on basic stuff. (For eg: Eggs will always be a food)
+
+Strategy for first release
+a) Complete offline first method.
 
 ## for v2
 1) Voice to list
 2) open camera or gallery to add image.(Auto fill form from image)
+3) Store room, when user completes a list we will add the item to store room for grocery items only. In store they can mark item as finish to keep it in the next list automatically.

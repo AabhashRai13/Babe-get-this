@@ -25,8 +25,17 @@ interface ShoppingItemDao {
     """)
     fun getItemsByListId(listId: String): Flow<List<ShoppingItemEntity>>
 
+    // One-shot read for snapshotting items before a CASCADE delete.
+    // Unlike getItemsByListId (Flow), this returns once and completes — used
+    // by the undo-delete flow so we can re-insert items if the user undoes.
+    @Query("SELECT * FROM shopping_items WHERE listId = :listId")
+    suspend fun getItemsByListIdOnce(listId: String): List<ShoppingItemEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: ShoppingItemEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertItems(items: List<ShoppingItemEntity>)
 
     @Update
     suspend fun updateItem(item: ShoppingItemEntity)

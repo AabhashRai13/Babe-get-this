@@ -139,9 +139,10 @@ fun ShoppingListScreen(
                 scrollBehavior = scrollBehavior,
             )
         },
-        // FAB only shows on the Active tab — no point creating new lists from Completed
+        // FAB only shows on the Active tab when there's at least one list —
+        // on the empty state, the centered "Create list" button is the sole CTA.
         floatingActionButton = {
-            if (uiState.isActiveTab) {
+            if (uiState.isActiveTab && !uiState.hasNoLists) {
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.onCreateListClick() },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
