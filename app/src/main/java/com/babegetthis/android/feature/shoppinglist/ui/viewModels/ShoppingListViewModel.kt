@@ -3,6 +3,7 @@ package com.babegetthis.android.feature.shoppinglist.ui.viewModels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
@@ -152,6 +153,28 @@ class ShoppingListViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    // Voice flow's persist callback — invoked by VoiceCaptureViewModel.confirm
+    // with the user-reviewed drafts. Returns the new list id (so the voice VM
+    // can transition to Done), and side-effect-emits navigateToList so the
+    // existing screen-level collector handles navigation. No snackbar on error —
+    // the voice sheet renders the failure inline in its Failed state.
+    suspend fun createListWithVoice(drafts: List<ItemDraft>): Result<String> {
+        val name = autoNameVoiceList()
+        val result = repository.createListWithItems(name, drafts)
+        if (result is Result.Success) {
+            _navigateToList.emit(result.data to name)
+        }
+        return result
+    }
+
+    // v1 placeholder: "List · 17 May". Replace once we want smarter auto-naming
+    // (e.g. derived from the first item, or asked from the user post-review).
+    private fun autoNameVoiceList(): String {
+        val today = java.time.LocalDate.now()
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM")
+        return "List · ${today.format(fmt)}"
     }
 
     fun undoDeleteList() {

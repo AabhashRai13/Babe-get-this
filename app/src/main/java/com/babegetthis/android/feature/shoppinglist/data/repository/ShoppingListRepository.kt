@@ -6,6 +6,9 @@ import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
+import com.babegetthis.android.core.voice.model.ItemDraft
+import com.babegetthis.android.feature.shoppingitems.data.mapper.toEntity
+import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppinglist.data.mapper.toDomain
 import com.babegetthis.android.feature.shoppinglist.data.mapper.toEntity
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
@@ -44,6 +47,48 @@ class ShoppingListRepository @Inject constructor(
         )
         shoppingListDao.insertList(list.toEntity())
         id
+    }
+
+    // Voice-capture entry point: create a new list AND drop its items in one go.
+    // Mirrors the (list insert + items insert) shape of restoreListWithItems below,
+    // and per-item defaults follow ShoppingItemRepository.addItem so voice items
+    // look identical to manually-typed ones. Returns the new list id so the
+    // ViewModel can navigate into it.
+    suspend fun createListWithItems(
+        name: String,
+        drafts: List<ItemDraft>,
+    ): Result<String> = safeCall {
+        val now = System.currentTimeMillis()
+        val listId = UUID.randomUUID().toString()
+
+        val list = ShoppingList(
+            id = listId,
+            name = name,
+            createdAt = now,
+            updatedAt = now,
+        )
+        shoppingListDao.insertList(list.toEntity())
+
+        val itemEntities = drafts.map { draft ->
+            ShoppingItem(
+                id = UUID.randomUUID().toString(),
+                listId = listId,
+                name = draft.name,
+                // Voice MVP: whole spoken phrase ("1 crate Eggs") lands in name;
+                // quantity stays empty — same shape as typing it in the name field.
+                quantity = "",
+                categoryId = null,
+                note = null,
+                shop = null,
+                createdAt = now,
+                updatedAt = now,
+            ).toEntity()
+        }
+        if (itemEntities.isNotEmpty()) {
+            shoppingItemDao.insertItems(itemEntities)
+        }
+
+        listId
     }
 
     suspend fun updateListName(listId: String, newName: String): Result<Unit> = safeCall {

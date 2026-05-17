@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -34,6 +36,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,6 +61,7 @@ import com.babegetthis.android.R
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
+import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
 import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
@@ -97,6 +104,12 @@ fun ShoppingListScreen(
     val authState by authStateManager.authState.collectAsState()
     val isLoggedIn = authState is AuthState.Authenticated
     var showProfileSheet by remember { mutableStateOf(false) }
+
+    // Create-list flow has two entry-style choices now: Type or Voice.
+    // chooser → small sheet with the two options
+    // voice sheet → the full voice-capture flow
+    var showCreateChooser by remember { mutableStateOf(false) }
+    var showVoiceSheet by remember { mutableStateOf(false) }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -144,7 +157,7 @@ fun ShoppingListScreen(
         floatingActionButton = {
             if (uiState.isActiveTab && !uiState.hasNoLists) {
                 ExtendedFloatingActionButton(
-                    onClick = { viewModel.onCreateListClick() },
+                    onClick = { showCreateChooser = true },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(16.dp),
@@ -166,7 +179,7 @@ fun ShoppingListScreen(
                     .padding(padding)
                     .padding(horizontal = 24.dp)
                     .fillMaxSize(),
-                onCreateList = { viewModel.onCreateListClick() }
+                onCreateList = { showCreateChooser = true }
             )
         } else {
             Column(
@@ -251,6 +264,30 @@ fun ShoppingListScreen(
         )
     }
 
+    if (showCreateChooser) {
+        CreateListChooserSheet(
+            onDismiss = { showCreateChooser = false },
+            onPickType = {
+                showCreateChooser = false
+                viewModel.onCreateListClick()
+            },
+            onPickVoice = {
+                showCreateChooser = false
+                showVoiceSheet = true
+            },
+        )
+    }
+
+    if (showVoiceSheet) {
+        VoiceCaptureSheet(
+            onDismiss = { showVoiceSheet = false },
+            // The voice VM calls this with the final reviewed drafts.
+            // We delegate to the screen VM which persists + emits navigateToList,
+            // returning Result<String> so the voice VM can transition to Done.
+            onConfirm = { drafts -> viewModel.createListWithVoice(drafts) },
+        )
+    }
+
     editingList?.let { list ->
         CreateListDialog(
             currentName = list.name,
@@ -277,6 +314,88 @@ fun ShoppingListScreen(
         )
     }
 }
+// Compact chooser: two icon tiles side-by-side. Sheet hugs its content
+// (no fillMaxSize) so it sits low on the screen instead of pulling up to
+// near-fullscreen the way the default ModalBottomSheet does.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CreateListChooserSheet(
+    onDismiss: () -> Unit,
+    onPickType: () -> Unit,
+    onPickVoice: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Text(
+                text = "Create a list",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+            ) {
+                ChooserTile(
+                    icon = Icons.Outlined.Edit,
+                    label = "Type",
+                    onClick = onPickType,
+                    modifier = Modifier.weight(1f),
+                )
+                ChooserTile(
+                    icon = Icons.Default.Mic,
+                    label = "Voice",
+                    onClick = onPickVoice,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChooserTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+            .clickable(onClick = onClick)
+            .padding(vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            modifier = Modifier.size(28.dp),
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
+}
+
 @Composable
 private fun TimePeriodHeader(period: TimePeriod) {
     Row(

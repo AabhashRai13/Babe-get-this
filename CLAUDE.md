@@ -101,6 +101,8 @@ Everything we build should serve this core or be deferred to v2.
 - What happens if user can't find the item? our user find the alternative. There should be a better way than chat app. Should solve a problem that call and chatting app doesn't do. Have to make it quick, just take image and may be just approve or reject message. 
   and algorithm that provides suggestion based on history.
 - auto categorization of product on basic stuff. (For eg: Eggs will always be a food)
+- Voice list auto-name disambiguator — `autoNameVoiceList()` in `ShoppingListViewModel` currently always returns `"List · 17 May"`, so 3 lists made the same day all share a name. Add a suffix (e.g. ` · 2`, ` · 3`) or derive from the first item ("Eggs + 2 more").
+- Voice flow analytics + error logging — instrument the voice-capture flow (start, stop, transcribe failures, persist failures). Especially important once `RemoteVoiceRepository` lands so we can debug API issues without device access.
 
 Strategy for first release
 a) Complete offline first method.
