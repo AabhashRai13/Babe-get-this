@@ -160,8 +160,7 @@ class ShoppingListViewModel @Inject constructor(
     // can transition to Done), and side-effect-emits navigateToList so the
     // existing screen-level collector handles navigation. No snackbar on error —
     // the voice sheet renders the failure inline in its Failed state.
-    suspend fun createListWithVoice(drafts: List<ItemDraft>): Result<String> {
-        val name = autoNameVoiceList()
+    suspend fun createListWithVoice(name: String, drafts: List<ItemDraft>): Result<String> {
         val result = repository.createListWithItems(name, drafts)
         if (result is Result.Success) {
             _navigateToList.emit(result.data to name)
@@ -169,9 +168,10 @@ class ShoppingListViewModel @Inject constructor(
         return result
     }
 
-    // v1 placeholder: "List · 17 May". Replace once we want smarter auto-naming
-    // (e.g. derived from the first item, or asked from the user post-review).
-    private fun autoNameVoiceList(): String {
+    // Default name seeded into the voice review sheet. The user can edit it
+    // before confirming, so this is only a starting point — not the saved name.
+    // TODO: disambiguate same-day lists (see CLAUDE.md).
+    fun defaultVoiceListName(): String {
         val today = java.time.LocalDate.now()
         val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM")
         return "List · ${today.format(fmt)}"

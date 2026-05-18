@@ -281,10 +281,11 @@ fun ShoppingListScreen(
     if (showVoiceSheet) {
         VoiceCaptureSheet(
             onDismiss = { showVoiceSheet = false },
-            // The voice VM calls this with the final reviewed drafts.
+            defaultListName = viewModel.defaultVoiceListName(),
+            // The voice VM calls this with the user-edited name + final drafts.
             // We delegate to the screen VM which persists + emits navigateToList,
             // returning Result<String> so the voice VM can transition to Done.
-            onConfirm = { drafts -> viewModel.createListWithVoice(drafts) },
+            onConfirm = { name, drafts -> viewModel.createListWithVoice(name, drafts) },
         )
     }
 

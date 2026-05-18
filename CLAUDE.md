@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Please try to make explanation brief and concise until asked otherwise.
+
 ## Project Overview
 
 "Babe, Get This" is a shopping list Android app in early MVP stage. Single-module Compose-first project using Clean Architecture with feature-based package organization.

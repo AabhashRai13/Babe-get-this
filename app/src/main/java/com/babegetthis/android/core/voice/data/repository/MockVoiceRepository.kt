@@ -16,9 +16,9 @@ class MockVoiceRepository @Inject constructor() : VoiceRepository {
         delay(800) // pretend the network call took ~800ms — proves the spinner works
         return Result.Success(
             listOf(
-                ItemDraft("1 crate Eggs"),
-                ItemDraft("2 L Coke"),
-                ItemDraft("Dish soap"),
+                ItemDraft(name = "Eggs", quantity = "1 crate"),
+                ItemDraft(name = "Coke", quantity = "2 L"),
+                ItemDraft(name = "Dish soap", quantity = null),
             )
         )
     }

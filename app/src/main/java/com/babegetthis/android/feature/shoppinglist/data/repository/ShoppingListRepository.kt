@@ -74,9 +74,10 @@ class ShoppingListRepository @Inject constructor(
                 id = UUID.randomUUID().toString(),
                 listId = listId,
                 name = draft.name,
-                // Voice MVP: whole spoken phrase ("1 crate Eggs") lands in name;
-                // quantity stays empty — same shape as typing it in the name field.
-                quantity = "",
+                // Backend returns name and quantity as separate fields. Pass
+                // quantity through verbatim; null → empty string to match the
+                // shape of manually-typed items.
+                quantity = draft.quantity.orEmpty(),
                 categoryId = null,
                 note = null,
                 shop = null,

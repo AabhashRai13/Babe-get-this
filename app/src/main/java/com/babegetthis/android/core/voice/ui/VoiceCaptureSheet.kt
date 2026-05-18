@@ -5,36 +5,26 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,6 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.core.voice.model.VoiceCaptureUiState
+import com.babegetthis.android.core.voice.ui.reviewing.ReviewingMode
 import com.babegetthis.android.core.voice.ui.viewModels.VoiceCaptureViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -71,7 +62,8 @@ import kotlinx.coroutines.isActive
 @Composable
 fun VoiceCaptureSheet(
     onDismiss: () -> Unit,
-    onConfirm: suspend (List<ItemDraft>) -> Result<String>,
+    defaultListName: String,
+    onConfirm: suspend (name: String, drafts: List<ItemDraft>) -> Result<String>,
     viewModel: VoiceCaptureViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -89,10 +81,12 @@ fun VoiceCaptureSheet(
         }
     )
 
-    // Auto-start: the moment the sheet opens, either begin recording (if mic
-    // permission is already granted) or ask for it. LaunchedEffect(Unit) runs
-    // exactly once for the lifetime of this composable.
+    // Auto-start: the moment the sheet opens, seed the VM with the default
+    // list name, then either begin recording (if mic permission is already
+    // granted) or ask for it. LaunchedEffect(Unit) runs exactly once for the
+    // lifetime of this composable.
     LaunchedEffect(Unit) {
+        viewModel.setDefaultListName(defaultListName)
         val alreadyGranted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
@@ -133,7 +127,10 @@ fun VoiceCaptureSheet(
                 is VoiceCaptureUiState.Transcribing -> LoadingMode("Listening to your list…")
                 is VoiceCaptureUiState.Reviewing -> ReviewingMode(
                     drafts = s.drafts,
+                    listName = s.listName,
+                    onEditName = viewModel::editListName,
                     onEdit = viewModel::editDraft,
+                    onEditQty = viewModel::editDraftQuantity,
                     onRemove = viewModel::removeDraft,
                     onCancel = {
                         viewModel.cancel()
@@ -239,66 +236,6 @@ private fun LoadingMode(label: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(16.dp))
-}
-
-@Composable
-private fun ReviewingMode(
-    drafts: List<ItemDraft>,
-    onEdit: (Int, String) -> Unit,
-    onRemove: (Int) -> Unit,
-    onCancel: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    Text(
-        text = "We heard ${drafts.size} item${if (drafts.size == 1) "" else "s"}",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-    )
-    Spacer(Modifier.height(12.dp))
-
-    // LazyColumn so long lists scroll inside the sheet rather than push the
-    // CTAs off-screen.
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().height(280.dp),
-        contentPadding = PaddingValues(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        itemsIndexed(drafts) { index, draft ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedTextField(
-                    value = draft.name,
-                    onValueChange = { onEdit(index, it) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                )
-                IconButton(
-                    onClick = { onRemove(index) },
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Remove")
-                }
-            }
-        }
-    }
-
-    Spacer(Modifier.height(16.dp))
-    Button(
-        onClick = onConfirm,
-        enabled = drafts.isNotEmpty(),
-        modifier = Modifier.fillMaxWidth().height(48.dp),
-    ) {
-        Text("Create list")
-    }
-    Spacer(Modifier.height(8.dp))
-    TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-        Text("Cancel")
-    }
 }
 
 @Composable
