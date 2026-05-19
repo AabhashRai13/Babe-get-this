@@ -15,8 +15,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -102,7 +102,7 @@ fun ProfileBottomSheet(
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Default.Person,
+                            imageVector = Icons.Outlined.Person,
                             contentDescription = null,
                             modifier = Modifier.size(32.dp),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -127,7 +127,7 @@ fun ProfileBottomSheet(
                 label = { Text("Name") },
                 leadingIcon = {
                     Icon(
-                        Icons.Default.Person,
+                        Icons.Outlined.Person,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                     )

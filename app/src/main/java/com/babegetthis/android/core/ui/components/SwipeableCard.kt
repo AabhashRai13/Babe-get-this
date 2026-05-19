@@ -44,8 +44,8 @@ import com.babegetthis.android.core.ui.haptics.rememberHaptic
 fun SwipeableCard(
     onSwipeLeft: () -> Unit,
     onSwipeRight: (() -> Unit)? = null,
-    leftIcon: ImageVector = Icons.Default.Delete,
-    rightIcon: ImageVector = Icons.Default.Check,
+    leftIcon: ImageVector = Icons.Filled.Delete,
+    rightIcon: ImageVector = Icons.Filled.Check,
     leftColor: Color = Color(0xFFE53935), // Red
     rightColor: Color = Color(0xFF43A047), // Green
     content: @Composable () -> Unit,

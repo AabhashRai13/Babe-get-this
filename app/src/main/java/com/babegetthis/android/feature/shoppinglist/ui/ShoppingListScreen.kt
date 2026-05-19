@@ -1,8 +1,14 @@
 package com.babegetthis.android.feature.shoppinglist.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -20,8 +26,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -48,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -137,7 +146,7 @@ fun ShoppingListScreen(
                 title = stringResource(R.string.app_name),
                 // Profile icon — only visible when logged in
                 showActionIcon = isLoggedIn,
-                actionIcon = Icons.Default.Person,
+                actionIcon = Icons.Outlined.Person,
                 onActionClick = { showProfileSheet = true },
                 useLargeTopBar = true,
                 scrollBehavior = scrollBehavior,
@@ -156,7 +165,7 @@ fun ShoppingListScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(16.dp),
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.shopping_list_create),
@@ -186,22 +195,54 @@ fun ShoppingListScreen(
                 // Uses ripple indication for touch feedback.
                 TabPillRow(
                     tabs = listOf(
-                        TabPill(label = "Active", icon = Icons.Outlined.ShoppingCart),
-                        TabPill(label = "Completed", icon = Icons.Default.Check)
+                        TabPill(
+                            label = "Active",
+                            iconInactive = Icons.Outlined.ShoppingCart,
+                            iconActive = Icons.Filled.ShoppingCart,
+                        ),
+                        TabPill(
+                            label = "Completed",
+                            iconInactive = Icons.Outlined.CheckCircle,
+                            iconActive = Icons.Filled.CheckCircle,
+                        )
                     ),
                     selectedIndex = uiState.selectedTab,
                     onTabSelected = { viewModel.setSelectedTab(it) },
                 )
 
-                // Tab content
-                if (uiState.displayedListsAreEmpty) {
-                    TabEmptyState(isActiveTab = uiState.isActiveTab)
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                    ) {
+                // Tab content — slides horizontally on tab swap.
+                // Direction is by sign of (target - initial): Active→Completed
+                // slides the new content in from the right; reverse slides from the left.
+                // Flutter analogue: a PageView with a programmatic controller.animateToPage,
+                // except here Compose drives both the in and out animations from one spec.
+                AnimatedContent(
+                    targetState = uiState.selectedTab,
+                    transitionSpec = {
+                        val goingRight = targetState > initialState
+                        val anim = tween<IntOffset>(durationMillis = 280)
+                        val fade = tween<Float>(durationMillis = 280)
+                        if (goingRight) {
+                            (slideInHorizontally(anim) { width -> width } + fadeIn(fade)) togetherWith
+                                (slideOutHorizontally(anim) { width -> -width } + fadeOut(fade))
+                        } else {
+                            (slideInHorizontally(anim) { width -> -width } + fadeIn(fade)) togetherWith
+                                (slideOutHorizontally(anim) { width -> width } + fadeOut(fade))
+                        }
+                    },
+                    label = "tab-content",
+                ) { tabIndex ->
+                    // `tabIndex` keys the cached content so the outgoing pane
+                    // keeps rendering its own snapshot while sliding away.
+                    // We still read `uiState` for the data — fine because both
+                    // panes ultimately settle on the same source of truth.
+                    if (uiState.displayedListsAreEmpty) {
+                        TabEmptyState(isActiveTab = tabIndex == 0)
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                        ) {
                         // Greeting only on Active tab
                         if (uiState.isActiveTab) {
                             item(key = "greeting") {
@@ -245,6 +286,7 @@ fun ShoppingListScreen(
                         }
 
                         item { Spacer(modifier = Modifier.height(88.dp)) }
+                        }
                     }
                 }
             }

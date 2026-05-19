@@ -98,7 +98,7 @@ fun ShoppingListEmptyState(
                 .height(56.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.Add,
+                imageVector = Icons.Filled.Add,
                 contentDescription = null,
             )
             Spacer(modifier = Modifier.width(8.dp))

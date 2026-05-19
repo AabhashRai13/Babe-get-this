@@ -31,9 +31,14 @@ import androidx.compose.ui.unit.dp
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
 
+// Pair of icons for state-driven rendering:
+// outlined when inactive, filled when active. Per the icon-style rule
+// (filled = action/active, outlined = passive/structural) this gives a
+// stronger state cue than a pure color swap.
 internal data class TabPill(
     val label: String,
-    val icon: ImageVector,
+    val iconInactive: ImageVector,
+    val iconActive: ImageVector,
 )
 
 // Pill-style tab row — clean alternative to PrimaryTabRow's bottom divider.
@@ -100,7 +105,7 @@ internal fun TabPillRow(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = tab.icon,
+                        imageVector = if (isSelected) tab.iconActive else tab.iconInactive,
                         contentDescription = null,
                         tint = contentColor,
                         modifier = Modifier.size(18.dp)

@@ -112,7 +112,7 @@ fun LoginScreen(
             ) {
                 IconButton(onClick = onNavigateBack) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        imageVector = Icons.Filled.Close,
                         contentDescription = "Close",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

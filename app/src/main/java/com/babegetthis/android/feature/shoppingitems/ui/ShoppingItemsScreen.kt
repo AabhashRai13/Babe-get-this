@@ -21,7 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Card
@@ -111,7 +111,7 @@ fun ShoppingItemsScreen(
         topBar = {
             BgtTopAppBar(
                 title = viewModel.listName,
-                navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+                navigationIcon = Icons.AutoMirrored.Outlined.ArrowBack,
                 onNavigationClick = onNavigateBack,
                 // Share button — gates behind auth check
                 showActionIcon = true,
@@ -137,7 +137,7 @@ fun ShoppingItemsScreen(
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(16.dp),
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.add),
@@ -428,7 +428,7 @@ private fun FirstItemPrompt(
                 .height(56.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.Add,
+                imageVector = Icons.Filled.Add,
                 contentDescription = null,
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -569,7 +569,7 @@ private fun ShoppingItemCard(
                 if (item.isPickedUp) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
-                            imageVector = Icons.Default.Check,
+                            imageVector = Icons.Filled.Check,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(16.dp),
