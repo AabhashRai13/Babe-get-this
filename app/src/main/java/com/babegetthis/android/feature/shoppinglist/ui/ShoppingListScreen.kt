@@ -46,7 +46,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,8 +68,6 @@ import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
-import com.babegetthis.android.core.util.getTimePeriod
-import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 import com.babegetthis.android.feature.shoppinglist.ui.components.GreetingSection
 import com.babegetthis.android.feature.shoppinglist.ui.components.ShoppingListCard
 import com.babegetthis.android.feature.shoppinglist.ui.components.TabEmptyState
