@@ -226,54 +226,62 @@ fun ShoppingListScreen(
                     },
                     label = "tab-content",
                 ) { tabIndex ->
-                    // `tabIndex` keys the cached content so the outgoing pane
-                    // keeps rendering its own snapshot while sliding away.
-                    // We still read `uiState` for the data — fine because both
-                    // panes ultimately settle on the same source of truth.
-                    if (uiState.displayedListsAreEmpty) {
-                        TabEmptyState(isActiveTab = tabIndex == 0)
+                    // Everything inside this lambda derives from `tabIndex`,
+                    // NOT from uiState.selectedTab. AnimatedContent re-runs
+                    // this block for both the incoming and outgoing panes
+                    // during a swap — if we read uiState.groupedLists here,
+                    // the outgoing pane would snap to the new tab's data
+                    // the instant the user tapped, making the slide pointless.
+                    val isActiveForPane = tabIndex == 0
+                    val listsForPane =
+                        if (isActiveForPane) uiState.activeLists else uiState.completedLists
+                    val groupedForPane =
+                        if (isActiveForPane) uiState.groupedActive else uiState.groupedCompleted
+
+                    if (listsForPane.isEmpty()) {
+                        TabEmptyState(isActiveTab = isActiveForPane)
                     } else {
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(horizontal = 16.dp),
                         ) {
-                        // Greeting only on Active tab
-                        if (uiState.isActiveTab) {
-                            item(key = "greeting") {
-                                GreetingSection(
-                                    listCount = uiState.activeLists.size,
-                                    itemsToGet = uiState.activeItemsToGet,
-                                )
-                            }
-                        }
-
-                       uiState.groupedLists.forEach { (period, periodLists) ->
-                            item(key = "header-$period-${uiState.selectedTab}") {
-                                TimePeriodHeader(period = period)
-                            }
-
-                            itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
-                                val accent = getAccentForList(list.id, isDark)
-
-                                SwipeableCard(
-                                    onSwipeLeft = { viewModel.deleteList(list.id) },
-                                ) {
-                                    ShoppingListCard(
-                                        list = list,
-                                        accent = accent,
-                                        isCompletedTab = !uiState.isActiveTab,
-                                        onClick = { onNavigateToList(list.id, list.name) },
-                                        onLongPress = { viewModel.onEditListClick(list) },
+                            // Greeting only on Active tab
+                            if (isActiveForPane) {
+                                item(key = "greeting") {
+                                    GreetingSection(
+                                        listCount = uiState.activeLists.size,
+                                        itemsToGet = uiState.activeItemsToGet,
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
                             }
 
-                            item { Spacer(modifier = Modifier.height(4.dp)) }
-                        }
+                            groupedForPane.forEach { (period, periodLists) ->
+                                item(key = "header-$period-$tabIndex") {
+                                    TimePeriodHeader(period = period)
+                                }
 
-                        item { Spacer(modifier = Modifier.height(88.dp)) }
+                                itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
+                                    val accent = getAccentForList(list.id, isDark)
+
+                                    SwipeableCard(
+                                        onSwipeLeft = { viewModel.deleteList(list.id) },
+                                    ) {
+                                        ShoppingListCard(
+                                            list = list,
+                                            accent = accent,
+                                            isCompletedTab = !isActiveForPane,
+                                            onClick = { onNavigateToList(list.id, list.name) },
+                                            onLongPress = { viewModel.onEditListClick(list) },
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+
+                                item { Spacer(modifier = Modifier.height(4.dp)) }
+                            }
+
+                            item { Spacer(modifier = Modifier.height(88.dp)) }
                         }
                     }
                 }
