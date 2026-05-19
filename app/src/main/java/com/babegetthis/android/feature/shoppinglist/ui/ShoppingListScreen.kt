@@ -1,12 +1,10 @@
 package com.babegetthis.android.feature.shoppinglist.ui
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -258,23 +256,16 @@ fun ShoppingListScreen(
                             itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
                                 val accent = getAccentForList(list.id, isDark)
 
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn() + slideInVertically(
-                                        initialOffsetY = { it / 2 }
-                                    ),
+                                SwipeableCard(
+                                    onSwipeLeft = { viewModel.deleteList(list.id) },
                                 ) {
-                                    SwipeableCard(
-                                        onSwipeLeft = { viewModel.deleteList(list.id) },
-                                    ) {
-                                        ShoppingListCard(
-                                            list = list,
-                                            accent = accent,
-                                            isCompletedTab = !uiState.isActiveTab,
-                                            onClick = { onNavigateToList(list.id, list.name) },
-                                            onLongPress = { viewModel.onEditListClick(list) },
-                                        )
-                                    }
+                                    ShoppingListCard(
+                                        list = list,
+                                        accent = accent,
+                                        isCompletedTab = !uiState.isActiveTab,
+                                        onClick = { onNavigateToList(list.id, list.name) },
+                                        onLongPress = { viewModel.onEditListClick(list) },
+                                    )
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                             }

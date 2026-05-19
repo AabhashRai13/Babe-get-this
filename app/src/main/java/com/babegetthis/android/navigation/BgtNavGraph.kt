@@ -1,5 +1,11 @@
 package com.babegetthis.android.navigation
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -61,7 +67,35 @@ fun BgtNavGraph(
                     type = NavType.BoolType
                     defaultValue = false
                 },
-            )
+            ),
+            // Push: new screen slides in from the right; old slides slightly left.
+            // Pop:  reverse — new screen comes back from the left; old slides off right.
+            // Matches Material motion ("forward" pattern) for sub-screen navigation.
+            // 300ms with FastOutSlowInEasing — Compose's default emphasized curve.
+            enterTransition = {
+                slideInHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    initialOffsetX = { fullWidth -> fullWidth },
+                ) + fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    targetOffsetX = { fullWidth -> -fullWidth / 4 },
+                ) + fadeOut(animationSpec = tween(300, easing = FastOutSlowInEasing))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    initialOffsetX = { fullWidth -> -fullWidth / 4 },
+                ) + fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    targetOffsetX = { fullWidth -> fullWidth },
+                ) + fadeOut(animationSpec = tween(300, easing = FastOutSlowInEasing))
+            },
         ) {
             ShoppingItemsScreen(
                 onNavigateBack = { navController.popBackStack() },
