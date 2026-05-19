@@ -59,6 +59,8 @@ import com.babegetthis.android.R
 import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,6 +81,7 @@ fun ShoppingItemsScreen(
     val activeByShop = activeItems.groupBy { it.shop ?: "" }
 
     val snackBarHostState = remember { SnackbarHostState() }
+    val haptic = rememberHaptic()
 
     // Auth prompt dialog — shown when an unauthenticated user taps Share
     var showAuthPrompt by remember { mutableStateOf(false) }
@@ -97,6 +100,7 @@ fun ShoppingItemsScreen(
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
+                haptic(Haptic.Light)
                 viewModel.undoDeleteItem()
             }
         }
@@ -125,7 +129,10 @@ fun ShoppingItemsScreen(
         floatingActionButton = {
             if (items.isNotEmpty()) {
                 ExtendedFloatingActionButton(
-                    onClick = { viewModel.onAddItemClick() },
+                    onClick = {
+                        haptic(Haptic.Medium)
+                        viewModel.onAddItemClick()
+                    },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(16.dp),
@@ -226,6 +233,7 @@ fun ShoppingItemsScreen(
                                 item = shoppingItem,
                                 onClick = { viewModel.onEditItemClick(shoppingItem) },
                                 onTogglePickedUp = {
+                                    haptic(Haptic.Light)
                                     viewModel.togglePickedUp(
                                         shoppingItem.id,
                                         !shoppingItem.isPickedUp

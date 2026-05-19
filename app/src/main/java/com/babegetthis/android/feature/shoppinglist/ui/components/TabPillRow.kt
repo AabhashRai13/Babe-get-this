@@ -28,6 +28,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 
 internal data class TabPill(
     val label: String,
@@ -44,6 +46,7 @@ internal fun TabPillRow(
     selectedIndex: Int,
     onTabSelected: (Int) -> Unit,
 ) {
+    val haptic = rememberHaptic()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -81,7 +84,10 @@ internal fun TabPillRow(
                         indication = ripple(
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                         ),
-                        onClick = { onTabSelected(index) },
+                        onClick = {
+                            haptic(Haptic.Medium)
+                            onTabSelected(index)
+                        },
                     ),
                 shape = CircleShape,
                 color = backgroundColor,

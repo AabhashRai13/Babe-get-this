@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.babegetthis.android.R
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 
 // MD3 top app bars use surface colors — not solid primary.
 // LargeTopAppBar gives a warm, modern feel with a big title that collapses on scroll.
@@ -33,6 +35,7 @@ fun BgtTopAppBar(
     useLargeTopBar: Boolean = false,
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
+    val haptic = rememberHaptic()
     // MD3 surface-tinted colors — the app bar blends with the background
     // and gets a subtle tint on scroll. Much more modern than a solid primary block.
     val colors = TopAppBarDefaults.topAppBarColors(
@@ -53,7 +56,12 @@ fun BgtTopAppBar(
 
     val navIcon: @Composable () -> Unit = {
         if (navigationIcon != null && onNavigationClick != null) {
-            IconButton(onClick = onNavigationClick) {
+            IconButton(
+                onClick = {
+                    haptic(Haptic.Light)
+                    onNavigationClick()
+                }
+            ) {
                 Icon(
                     imageVector = navigationIcon,
                     contentDescription = null,
@@ -64,7 +72,12 @@ fun BgtTopAppBar(
 
     val actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         if (showActionIcon && onActionClick != null) {
-            IconButton(onClick = onActionClick) {
+            IconButton(
+                onClick = {
+                    haptic(Haptic.Light)
+                    onActionClick()
+                }
+            ) {
                 Icon(
                     imageVector = actionIcon,
                     contentDescription = null,

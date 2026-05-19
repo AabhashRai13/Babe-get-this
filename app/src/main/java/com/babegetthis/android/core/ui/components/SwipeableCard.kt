@@ -25,6 +25,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 
 // Reusable swipe wrapper for cards.
 // Like Flutter's Dismissible widget — reveals colored backgrounds with icons on swipe.
@@ -48,15 +50,20 @@ fun SwipeableCard(
     rightColor: Color = Color(0xFF43A047), // Green
     content: @Composable () -> Unit,
 ) {
+    val haptic = rememberHaptic()
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { dismissValue ->
             when (dismissValue) {
                 SwipeToDismissBoxValue.EndToStart -> {
+                    // Destructive direction (delete) — firmer buzz.
+                    haptic(Haptic.Medium)
                     onSwipeLeft()
                     true
                 }
                 SwipeToDismissBoxValue.StartToEnd -> {
                     if (onSwipeRight != null) {
+                        // Toggle direction (pick up / un-pick) — matches checkbox tap.
+                        haptic(Haptic.Light)
                         onSwipeRight()
                         true
                     } else {

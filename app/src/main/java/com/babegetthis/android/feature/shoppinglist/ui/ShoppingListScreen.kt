@@ -55,6 +55,8 @@ import com.babegetthis.android.R
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
@@ -93,6 +95,7 @@ fun ShoppingListScreen(
     val editingList by viewModel.editingList.collectAsState()
     val snackBarHostState = remember { SnackbarHostState() }
     val isDark = isSystemInDarkTheme()
+    val haptic = rememberHaptic()
 
     val authState by authStateManager.authState.collectAsState()
     val isLoggedIn = authState is AuthState.Authenticated
@@ -120,6 +123,7 @@ fun ShoppingListScreen(
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
+                haptic(Haptic.Light)
                 viewModel.undoDeleteList()
             }
         }
@@ -144,7 +148,10 @@ fun ShoppingListScreen(
         floatingActionButton = {
             if (uiState.isActiveTab && !uiState.hasNoLists) {
                 ExtendedFloatingActionButton(
-                    onClick = { viewModel.onCreateListClick() },
+                    onClick = {
+                        haptic(Haptic.Medium)
+                        viewModel.onCreateListClick()
+                    },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(16.dp),
