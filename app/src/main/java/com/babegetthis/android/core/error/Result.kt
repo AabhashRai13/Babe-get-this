@@ -9,30 +9,21 @@ package com.babegetthis.android.core.error
 sealed class Result<out T> {
     data class Success<T>(val data: T) : Result<T>()
     data class Error(val error: AppError) : Result<Nothing>()
-
-    // Helper to check state quickly
-    val isSuccess: Boolean get() = this is Success
-    val isError: Boolean get() = this is Error
-
-    // Get data or null — like .valueOrNull in Riverpod
-    fun getOrNull(): T? = when (this) {
-        is Success -> data
-        is Error -> null
-    }
-
-    // Get error or null
-    fun errorOrNull(): AppError? = when (this) {
-        is Success -> null
-        is Error -> error
-    }
 }
 
 // Helper function to wrap database/network calls in try/catch.
 // Any repository function can use this instead of writing try/catch everywhere.
 // Like a reusable wrapper: final result = await safeCall(() => api.getItems());
+//
+// `onUnauthorized` lets the caller override the 401 → AppError mapping.
+// Default is UnauthorizedError ("Session expired..."), which is right for
+// authenticated endpoints where 401 truly means the token went stale. Login
+// and register override it to AuthError("Invalid email or password.") because
+// for those endpoints, 401 means wrong credentials — never "session expired".
 
 suspend fun <T> safeCall(
-    block: suspend () -> T
+    onUnauthorized: () -> AppError = { AppError.UnauthorizedError() },
+    block: suspend () -> T,
 ): Result<T> {
     return try {
         Result.Success(block())
@@ -52,7 +43,7 @@ suspend fun <T> safeCall(
 
             // HTTP errors from Retrofit — server returned an error status code
             is retrofit2.HttpException -> when (e.code()) {
-                401 -> AppError.UnauthorizedError()
+                401 -> onUnauthorized()
                 in 400..499 -> AppError.AuthError(e.message ?: "Request failed.")
                 in 500..599 -> AppError.ServerError(e.code(), "Server error. Please try later.")
                 else -> AppError.ServerError(e.code(), e.message ?: "Unexpected server response.")

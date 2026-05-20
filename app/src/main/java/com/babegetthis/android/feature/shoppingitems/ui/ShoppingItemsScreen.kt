@@ -1,6 +1,19 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +34,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Card
@@ -43,12 +57,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -59,7 +78,11 @@ import com.babegetthis.android.R
 import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,16 +92,19 @@ fun ShoppingItemsScreen(
     onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingItemsViewModel = hiltViewModel()
 ) {
-    val items by viewModel.items.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val showDialog by viewModel.showAddItemDialog.collectAsState()
     val editingItem by viewModel.editingItem.collectAsState()
 
-    val activeItems = items.filter { !it.isPickedUp }
-    val completedItems = items.filter { it.isPickedUp }
-    val activeByShop = activeItems.groupBy { it.shop ?: "" }
+    // All derived lists/maps come from uiState — computed once per data
+    // emission in the ViewModel, not on every recomposition.
+    val activeItems = uiState.activeItems
+    val completedItems = uiState.completedItems
+    val activeByShop = uiState.activeByShop
 
     val snackBarHostState = remember { SnackbarHostState() }
+    val haptic = rememberHaptic()
 
     // Auth prompt dialog — shown when an unauthenticated user taps Share
     var showAuthPrompt by remember { mutableStateOf(false) }
@@ -86,6 +112,18 @@ fun ShoppingItemsScreen(
     LaunchedEffect(Unit) {
         viewModel.errorMessage.collect { message ->
             snackBarHostState.showSnackbar(message)
+        }
+    }
+
+    // Fire a Success haptic the moment the list goes from
+    // "some unchecked" → "all checked off". The ViewModel filters out the
+    // initial load of an already-complete list, so this only buzzes on
+    // the actual transition.
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is ShoppingItemsViewModel.UiEvent.ListJustCompleted -> haptic(Haptic.Success)
+            }
         }
     }
 
@@ -97,6 +135,7 @@ fun ShoppingItemsScreen(
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
+                haptic(Haptic.Light)
                 viewModel.undoDeleteItem()
             }
         }
@@ -107,7 +146,7 @@ fun ShoppingItemsScreen(
         topBar = {
             BgtTopAppBar(
                 title = viewModel.listName,
-                navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+                navigationIcon = Icons.AutoMirrored.Outlined.ArrowBack,
                 onNavigationClick = onNavigateBack,
                 // Share button — gates behind auth check
                 showActionIcon = true,
@@ -123,14 +162,17 @@ fun ShoppingItemsScreen(
             )
         },
         floatingActionButton = {
-            if (items.isNotEmpty()) {
+            if (!uiState.isEmpty) {
                 ExtendedFloatingActionButton(
-                    onClick = { viewModel.onAddItemClick() },
+                    onClick = {
+                        haptic(Haptic.Medium)
+                        viewModel.onAddItemClick()
+                    },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(16.dp),
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.add),
@@ -140,7 +182,7 @@ fun ShoppingItemsScreen(
             }
         }
     ) { padding ->
-        if (items.isEmpty()) {
+        if (uiState.isEmpty) {
             FirstItemPrompt(
                 modifier = Modifier
                     .padding(padding)
@@ -157,8 +199,8 @@ fun ShoppingItemsScreen(
                 // Progress summary card at the top
                 item(key = "progress") {
                     ProgressCard(
-                        totalItems = items.size,
-                        completedCount = completedItems.size,
+                        totalItems = uiState.totalCount,
+                        completedCount = uiState.completedCount,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -226,6 +268,7 @@ fun ShoppingItemsScreen(
                                 item = shoppingItem,
                                 onClick = { viewModel.onEditItemClick(shoppingItem) },
                                 onTogglePickedUp = {
+                                    haptic(Haptic.Light)
                                     viewModel.togglePickedUp(
                                         shoppingItem.id,
                                         !shoppingItem.isPickedUp
@@ -282,6 +325,16 @@ fun ShoppingItemsScreen(
 
 // Progress card — shows how far along the shopping trip is.
 // A visual focal point that gives the screen character.
+//
+// Celebration sub-animations when the list transitions to all-done:
+//   1) Card pops in: scale snaps to 0.85f, springs back to 1.0f
+//   2) Filled.CheckCircle appears next to "All done!", rotating from
+//      -90° to 0° and fading in over 200ms
+//   3) (Haptic.Success is handled at the screen level via the ViewModel
+//       UiEvent.ListJustCompleted flow — see ShoppingItemsScreen.)
+//
+// All three skip on the initial composition (hasInitialized guard) so
+// opening a list that's already complete doesn't replay the celebration.
 @Composable
 private fun ProgressCard(
     totalItems: Int,
@@ -290,15 +343,67 @@ private fun ProgressCard(
     val progress = if (totalItems > 0) completedCount.toFloat() / totalItems else 0f
     val allDone = completedCount == totalItems && totalItems > 0
 
+    // Animatable lets us snapTo (jump instantly) then animateTo, which is
+    // how we get "card appears at 0.85 then springs up to 1.0" rather
+    // than the smooth lerp animateFloatAsState would produce.
+    val cardScale = remember { Animatable(1f) }
+    // Icon scales 0 -> 1 with a bouncy spring so it overshoots naturally.
+    // AnimatedVisibility handles the layout slot reveal + fade; graphicsLayer
+    // scale adds the bouncy pop on top.
+    val checkScale = remember { Animatable(if (allDone) 1f else 0f) }
+    // One-shot 0 -> 1 -> 0 pulse for the container color flash.
+    val pulseProgress = remember { Animatable(0f) }
+    var hasInitialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(allDone) {
+        if (hasInitialized && allDone) {
+            // Just transitioned into all-done — play the celebration.
+            cardScale.snapTo(0.85f)
+            checkScale.snapTo(0f)
+            pulseProgress.snapTo(0f)
+
+            launch {
+                cardScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                )
+            }
+            launch {
+                checkScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioHighBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                )
+            }
+            launch {
+                pulseProgress.animateTo(1f, tween(180, easing = FastOutSlowInEasing))
+                pulseProgress.animateTo(0f, tween(320, easing = FastOutSlowInEasing))
+            }
+        } else if (!allDone) {
+            // Re-opening or unticking — reset without animating.
+            checkScale.snapTo(0f)
+            pulseProgress.snapTo(0f)
+        }
+        hasInitialized = true
+    }
+
+    // Pulse the container from primaryContainer toward primary and back on
+    // completion, then settle. Steady-state color is unchanged.
+    val baseContainer = if (allDone)
+        MaterialTheme.colorScheme.primaryContainer
+    else
+        MaterialTheme.colorScheme.surfaceContainerLow
+    val pulseTarget = MaterialTheme.colorScheme.primary
+    val containerColor = lerp(baseContainer, pulseTarget, pulseProgress.value)
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(cardScale.value),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (allDone)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         border = if (!allDone) BorderStroke(
             width = 0.5.dp,
@@ -315,16 +420,42 @@ private fun ProgressCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = if (allDone) "All done!"
-                           else "$completedCount of $totalItems picked up",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (allDone)
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    else
-                        MaterialTheme.colorScheme.onSurface,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // AnimatedVisibility collapses the icon + spacer slot when
+                    // not complete so the title row isn't padded with empty
+                    // space. The bouncy graphicsLayer scale plays on top of
+                    // the slot reveal for the "pop" effect.
+                    AnimatedVisibility(
+                        visible = allDone,
+                        enter = expandHorizontally() + fadeIn(),
+                        exit = shrinkHorizontally() + fadeOut(),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .graphicsLayer {
+                                        scaleX = checkScale.value
+                                        scaleY = checkScale.value
+                                    },
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                    }
+                    Text(
+                        text = if (allDone) "All done!"
+                               else "$completedCount of $totalItems picked up",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (allDone)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else
+                            MaterialTheme.colorScheme.onSurface,
+                    )
+                }
                 // Percentage badge
                 Surface(
                     shape = RoundedCornerShape(10.dp),
@@ -420,7 +551,7 @@ private fun FirstItemPrompt(
                 .height(56.dp),
         ) {
             Icon(
-                imageVector = Icons.Default.Add,
+                imageVector = Icons.Filled.Add,
                 contentDescription = null,
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -516,20 +647,66 @@ private fun ShoppingItemCard(
     onClick: () -> Unit,
     onTogglePickedUp: () -> Unit,
 ) {
+    // --- Sub-animations for the pick-up moment ---
+    // Following the checklist's "break it into sub-animations" pattern:
+    //   1) card container colour eases instead of snapping
+    //   2) checkbox surface colour eases
+    //   3) check icon Crossfades in/out
+    //   4) checkbox scales 1.0 → 1.15 → 1.0 on every TOGGLE (spring pop)
+    //   5) text colour eases to/from the muted state
+    val animSpec = tween<Color>(durationMillis = 220)
+    val cardColor by animateColorAsState(
+        targetValue = if (item.isPickedUp)
+            MaterialTheme.colorScheme.surfaceContainer
+        else
+            MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = animSpec,
+        label = "card-color",
+    )
+    val checkboxColor by animateColorAsState(
+        targetValue = if (item.isPickedUp)
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.surface,
+        animationSpec = animSpec,
+        label = "checkbox-color",
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (item.isPickedUp)
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+        else
+            MaterialTheme.colorScheme.onSurface,
+        animationSpec = animSpec,
+        label = "text-color",
+    )
+
+    // Scale pop on the checkbox — driven by a target that we briefly bump
+    // to 1.15f and let spring back. `hasInitialized` skips the pop on the
+    // very first composition (e.g. when scrolling into view), so it only
+    // plays on a real user toggle.
+    var scaleTarget by remember(item.id) { mutableFloatStateOf(1f) }
+    var hasInitialized by remember(item.id) { mutableStateOf(false) }
+    LaunchedEffect(item.isPickedUp) {
+        if (hasInitialized) {
+            scaleTarget = 1.15f
+            delay(120)
+            scaleTarget = 1f
+        }
+        hasInitialized = true
+    }
+    val checkboxScale by animateFloatAsState(
+        targetValue = scaleTarget,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "checkbox-scale",
+    )
+
     Card(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize(),
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            // Active items pop on white; picked-up items recede into the
-            // grey field, giving the list a clear hierarchy at a glance.
-            containerColor = if (item.isPickedUp)
-                MaterialTheme.colorScheme.surfaceContainer
-            else
-                MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (item.isPickedUp) 0.dp else 2.dp,
         ),
@@ -544,28 +721,38 @@ private fun ShoppingItemCard(
                 .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Circular checkbox — filled green when picked up, outlined when active.
+            // Circular checkbox — filled when picked up, outlined when active.
+            // Colour eases via animateColorAsState; the check icon Crossfades
+            // in; the whole circle pops on toggle via the scale modifier.
             Surface(
                 onClick = onTogglePickedUp,
                 shape = CircleShape,
-                color = if (item.isPickedUp)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.surface,
+                color = checkboxColor,
                 border = if (!item.isPickedUp)
                     CardDefaults.outlinedCardBorder()
                 else
                     null,
-                modifier = Modifier.size(30.dp),
+                modifier = Modifier
+                    .size(30.dp)
+                    .scale(checkboxScale),
             ) {
-                if (item.isPickedUp) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(16.dp),
-                        )
+                Crossfade(
+                    targetState = item.isPickedUp,
+                    animationSpec = tween(180),
+                    label = "check-icon",
+                ) { pickedUp ->
+                    if (pickedUp) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -578,10 +765,7 @@ private fun ShoppingItemCard(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = if (item.isPickedUp) FontWeight.Normal else FontWeight.Medium,
                     textDecoration = if (item.isPickedUp) TextDecoration.LineThrough else TextDecoration.None,
-                    color = if (item.isPickedUp)
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
-                    else
-                        MaterialTheme.colorScheme.onSurface,
+                    color = textColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

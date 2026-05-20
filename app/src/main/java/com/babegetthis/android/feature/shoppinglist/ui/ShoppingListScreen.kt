@@ -1,8 +1,12 @@
 package com.babegetthis.android.feature.shoppinglist.ui
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -20,8 +24,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -38,7 +44,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -55,11 +61,11 @@ import com.babegetthis.android.R
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
-import com.babegetthis.android.core.util.getTimePeriod
-import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 import com.babegetthis.android.feature.shoppinglist.ui.components.GreetingSection
 import com.babegetthis.android.feature.shoppinglist.ui.components.ShoppingListCard
 import com.babegetthis.android.feature.shoppinglist.ui.components.TabEmptyState
@@ -93,6 +99,7 @@ fun ShoppingListScreen(
     val editingList by viewModel.editingList.collectAsState()
     val snackBarHostState = remember { SnackbarHostState() }
     val isDark = isSystemInDarkTheme()
+    val haptic = rememberHaptic()
 
     val authState by authStateManager.authState.collectAsState()
     val isLoggedIn = authState is AuthState.Authenticated
@@ -120,6 +127,7 @@ fun ShoppingListScreen(
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
+                haptic(Haptic.Light)
                 viewModel.undoDeleteList()
             }
         }
@@ -133,7 +141,7 @@ fun ShoppingListScreen(
                 title = stringResource(R.string.app_name),
                 // Profile icon — only visible when logged in
                 showActionIcon = isLoggedIn,
-                actionIcon = Icons.Default.Person,
+                actionIcon = Icons.Outlined.Person,
                 onActionClick = { showProfileSheet = true },
                 useLargeTopBar = true,
                 scrollBehavior = scrollBehavior,
@@ -144,12 +152,15 @@ fun ShoppingListScreen(
         floatingActionButton = {
             if (uiState.isActiveTab && !uiState.hasNoLists) {
                 ExtendedFloatingActionButton(
-                    onClick = { viewModel.onCreateListClick() },
+                    onClick = {
+                        haptic(Haptic.Medium)
+                        viewModel.onCreateListClick()
+                    },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(16.dp),
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.shopping_list_create),
@@ -179,65 +190,99 @@ fun ShoppingListScreen(
                 // Uses ripple indication for touch feedback.
                 TabPillRow(
                     tabs = listOf(
-                        TabPill(label = "Active", icon = Icons.Outlined.ShoppingCart),
-                        TabPill(label = "Completed", icon = Icons.Default.Check)
+                        TabPill(
+                            label = "Active",
+                            iconInactive = Icons.Outlined.ShoppingCart,
+                            iconActive = Icons.Filled.ShoppingCart,
+                        ),
+                        TabPill(
+                            label = "Completed",
+                            iconInactive = Icons.Outlined.CheckCircle,
+                            iconActive = Icons.Filled.CheckCircle,
+                        )
                     ),
                     selectedIndex = uiState.selectedTab,
                     onTabSelected = { viewModel.setSelectedTab(it) },
                 )
 
-                // Tab content
-                if (uiState.displayedListsAreEmpty) {
-                    TabEmptyState(isActiveTab = uiState.isActiveTab)
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                    ) {
-                        // Greeting only on Active tab
-                        if (uiState.isActiveTab) {
-                            item(key = "greeting") {
-                                GreetingSection(
-                                    listCount = uiState.activeLists.size,
-                                    itemsToGet = uiState.activeItemsToGet,
-                                )
-                            }
+                // Tab content — slides horizontally on tab swap.
+                // Direction is by sign of (target - initial): Active→Completed
+                // slides the new content in from the right; reverse slides from the left.
+                // Flutter analogue: a PageView with a programmatic controller.animateToPage,
+                // except here Compose drives both the in and out animations from one spec.
+                AnimatedContent(
+                    targetState = uiState.selectedTab,
+                    transitionSpec = {
+                        val goingRight = targetState > initialState
+                        val anim = tween<IntOffset>(durationMillis = 280)
+                        val fade = tween<Float>(durationMillis = 280)
+                        if (goingRight) {
+                            (slideInHorizontally(anim) { width -> width } + fadeIn(fade)) togetherWith
+                                (slideOutHorizontally(anim) { width -> -width } + fadeOut(fade))
+                        } else {
+                            (slideInHorizontally(anim) { width -> -width } + fadeIn(fade)) togetherWith
+                                (slideOutHorizontally(anim) { width -> width } + fadeOut(fade))
                         }
+                    },
+                    label = "tab-content",
+                ) { tabIndex ->
+                    // Everything inside this lambda derives from `tabIndex`,
+                    // NOT from uiState.selectedTab. AnimatedContent re-runs
+                    // this block for both the incoming and outgoing panes
+                    // during a swap — if we read uiState.groupedLists here,
+                    // the outgoing pane would snap to the new tab's data
+                    // the instant the user tapped, making the slide pointless.
+                    val isActiveForPane = tabIndex == 0
+                    val listsForPane =
+                        if (isActiveForPane) uiState.activeLists else uiState.completedLists
+                    val groupedForPane =
+                        if (isActiveForPane) uiState.groupedActive else uiState.groupedCompleted
 
-                       uiState.groupedLists.forEach { (period, periodLists) ->
-                            item(key = "header-$period-${uiState.selectedTab}") {
-                                TimePeriodHeader(period = period)
+                    if (listsForPane.isEmpty()) {
+                        TabEmptyState(isActiveTab = isActiveForPane)
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                        ) {
+                            // Greeting only on Active tab
+                            if (isActiveForPane) {
+                                item(key = "greeting") {
+                                    GreetingSection(
+                                        listCount = uiState.activeLists.size,
+                                        itemsToGet = uiState.activeItemsToGet,
+                                    )
+                                }
                             }
 
-                            itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
-                                val accent = getAccentForList(list.id, isDark)
+                            groupedForPane.forEach { (period, periodLists) ->
+                                item(key = "header-$period-$tabIndex") {
+                                    TimePeriodHeader(period = period)
+                                }
 
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn() + slideInVertically(
-                                        initialOffsetY = { it / 2 }
-                                    ),
-                                ) {
+                                itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
+                                    val accent = getAccentForList(list.id, isDark)
+
                                     SwipeableCard(
                                         onSwipeLeft = { viewModel.deleteList(list.id) },
                                     ) {
                                         ShoppingListCard(
                                             list = list,
                                             accent = accent,
-                                            isCompletedTab = !uiState.isActiveTab,
+                                            isCompletedTab = !isActiveForPane,
                                             onClick = { onNavigateToList(list.id, list.name) },
                                             onLongPress = { viewModel.onEditListClick(list) },
                                         )
                                     }
+                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
+
+                                item { Spacer(modifier = Modifier.height(4.dp)) }
                             }
 
-                            item { Spacer(modifier = Modifier.height(4.dp)) }
+                            item { Spacer(modifier = Modifier.height(88.dp)) }
                         }
-
-                        item { Spacer(modifier = Modifier.height(88.dp)) }
                     }
                 }
             }

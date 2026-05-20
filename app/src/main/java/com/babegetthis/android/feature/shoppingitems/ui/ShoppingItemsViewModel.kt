@@ -10,12 +10,14 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.model.Category
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
+import com.babegetthis.android.feature.shoppingitems.model.ShoppingItemsUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,7 +32,6 @@ class ShoppingItemsViewModel @Inject constructor(
 
     val listId: String = savedStateHandle.get<String>("listId") ?: ""
     val listName: String = savedStateHandle.get<String>("listName") ?: ""
-    val isNewList: Boolean = savedStateHandle.get<Boolean>("isNew") ?: false
 
     // Check if the user is logged in — used to gate the share feature.
     fun isAuthenticated(): Boolean {
@@ -42,6 +43,25 @@ class ShoppingItemsViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
+        )
+
+    // Derived UI state: filter + groupBy run once per upstream emission
+    // here, instead of on every recomposition in the screen. Keeps the
+    // hot animation paths (ProgressCard color pulse) cheap.
+    val uiState: StateFlow<ShoppingItemsUiState> = items
+        .map { list ->
+            val active = list.filter { !it.isPickedUp }
+            ShoppingItemsUiState(
+                items = list,
+                activeItems = active,
+                completedItems = list.filter { it.isPickedUp },
+                activeByShop = active.groupBy { it.shop ?: "" },
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ShoppingItemsUiState(),
         )
 
     val categories: StateFlow<List<Category>> = categoryRepository.getAllCategories()
@@ -65,6 +85,33 @@ class ShoppingItemsViewModel @Inject constructor(
 
     private val _undoDeleteEvent = MutableSharedFlow<String>() // emits item name
     val undoDeleteEvent = _undoDeleteEvent.asSharedFlow()
+
+    // One-shot UI events the screen consumes (e.g. fire a Success haptic
+    // when the list just became all-done). SharedFlow keeps the pattern
+    // consistent with errorMessage / undoDeleteEvent above.
+    // Flutter analogue: a one-off Stream the View listens to and reacts to.
+    sealed class UiEvent {
+        data object ListJustCompleted : UiEvent()
+    }
+    private val _events = MutableSharedFlow<UiEvent>()
+    val events = _events.asSharedFlow()
+
+    init {
+        // Watch the items flow and detect the TRANSITION from "not all done"
+        // to "all done". We only emit on the transition itself — not on
+        // initial load of an already-completed list, otherwise opening any
+        // finished list would buzz.
+        viewModelScope.launch {
+            var wasAllDone: Boolean? = null
+            items.collect { itemList ->
+                val isAllDone = itemList.isNotEmpty() && itemList.all { it.isPickedUp }
+                if (wasAllDone == false && isAllDone) {
+                    _events.emit(UiEvent.ListJustCompleted)
+                }
+                wasAllDone = isAllDone
+            }
+        }
+    }
 
     fun onAddItemClick() {
         showAddItemDialog.value = true

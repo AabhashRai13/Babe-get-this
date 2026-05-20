@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +34,7 @@ internal fun TabEmptyState(
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            imageVector = if (isActiveTab) Icons.Outlined.ShoppingCart else Icons.Default.Check,
+            imageVector = if (isActiveTab) Icons.Outlined.ShoppingCart else Icons.Outlined.CheckCircle,
             contentDescription = null,
             modifier = Modifier.size(48.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),

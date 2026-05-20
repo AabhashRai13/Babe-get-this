@@ -45,20 +45,31 @@ class ShoppingListViewModel @Inject constructor(
         _selectedTab,
     ) {
         lists, tab ->
-        val active = lists.filter{
-            !it.isCompleted
-        }
-        val completed = lists.filter {
-            it.isCompleted
-        }
-        val displayed = if (tab == 0) active else completed
+        val active = lists.filter { !it.isCompleted }
+        val completed = lists.filter { it.isCompleted }
 
-        val grouped = linkedMapOf<TimePeriod, MutableList<ShoppingList>>()
-        for (list in displayed){
-            val period = getTimePeriod(list.createdAt)
-            grouped.getOrPut(period) { mutableListOf() }.add(list)
+        // Group BOTH tabs up front so the AnimatedContent on the screen
+        // can render the outgoing pane with its own data during a tab
+        // swap, instead of both panes snapping to whichever tab is now
+        // selected. linkedMapOf preserves insertion order so time-period
+        // headers (Today / This week / Older) stay in the right sequence.
+        fun groupByPeriod(source: List<ShoppingList>): Map<TimePeriod, List<ShoppingList>> {
+            val out = linkedMapOf<TimePeriod, MutableList<ShoppingList>>()
+            for (list in source) {
+                val period = getTimePeriod(list.createdAt)
+                out.getOrPut(period) { mutableListOf() }.add(list)
+            }
+            return out
         }
-        ShoppingListUiState(activeLists = active, completedLists = completed, selectedTab = tab, groupedLists = grouped, activeItemsToGet = active.sumOf { it.itemCount - it.completedItemCount })
+
+        ShoppingListUiState(
+            activeLists = active,
+            completedLists = completed,
+            selectedTab = tab,
+            groupedActive = groupByPeriod(active),
+            groupedCompleted = groupByPeriod(completed),
+            activeItemsToGet = active.sumOf { it.itemCount - it.completedItemCount },
+        )
     }.stateIn(
         scope = viewModelScope,
         started =  SharingStarted.WhileSubscribed(5000),
