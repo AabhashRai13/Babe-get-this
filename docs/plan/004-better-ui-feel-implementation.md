@@ -63,15 +63,28 @@ File: `ShoppingItemsScreen.kt` (`ShoppingItemCard`, ~L523). Break into sub-anima
 
 ViewModel: `ShoppingItemsViewModel.kt` — expose `Channel<UiEvent>` for the "list just completed" one-shot signal, consumed in the screen via `LaunchedEffect`.
 
-## Commit 6 — "List complete" celebration
+## Commit 6 — "List complete" celebration *(partially done, needs more work)*
 
-File: `ShoppingItemsScreen.kt` L351–359 (progress card section).
+File: `ShoppingItemsScreen.kt` `ProgressCard` composable.
 
-1. Progress bar fills to 100% — existing tween, keep
-2. "All done!" card scales in `0.85 → 1.0` with `spring(DampingRatioLowBouncy)`
-3. Small `Filled.CheckCircle` rotates `-90° → 0°` + fades in (200ms tween)
-4. `Haptic.Success` fires once via the channel from Commit 5
-5. Guard with `key(uiState.isAllDone)` so it only plays on transition, not every recomposition
+1. Progress bar fills to 100% — existing tween, keep ✅
+2. "All done!" card scales in `0.85 → 1.0` with `spring(DampingRatioLowBouncy)` ✅ (implemented via `Animatable.snapTo` + `animateTo`)
+3. Small `Filled.CheckCircle` rotates `-90° → 0°` + fades in (200ms tween) ⚠️ **rotation not visible on device**
+4. `Haptic.Success` fires once via the SharedFlow from Commit 5 ✅
+5. Guard with `hasInitialized` so it only plays on transition, not initial composition ✅
+
+### ⚠️ Open: rotation animation not landing
+
+**Symptom:** the icon appears and fades in, but the rotation from -90° to 0° isn't visibly happening on device. The pop + fade reads as "subtle" overall.
+
+**Possible causes to investigate:**
+- The `Icon` size is 20.dp — at that size, a rotation may be too small to perceive. Try 28–32.dp.
+- `graphicsLayer { rotationZ = checkRotation.value; alpha = checkAlpha.value }` — both values may be reading the initial settled state because the `if (allDone)` outer gate causes the Icon to only mount AFTER `LaunchedEffect` already snapped values to settled. The `snapTo(-90f)` may be running but the Icon isn't composed yet to display it. Try always composing the Icon (with `alpha = 0` when not done) instead of gating with `if (allDone)`.
+- Or: the `LaunchedEffect` runs all branches in one go — `snapTo(-90f)` then `animateTo(0f)` may collapse to no visible interpolation because both happen in the same effect body, and the Icon doesn't re-compose between them.
+
+**Suggested next step:** drop the `if (allDone)` gate inside the Row; always compose the Icon with `alpha = checkAlpha.value` controlling visibility. Then split the rotation `snapTo` and `animateTo` into separate suspending calls with `delay(0)` or `withFrameNanos { }` between them, so the layer composes once with `-90°` before easing to `0°`.
+
+Also worth dialing the celebration up if it still feels muted: bigger icon (28–32.dp), longer scale window (give the spring more time), or add a brief "primaryContainer glow" via background pulse.
 
 ## Files touched
 

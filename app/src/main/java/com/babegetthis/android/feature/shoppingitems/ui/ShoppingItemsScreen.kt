@@ -1,8 +1,15 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -27,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Place
@@ -58,6 +66,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -72,6 +82,7 @@ import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,14 +92,16 @@ fun ShoppingItemsScreen(
     onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingItemsViewModel = hiltViewModel()
 ) {
-    val items by viewModel.items.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val showDialog by viewModel.showAddItemDialog.collectAsState()
     val editingItem by viewModel.editingItem.collectAsState()
 
-    val activeItems = items.filter { !it.isPickedUp }
-    val completedItems = items.filter { it.isPickedUp }
-    val activeByShop = activeItems.groupBy { it.shop ?: "" }
+    // All derived lists/maps come from uiState — computed once per data
+    // emission in the ViewModel, not on every recomposition.
+    val activeItems = uiState.activeItems
+    val completedItems = uiState.completedItems
+    val activeByShop = uiState.activeByShop
 
     val snackBarHostState = remember { SnackbarHostState() }
     val haptic = rememberHaptic()
@@ -149,7 +162,7 @@ fun ShoppingItemsScreen(
             )
         },
         floatingActionButton = {
-            if (items.isNotEmpty()) {
+            if (!uiState.isEmpty) {
                 ExtendedFloatingActionButton(
                     onClick = {
                         haptic(Haptic.Medium)
@@ -169,7 +182,7 @@ fun ShoppingItemsScreen(
             }
         }
     ) { padding ->
-        if (items.isEmpty()) {
+        if (uiState.isEmpty) {
             FirstItemPrompt(
                 modifier = Modifier
                     .padding(padding)
@@ -186,8 +199,8 @@ fun ShoppingItemsScreen(
                 // Progress summary card at the top
                 item(key = "progress") {
                     ProgressCard(
-                        totalItems = items.size,
-                        completedCount = completedItems.size,
+                        totalItems = uiState.totalCount,
+                        completedCount = uiState.completedCount,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                 }
@@ -312,6 +325,16 @@ fun ShoppingItemsScreen(
 
 // Progress card — shows how far along the shopping trip is.
 // A visual focal point that gives the screen character.
+//
+// Celebration sub-animations when the list transitions to all-done:
+//   1) Card pops in: scale snaps to 0.85f, springs back to 1.0f
+//   2) Filled.CheckCircle appears next to "All done!", rotating from
+//      -90° to 0° and fading in over 200ms
+//   3) (Haptic.Success is handled at the screen level via the ViewModel
+//       UiEvent.ListJustCompleted flow — see ShoppingItemsScreen.)
+//
+// All three skip on the initial composition (hasInitialized guard) so
+// opening a list that's already complete doesn't replay the celebration.
 @Composable
 private fun ProgressCard(
     totalItems: Int,
@@ -320,15 +343,67 @@ private fun ProgressCard(
     val progress = if (totalItems > 0) completedCount.toFloat() / totalItems else 0f
     val allDone = completedCount == totalItems && totalItems > 0
 
+    // Animatable lets us snapTo (jump instantly) then animateTo, which is
+    // how we get "card appears at 0.85 then springs up to 1.0" rather
+    // than the smooth lerp animateFloatAsState would produce.
+    val cardScale = remember { Animatable(1f) }
+    // Icon scales 0 -> 1 with a bouncy spring so it overshoots naturally.
+    // AnimatedVisibility handles the layout slot reveal + fade; graphicsLayer
+    // scale adds the bouncy pop on top.
+    val checkScale = remember { Animatable(if (allDone) 1f else 0f) }
+    // One-shot 0 -> 1 -> 0 pulse for the container color flash.
+    val pulseProgress = remember { Animatable(0f) }
+    var hasInitialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(allDone) {
+        if (hasInitialized && allDone) {
+            // Just transitioned into all-done — play the celebration.
+            cardScale.snapTo(0.85f)
+            checkScale.snapTo(0f)
+            pulseProgress.snapTo(0f)
+
+            launch {
+                cardScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy),
+                )
+            }
+            launch {
+                checkScale.animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioHighBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                )
+            }
+            launch {
+                pulseProgress.animateTo(1f, tween(180, easing = FastOutSlowInEasing))
+                pulseProgress.animateTo(0f, tween(320, easing = FastOutSlowInEasing))
+            }
+        } else if (!allDone) {
+            // Re-opening or unticking — reset without animating.
+            checkScale.snapTo(0f)
+            pulseProgress.snapTo(0f)
+        }
+        hasInitialized = true
+    }
+
+    // Pulse the container from primaryContainer toward primary and back on
+    // completion, then settle. Steady-state color is unchanged.
+    val baseContainer = if (allDone)
+        MaterialTheme.colorScheme.primaryContainer
+    else
+        MaterialTheme.colorScheme.surfaceContainerLow
+    val pulseTarget = MaterialTheme.colorScheme.primary
+    val containerColor = lerp(baseContainer, pulseTarget, pulseProgress.value)
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(cardScale.value),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (allDone)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         border = if (!allDone) BorderStroke(
             width = 0.5.dp,
@@ -345,16 +420,42 @@ private fun ProgressCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = if (allDone) "All done!"
-                           else "$completedCount of $totalItems picked up",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (allDone)
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    else
-                        MaterialTheme.colorScheme.onSurface,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // AnimatedVisibility collapses the icon + spacer slot when
+                    // not complete so the title row isn't padded with empty
+                    // space. The bouncy graphicsLayer scale plays on top of
+                    // the slot reveal for the "pop" effect.
+                    AnimatedVisibility(
+                        visible = allDone,
+                        enter = expandHorizontally() + fadeIn(),
+                        exit = shrinkHorizontally() + fadeOut(),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .graphicsLayer {
+                                        scaleX = checkScale.value
+                                        scaleY = checkScale.value
+                                    },
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                    }
+                    Text(
+                        text = if (allDone) "All done!"
+                               else "$completedCount of $totalItems picked up",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (allDone)
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        else
+                            MaterialTheme.colorScheme.onSurface,
+                    )
+                }
                 // Percentage badge
                 Surface(
                     shape = RoundedCornerShape(10.dp),

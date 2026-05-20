@@ -3,9 +3,14 @@ package com.babegetthis.android.core.auth.data
 import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.data.network.dto.LoginRequest
 import com.babegetthis.android.core.data.network.dto.RegisterRequest
+import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
 import javax.inject.Inject
+
+// For login/register, a 401 means "wrong email/password", not "session
+// expired" — override the default safeCall mapping accordingly.
+private val invalidCredentials = { AppError.AuthError("Invalid email or password.") }
 
 // Real implementation that hits the actual API via Retrofit.
 // Used in staging and prod flavors.
@@ -18,7 +23,7 @@ class RealAuthRepository @Inject constructor(
 ) : AuthRepository {
 
     override suspend fun register(email: String, password: String, name: String): Result<User> =
-        safeCall {
+        safeCall(onUnauthorized = invalidCredentials) {
             val response = authApiService.register(
                 RegisterRequest(email = email, password = password, name = name)
             )
@@ -38,7 +43,7 @@ class RealAuthRepository @Inject constructor(
         }
 
     override suspend fun login(email: String, password: String): Result<User> =
-        safeCall {
+        safeCall(onUnauthorized = invalidCredentials) {
             val response = authApiService.login(
                 LoginRequest(email = email, password = password)
             )
