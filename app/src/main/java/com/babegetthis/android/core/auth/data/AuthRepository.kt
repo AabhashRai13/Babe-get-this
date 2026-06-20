@@ -6,10 +6,7 @@ import com.babegetthis.android.core.error.Result
 // Interface for authentication operations.
 // This is the key to environment switching:
 //   - In dev flavor → FakeAuthRepository is injected (no network calls)
-//   - In staging/prod → RealAuthRepository is injected (real API calls)
-//
-// ViewModels only see this interface — they never know if data is real or fake.
-// Like defining an abstract repository in Flutter and swapping implementations with GetIt.
+//   - In staging/prod → SupabaseAuthRepository is injected (real Supabase auth)
 
 interface AuthRepository {
     suspend fun register(email: String, password: String, name: String): Result<User>

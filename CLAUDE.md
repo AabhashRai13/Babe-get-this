@@ -64,6 +64,7 @@ Add use cases later only when a ViewModel gets complex enough to justify it.
 - Use meaningful variable names — no abbreviations while I'm learning
 - Add comments explaining *why*, not just what
 - Prefer simple solutions over optimized ones until I understand the basics
+- Only write absolutely needed comments, don't explain every possible corner case
 
 ## What I Already Know (don't over-explain)
 - Mobile app lifecycle concepts
@@ -93,6 +94,16 @@ Everything we build should serve this core or be deferred to v2.
 
 
 ## TODO
+- [ ] **(tomorrow) Add Supabase keys** to `local.properties`: `SUPABASE_URL` and
+      `SUPABASE_ANON_KEY` (from Supabase dashboard → Project Settings → API).
+      Until then, auth builds but won't connect. See
+      `docs/technical-decisions/001-auth-via-supabase.md`. Test on the **staging**
+      variant (dev uses the fake auth repo).
+- [ ] **(tomorrow, discuss first) Improve `SupabaseAuthRepository` readability** —
+      not happy with it as-is; explore a cleaner structure before refactoring.
+- [ ] **(tomorrow, discuss first) Two Supabase projects** — one for production, one
+      shared by staging + dev — wired per flavor (like `BASE_URL`), with dev still
+      using the fake auth repo. Decide project split + how keys map to flavors.
 - Shopping lists should show a "completed" status when all items in the list are checked/picked up
 - Greeting on the home screen should be time-aware (Good morning/afternoon/evening) — already implemented, keep it this way
 - Create a work manager that checks for any stale list (Yet to decide Criteria to define stale list) and move them to history list or something. Purpose is to one good ui and learning opportunity. And a way to move this stale list back to active or complete.
@@ -106,6 +117,5 @@ Strategy for first release
 a) Complete offline first method.
 
 ## for v2
-1) Voice to list
-2) open camera or gallery to add image.(Auto fill form from image)
-3) Store room, when user completes a list we will add the item to store room for grocery items only. In store they can mark item as finish to keep it in the next list automatically.
+1) open camera or gallery to add image.(Auto fill form from image)
+2) Store room, when user completes a list we will add the item to store room for grocery items only. In store they can mark item as finish to keep it in the next list automatically.

@@ -1,7 +1,6 @@
 package com.babegetthis.android.core.data.di
 
 import com.babegetthis.android.BuildConfig
-import com.babegetthis.android.core.auth.data.AuthApiService
 import com.babegetthis.android.core.data.network.AuthAuthenticator
 import com.babegetthis.android.core.data.network.AuthInterceptor
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -68,6 +67,11 @@ object NetworkModule {
     // Retrofit = the API client builder. Like Dio() in Flutter.
     // It takes the OkHttpClient as its engine and the base URL from BuildConfig
     // (which changes per flavor: dev/staging/prod).
+    //
+    // NOTE: Authentication no longer goes through Retrofit — it moved to the
+    // Supabase SDK (see SupabaseModule). This Retrofit instance is kept for the
+    // upcoming audio-transcribe API, which calls our own Node backend (BASE_URL).
+    // The AuthInterceptor still attaches the Supabase access token to those calls.
     @Provides
     @Singleton
     fun provideRetrofit(
@@ -80,14 +84,5 @@ object NetworkModule {
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()
-    }
-
-    // Create the AuthApiService from Retrofit.
-    // Retrofit generates the implementation at runtime from the interface.
-    // Like using Dio to call specific endpoints, but type-safe.
-    @Provides
-    @Singleton
-    fun provideAuthApiService(retrofit: Retrofit): AuthApiService {
-        return retrofit.create(AuthApiService::class.java)
     }
 }

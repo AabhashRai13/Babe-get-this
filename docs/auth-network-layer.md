@@ -3,6 +3,14 @@
 **Date:** April 2026
 **Status:** Phases 1-5 complete, Phase 6 (WebSocket sync) pending
 
+> ⚠️ **Partially superseded (2026-06-20).** Authentication moved from our custom
+> Node API to **Supabase**. The custom auth pieces below — `AuthApiService`,
+> `AuthDtos`, and the `RealAuthRepository` "calls Retrofit" description (the
+> class is now `SupabaseAuthRepository`) — no
+> longer reflect the code. The network layer (Retrofit/OkHttp/interceptors) and
+> auth state/storage are still accurate and are reused for the audio-transcribe
+> API. See `docs/technical-decisions/001-auth-via-supabase.md`.
+
 ## Overview
 Added user authentication (login/register) with a multi-environment network layer. The app now starts on a login screen and navigates to the main app after successful auth. In the dev flavor, no real API calls are made — fake responses are returned.
 
