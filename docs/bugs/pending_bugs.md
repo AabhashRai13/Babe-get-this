@@ -1,2 +1,0 @@
-1) When app starts for the first time on empty state we have two create list button, floating button should hide on empty state.
-2) When I delete a list inside completed tab, and i undo it from the dialog the list goes to active tab but the item inside it gets deleted.

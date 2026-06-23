@@ -104,10 +104,32 @@ Everything we build should serve this core or be deferred to v2.
 - [ ] **(tomorrow, discuss first) Two Supabase projects** — one for production, one
       shared by staging + dev — wired per flavor (like `BASE_URL`), with dev still
       using the fake auth repo. Decide project split + how keys map to flavors.
+      DECIDED: one project now (staging), create the prod project before publishing,
+      then do the per-flavor key split. dev stays on the fake repo.
+- [ ] **(before production) Email confirmation + deep links** — staging currently
+      runs with "Confirm email" OFF. Before launch: turn it back ON in the prod
+      Supabase project, and set up Android deep links so the confirmation link opens
+      the app instead of `http://localhost:3000`. Needs: Supabase Site URL + redirect
+      URLs, plus an Android App Link / custom URL scheme wired to the confirm flow.
+- [ ] **(deferred — required before Play Store launch) Delete account** — Google Play
+      mandates an in-app account-deletion path (+ a public URL) for any app with
+      account creation. NOT a client-only change: Supabase user deletion needs the
+      `service_role` key, which must NEVER ship in the app. So it requires a
+      server-side call. DECIDED approach (for when we pick it up):
+      - Use a **Supabase Edge Function** (not the Node gateway) — keeps account
+        lifecycle next to the data, deploys with the Supabase project, and gets
+        `service_role` from its own env. The app calls it with the user's JWT; the
+        function verifies and runs `auth.admin.deleteUser()`.
+      - Client side: call the function → on success clear local session
+        (`AuthStateManager.logout()` path).
+      - **Keep local Room data** (lists/items stay on-device) — account deletion
+        removes cloud identity only. Confirm dialog must state this explicitly:
+        "Your account will be deleted. Lists on this device will remain."
+      - Lives in the ProfileBottomSheet alongside the existing edit-name / logout.
 - Shopping lists should show a "completed" status when all items in the list are checked/picked up
 - Greeting on the home screen should be time-aware (Good morning/afternoon/evening) — already implemented, keep it this way
 - Create a work manager that checks for any stale list (Yet to decide Criteria to define stale list) and move them to history list or something. Purpose is to one good ui and learning opportunity. And a way to move this stale list back to active or complete.
-- Use code magic for CI-CD (codemagic.yaml  not ui). Two work flows, for staging firebase Distribution and production on play store.
+- Use GitHub Actions for CI/CD (workflow YAML in `.github/workflows/`, not a UI). Two workflows: staging → Firebase App Distribution, production → Play Store. (Decided against Codemagic.)
 - One live scenario, let's say someone deletes the item, user have to put in optional note on why they deleted the item. IDK i just want it to be easier for user to communicate.
 - What happens if user can't find the item? our user find the alternative. There should be a better way than chat app. Should solve a problem that call and chatting app doesn't do. Have to make it quick, just take image and may be just approve or reject message. 
   and algorithm that provides suggestion based on history.

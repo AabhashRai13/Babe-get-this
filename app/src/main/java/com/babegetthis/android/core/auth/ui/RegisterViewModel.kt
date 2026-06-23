@@ -3,6 +3,7 @@ package com.babegetthis.android.core.auth.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
+import com.babegetthis.android.core.auth.data.RegisterResult
 import com.babegetthis.android.core.error.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -48,9 +49,18 @@ class RegisterViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
             when (val result = authRepository.register(email, password, name)) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(isLoading = false)
-                    _registerSuccess.emit(Unit)
+                is Result.Success -> when (result.data) {
+                    is RegisterResult.SignedIn -> {
+                        _uiState.value = _uiState.value.copy(isLoading = false)
+                        _registerSuccess.emit(Unit)
+                    }
+                    RegisterResult.ConfirmationRequired -> {
+                        // Not an error — the account was created, they just need to confirm.
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            errorMessage = "Check your email to confirm your account, then sign in.",
+                        )
+                    }
                 }
                 is Result.Error -> {
                     _uiState.value = _uiState.value.copy(

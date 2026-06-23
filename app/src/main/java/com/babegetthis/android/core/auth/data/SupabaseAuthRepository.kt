@@ -19,10 +19,9 @@ import javax.inject.Inject
 class SupabaseAuthRepository @Inject constructor(
     private val supabaseClient: SupabaseClient,
     private val authStateManager: AuthStateManager,
-    private val tokenManager: TokenManager,
 ) : AuthRepository {
 
-    override suspend fun register(email: String, password: String, name: String): Result<User> =
+    override suspend fun register(email: String, password: String, name: String): Result<RegisterResult> =
         runCatchingAuth {
             // We pass the display name as user_metadata so it lives on the
             // Supabase user record, not just locally.
@@ -31,12 +30,15 @@ class SupabaseAuthRepository @Inject constructor(
                 this.password = password
                 this.data = buildJsonObject { put("name", name) }
             }
-            // With "Confirm email" OFF, sign-up creates a session immediately.
-            // With it ON, there is no session yet — the user must confirm first.
+            // With "Confirm email" OFF, sign-up creates a session immediately → SignedIn.
+            // With it ON, there is no session yet → the user must confirm first.
             if (supabaseClient.auth.currentSessionOrNull() == null) {
-                throw EmailConfirmationRequiredException()
+                RegisterResult.ConfirmationRequired
+            } else {
+                RegisterResult.SignedIn(
+                    persistCurrentSession(fallbackName = name, fallbackEmail = email)
+                )
             }
-            persistCurrentSession(fallbackName = name, fallbackEmail = email)
         }
 
     override suspend fun login(email: String, password: String): Result<User> =
@@ -67,8 +69,8 @@ class SupabaseAuthRepository @Inject constructor(
             data = buildJsonObject { put("name", name) }
         }
         // Keep the locally cached name in sync for the profile screen
-        tokenManager.saveUserName(name)
-        updated.toUser(fallbackName = name, fallbackEmail = tokenManager.getUserEmail() ?: "")
+        authStateManager.updateName(name)
+        updated.toUser(fallbackName = name, fallbackEmail = authStateManager.currentEmail() ?: "")
     }
 
     // -- Helpers --
@@ -112,8 +114,6 @@ class SupabaseAuthRepository @Inject constructor(
     private suspend fun <T> runCatchingAuth(block: suspend () -> T): Result<T> =
         try {
             Result.Success(block())
-        } catch (e: EmailConfirmationRequiredException) {
-            Result.Error(AppError.AuthError("Check your email to confirm your account, then sign in."))
         } catch (e: UnknownHostException) {
             Result.Error(AppError.NetworkError())
         } catch (e: ConnectException) {
@@ -135,8 +135,4 @@ class SupabaseAuthRepository @Inject constructor(
             else -> raw
         }
     }
-
-    // Internal signal that sign-up worked but the account needs email confirmation
-    // before a session exists. Mapped to a friendly message above.
-    private class EmailConfirmationRequiredException : Exception()
 }

@@ -27,11 +27,22 @@ private fun getGreeting(): String {
 
 // Greeting section — gives the home screen a warm focal point.
 // Shows a time-aware greeting and a quick summary of active lists/items.
+// When signed in, the greeting is personalised with the user's first name.
 @Composable
 internal fun GreetingSection(
     listCount: Int,
     itemsToGet: Int,
+    userName: String? = null,
 ) {
+    // Personalise with the first name only ("Aabhash Rai" → "Aabhash").
+    // Blank/null name (logged out) falls back to the plain greeting.
+    val firstName = userName?.trim()?.takeIf { it.isNotEmpty() }?.substringBefore(' ')
+    val greeting = if (firstName != null) {
+        "${getGreeting()}, $firstName"
+    } else {
+        getGreeting()
+    }
+
     val summary = when {
         itemsToGet == 0 -> "$listCount lists — nothing to pick up yet"
         listCount == 1 -> "1 list · $itemsToGet items to get"
@@ -47,7 +58,7 @@ internal fun GreetingSection(
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
             Text(
-                text = getGreeting(),
+                text = greeting,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,

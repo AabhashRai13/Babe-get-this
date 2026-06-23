@@ -13,9 +13,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-// Shown when an unauthenticated user taps the Share button.
-// Prompts them to sign in or create an account — this is the main
-// entry point to auth now that the login wall is removed.
+// Reactive "sign in to continue" prompt for a gated feature.
+// DORMANT — not currently triggered anywhere. It used to back the Share
+// button, but Share was cut from v1 and the always-visible Home account
+// icon now owns the auth entry point. Kept to be retargeted to the real
+// gated feature (e.g. partner sync) when that ships.
 // Like a Flutter showDialog() with CupertinoAlertDialog.
 
 @Composable

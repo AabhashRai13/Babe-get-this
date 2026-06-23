@@ -21,6 +21,13 @@ class AuthStateManager @Inject constructor(
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
+    // The signed-in user's display name, or null when logged out.
+    // Kept as its own flow because AuthState only carries the userId — the UI
+    // (e.g. the Home greeting) observes this so the name shows up reactively
+    // on login, on logout, and right after the user edits it.
+    private val _userName = MutableStateFlow(tokenManager.getUserName())
+    val userName: StateFlow<String?> = _userName.asStateFlow()
+
     // Call this once when the app starts (e.g., from MainActivity or Application)
     fun initialize() {
         val token = tokenManager.getToken()
@@ -31,6 +38,7 @@ class AuthStateManager @Inject constructor(
         } else {
             AuthState.Unauthenticated
         }
+        _userName.value = tokenManager.getUserName()
     }
 
     // Called after successful login or register.
@@ -41,11 +49,24 @@ class AuthStateManager @Inject constructor(
         tokenManager.saveUserName(userName)
         tokenManager.saveUserEmail(userEmail)
         _authState.value = AuthState.Authenticated(userId)
+        _userName.value = userName
     }
 
     // Called on explicit logout or when server returns 401
     fun logout() {
         tokenManager.clear()
         _authState.value = AuthState.Unauthenticated
+        _userName.value = null
     }
+
+    // Update just the cached display name (after the user edits their profile).
+    // The repo goes through here instead of touching TokenManager directly,
+    // so every local-storage write stays behind this one class.
+    fun updateName(name: String) {
+        tokenManager.saveUserName(name)
+        _userName.value = name
+    }
+
+    // The currently cached email, if any — used as a fallback when building a User.
+    fun currentEmail(): String? = tokenManager.getUserEmail()
 }
