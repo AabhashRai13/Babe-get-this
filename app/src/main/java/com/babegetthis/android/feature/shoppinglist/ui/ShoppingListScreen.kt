@@ -8,6 +8,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -77,9 +79,6 @@ import com.babegetthis.android.ui.theme.ListAccentColor
 import com.babegetthis.android.ui.theme.ListAccentPalette
 import kotlin.math.abs
 
-// Picks a stable accent color for a list based on its ID.
-// Uses the hash of the ID so the color never changes for a given list,
-// but different lists get different colors — like Google Keep.
 private fun getAccentForList(listId: String, isDark: Boolean): ListAccentColor {
     val palette = if (isDark) DarkListAccentPalette else ListAccentPalette
     val index = abs(listId.hashCode()) % palette.size
@@ -92,6 +91,7 @@ fun ShoppingListScreen(
     authStateManager: com.babegetthis.android.core.auth.data.AuthStateManager,
     onNavigateToList: (listId: String, listName: String) -> Unit = { _, _ -> },
     onNavigateToNewList: (listId: String, listName: String) -> Unit = { _, _ -> },
+    onNavigateToLogin: () -> Unit = {},
     viewModel: ShoppingListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -103,6 +103,7 @@ fun ShoppingListScreen(
 
     val authState by authStateManager.authState.collectAsState()
     val isLoggedIn = authState is AuthState.Authenticated
+    val userName by authStateManager.userName.collectAsState()
     var showProfileSheet by remember { mutableStateOf(false) }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -139,16 +140,24 @@ fun ShoppingListScreen(
         topBar = {
             BgtTopAppBar(
                 title = stringResource(R.string.app_name),
-                // Profile icon — only visible when logged in
-                showActionIcon = isLoggedIn,
-                actionIcon = Icons.Outlined.Person,
-                onActionClick = { showProfileSheet = true },
+                actionSlot = {
+                    AccountAction(
+                        isLoggedIn = isLoggedIn,
+                        userName = userName,
+                        onOpenProfile = {
+                            haptic(Haptic.Light)
+                            showProfileSheet = true
+                        },
+                        onSignIn = {
+                            haptic(Haptic.Light)
+                            onNavigateToLogin()
+                        },
+                    )
+                },
                 useLargeTopBar = true,
                 scrollBehavior = scrollBehavior,
             )
         },
-        // FAB only shows on the Active tab when there's at least one list —
-        // on the empty state, the centered "Create list" button is the sole CTA.
         floatingActionButton = {
             if (uiState.isActiveTab && !uiState.hasNoLists) {
                 ExtendedFloatingActionButton(
@@ -170,7 +179,7 @@ fun ShoppingListScreen(
             }
         }
     ) { padding ->
-        // No lists at all — show the empty state (no tabs needed)
+
         if (uiState.hasNoLists) {
             ShoppingListEmptyState(
                 modifier = Modifier
@@ -185,9 +194,6 @@ fun ShoppingListScreen(
                     .padding(padding)
                     .fillMaxSize(),
             ) {
-                // Custom pill-style tab row — no divider line.
-                // Selected tab gets a tinted pill background with bold text.
-                // Uses ripple indication for touch feedback.
                 TabPillRow(
                     tabs = listOf(
                         TabPill(
@@ -204,12 +210,6 @@ fun ShoppingListScreen(
                     selectedIndex = uiState.selectedTab,
                     onTabSelected = { viewModel.setSelectedTab(it) },
                 )
-
-                // Tab content — slides horizontally on tab swap.
-                // Direction is by sign of (target - initial): Active→Completed
-                // slides the new content in from the right; reverse slides from the left.
-                // Flutter analogue: a PageView with a programmatic controller.animateToPage,
-                // except here Compose drives both the in and out animations from one spec.
                 AnimatedContent(
                     targetState = uiState.selectedTab,
                     transitionSpec = {
@@ -226,12 +226,6 @@ fun ShoppingListScreen(
                     },
                     label = "tab-content",
                 ) { tabIndex ->
-                    // Everything inside this lambda derives from `tabIndex`,
-                    // NOT from uiState.selectedTab. AnimatedContent re-runs
-                    // this block for both the incoming and outgoing panes
-                    // during a swap — if we read uiState.groupedLists here,
-                    // the outgoing pane would snap to the new tab's data
-                    // the instant the user tapped, making the slide pointless.
                     val isActiveForPane = tabIndex == 0
                     val listsForPane =
                         if (isActiveForPane) uiState.activeLists else uiState.completedLists
@@ -252,6 +246,7 @@ fun ShoppingListScreen(
                                     GreetingSection(
                                         listCount = uiState.activeLists.size,
                                         itemsToGet = uiState.activeItemsToGet,
+                                        userName = userName,
                                     )
                                 }
                             }
@@ -342,6 +337,70 @@ private fun TimePeriodHeader(period: TimePeriod) {
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp,
         )
+    }
+}
+
+// The Home top-bar account control. Its appearance is the visual cue for
+// auth state: an initial-avatar when signed in, a "Sign in" pill when not.
+@Composable
+private fun AccountAction(
+    isLoggedIn: Boolean,
+    userName: String?,
+    onOpenProfile: () -> Unit,
+    onSignIn: () -> Unit,
+) {
+    if (isLoggedIn) {
+        // Circular initial avatar — same language as the Profile sheet avatar.
+        val initial = userName?.trim()?.firstOrNull()?.uppercase()
+        Box(
+            modifier = Modifier
+                .padding(end = 8.dp)
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .clickable(onClick = onOpenProfile),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (initial != null) {
+                Text(
+                    text = initial,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            } else {
+                // No name cached yet — fall back to a person glyph.
+                Icon(
+                    imageVector = Icons.Outlined.Person,
+                    contentDescription = "Account",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    } else {
+        // Outlined "Sign in" pill — clearly an invitation, not just an icon.
+        val pillShape = RoundedCornerShape(percent = 50)
+        Row(
+            modifier = Modifier
+                .padding(end = 8.dp)
+                .clip(pillShape)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = pillShape,
+                )
+                .clickable(onClick = onSignIn)
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Sign in",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 

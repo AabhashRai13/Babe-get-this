@@ -75,7 +75,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
-import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.ui.haptics.Haptic
@@ -88,8 +87,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun ShoppingItemsScreen(
     onNavigateBack: () -> Unit = {},
-    onNavigateToLogin: () -> Unit = {},
-    onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingItemsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -105,9 +102,6 @@ fun ShoppingItemsScreen(
 
     val snackBarHostState = remember { SnackbarHostState() }
     val haptic = rememberHaptic()
-
-    // Auth prompt dialog — shown when an unauthenticated user taps Share
-    var showAuthPrompt by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.errorMessage.collect { message ->
@@ -148,17 +142,8 @@ fun ShoppingItemsScreen(
                 title = viewModel.listName,
                 navigationIcon = Icons.AutoMirrored.Outlined.ArrowBack,
                 onNavigationClick = onNavigateBack,
-                // Share button — gates behind auth check
-                showActionIcon = true,
-                onActionClick = {
-                    if (viewModel.isAuthenticated()) {
-                        // User is logged in — sharing not built yet (v2)
-                        viewModel.showComingSoonMessage()
-                    } else {
-                        // Not logged in — prompt to sign in
-                        showAuthPrompt = true
-                    }
-                },
+                // No top-bar action on this screen — Share was removed for v1.
+                // The account entry point lives on Home only.
             )
         },
         floatingActionButton = {
@@ -310,15 +295,6 @@ fun ShoppingItemsScreen(
             onCreateCategory = { name, onCreated ->
                 viewModel.addCategory(name, onCreated)
             }
-        )
-    }
-
-    // Auth prompt — shown when unauthenticated user taps Share
-    if (showAuthPrompt) {
-        AuthPromptDialog(
-            onLogin = onNavigateToLogin,
-            onRegister = onNavigateToRegister,
-            onDismiss = { showAuthPrompt = false },
         )
     }
 }

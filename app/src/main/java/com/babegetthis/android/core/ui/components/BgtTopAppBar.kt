@@ -1,5 +1,6 @@
 package com.babegetthis.android.core.ui.components
 
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +33,11 @@ fun BgtTopAppBar(
     showActionIcon: Boolean = false,
     actionIcon: ImageVector = Icons.Filled.Share,
     onActionClick: (() -> Unit)? = null,
+    // Custom action slot — when provided it replaces the default icon button
+    // entirely, so callers can render richer controls (e.g. an avatar or a
+    // labelled pill). Compose's slot API: like passing a builder/child widget
+    // into a Flutter widget instead of a fixed icon.
+    actionSlot: (@Composable RowScope.() -> Unit)? = null,
     useLargeTopBar: Boolean = false,
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
@@ -70,8 +76,11 @@ fun BgtTopAppBar(
         }
     }
 
-    val actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
-        if (showActionIcon && onActionClick != null) {
+    val actions: @Composable RowScope.() -> Unit = {
+        if (actionSlot != null) {
+            // Caller supplied a custom control — render it instead of the icon.
+            actionSlot()
+        } else if (showActionIcon && onActionClick != null) {
             IconButton(
                 onClick = {
                     haptic(Haptic.Light)

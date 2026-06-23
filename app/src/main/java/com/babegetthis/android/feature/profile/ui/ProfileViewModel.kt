@@ -38,7 +38,7 @@ class ProfileViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
-    // One-shot events for showing toast/snackbar messages
+    // One-shot events for showing toast/snack bar messages
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent = _toastEvent.asSharedFlow()
 
@@ -96,8 +96,7 @@ class ProfileViewModel @Inject constructor(
 
             when (val result = authRepository.logout()) {
                 is Result.Success -> {
-                    // AuthStateManager flips to Unauthenticated.
-                    // The UI will react — profile button disappears, bottom sheet auto-dismisses.
+                    _uiState.value = _uiState.value.copy(isLoggingOut = false)
                 }
                 is Result.Error -> {
                     _uiState.value = _uiState.value.copy(isLoggingOut = false)

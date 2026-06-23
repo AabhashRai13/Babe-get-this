@@ -9,7 +9,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 // Securely stores the auth token and user ID using EncryptedSharedPreferences.
-// This is like flutter_secure_storage — data is AES-256 encrypted at rest.
 // The rest of the app never touches SharedPreferences directly; it goes through this class.
 
 @Singleton

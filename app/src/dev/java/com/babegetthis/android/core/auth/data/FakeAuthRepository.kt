@@ -13,6 +13,7 @@ import javax.inject.Inject
 // Special test emails trigger different scenarios:
 //   - "error@test.com" → simulates a server error
 //   - "taken@test.com" → simulates "email already registered"
+//   - "confirm@test.com" → simulates sign-up that needs email confirmation
 //   - anything else → success with a fake user
 
 class FakeAuthRepository @Inject constructor(
@@ -20,12 +21,13 @@ class FakeAuthRepository @Inject constructor(
     private val tokenManager: TokenManager,
 ) : AuthRepository {
 
-    override suspend fun register(email: String, password: String, name: String): Result<User> {
+    override suspend fun register(email: String, password: String, name: String): Result<RegisterResult> {
         delay(800) // Simulate network delay
 
         return when (email.lowercase()) {
             "error@test.com" -> Result.Error(AppError.ServerError(500, "Fake server error"))
             "taken@test.com" -> Result.Error(AppError.AuthError("Email is already registered."))
+            "confirm@test.com" -> Result.Success(RegisterResult.ConfirmationRequired)
             else -> {
                 val userId = UUID.randomUUID().toString()
                 val fakeToken = "fake-token-${UUID.randomUUID()}"
@@ -37,7 +39,7 @@ class FakeAuthRepository @Inject constructor(
                 )
 
                 Result.Success(
-                    User(id = userId, email = email, name = name)
+                    RegisterResult.SignedIn(User(id = userId, email = email, name = name))
                 )
             }
         }

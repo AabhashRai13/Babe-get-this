@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,21 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android.plugin)
 }
+
+// Read Supabase credentials from local.properties (which is gitignored), so the
+// project URL and anon key never get committed. This is like reading from a
+// .env file in Flutter. If the keys are missing we fall back to empty strings
+// so the project still builds — auth calls just won't work until they're set.
+// Note: the anon key is safe to ship inside the app (it's public by design);
+// real protection comes from Supabase Row-Level Security, not from hiding it.
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+val supabaseUrl: String = localProperties.getProperty("SUPABASE_URL") ?: ""
+val supabaseAnonKey: String = localProperties.getProperty("SUPABASE_ANON_KEY") ?: ""
 
 android {
     namespace = "com.babegetthis.android"
@@ -21,6 +38,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Supabase config, exposed to Kotlin as BuildConfig.SUPABASE_URL / _ANON_KEY.
+        // Lives in defaultConfig (not per-flavor) because all flavors point at the
+        // same Supabase project for now. If we add separate dev/prod Supabase
+        // projects later, these move into the productFlavors blocks like BASE_URL.
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     // Product flavors for environment switching.
@@ -111,4 +135,11 @@ dependencies {
 
     // Secure token storage — EncryptedSharedPreferences (like flutter_secure_storage)
     implementation(libs.security.crypto)
+
+    // Supabase — authentication now, realtime later. The BOM (platform()) pins
+    // every supabase module to one compatible version. auth-kt is the login client;
+    // ktor-client-okhttp is the HTTP engine it sends requests through.
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)
+    implementation(libs.ktor.client.okhttp)
 }

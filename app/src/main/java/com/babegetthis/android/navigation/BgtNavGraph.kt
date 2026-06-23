@@ -54,6 +54,9 @@ fun BgtNavGraph(
                 },
                 onNavigateToNewList = { listId, listName ->
                     navController.navigate(Routes.shoppingItems(listId, listName, isNew = true))
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Routes.LOGIN)
                 }
             )
         }
@@ -99,8 +102,6 @@ fun BgtNavGraph(
         ) {
             ShoppingItemsScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
-                onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
             )
         }
 
