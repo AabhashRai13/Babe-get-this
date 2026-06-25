@@ -3,6 +3,8 @@ package com.babegetthis.android.core.auth.data
 import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.network.NetworkMonitor
+import java.io.IOException
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -19,6 +21,7 @@ import javax.inject.Inject
 class SupabaseAuthRepository @Inject constructor(
     private val supabaseClient: SupabaseClient,
     private val authStateManager: AuthStateManager,
+    private val networkMonitor: NetworkMonitor,
 ) : AuthRepository {
 
     override suspend fun register(email: String, password: String, name: String): Result<RegisterResult> =
@@ -111,19 +114,47 @@ class SupabaseAuthRepository @Inject constructor(
     // One place to turn auth failures into our AppError types. Supabase throws
     // its own exceptions (not Retrofit's), so we map by message here rather than
     // reusing safeCall()'s Retrofit-specific HttpException handling.
-    private suspend fun <T> runCatchingAuth(block: suspend () -> T): Result<T> =
-        try {
+    private suspend fun <T> runCatchingAuth(block: suspend () -> T): Result<T> {
+        // Proactive guard: if we're offline, fail fast with a clean message
+        // instead of letting Supabase throw a raw transport error (which is how
+        // the offline login leaked provider text before).
+        if (!networkMonitor.isOnline()) {
+            return Result.Error(AppError.NetworkError())
+        }
+        return try {
             Result.Success(block())
-        } catch (e: UnknownHostException) {
-            Result.Error(AppError.NetworkError())
-        } catch (e: ConnectException) {
-            Result.Error(AppError.NetworkError("Cannot reach the authentication server."))
         } catch (e: SocketTimeoutException) {
             Result.Error(AppError.TimeoutError())
         } catch (e: Exception) {
-            Result.Error(AppError.AuthError(friendlyMessage(e)))
+            // Defensive layer: the connection can drop mid-request, and
+            // Supabase/Ktor wrap the underlying network exception several causes
+            // deep — a top-level type check misses it. Walk the cause chain
+            // before deciding this is an auth (credentials) error.
+            if (e.isNetworkFailure()) {
+                Result.Error(AppError.NetworkError())
+            } else {
+                Result.Error(AppError.AuthError(friendlyMessage(e)))
+            }
         }
+    }
 
+    // True if any exception in the cause chain is a transport-level failure.
+    private fun Throwable.isNetworkFailure(): Boolean {
+        var current: Throwable? = this
+        while (current != null) {
+            if (current is UnknownHostException ||
+                current is ConnectException ||
+                current is SocketTimeoutException ||
+                current is IOException
+            ) return true
+            current = current.cause
+        }
+        return false
+    }
+
+    // Map known Supabase error messages to friendly copy. The else branch NEVER
+    // returns the raw provider text — an unrecognized failure gets a generic
+    // message so we don't leak internal/Supabase wording to the user.
     private fun friendlyMessage(e: Exception): String {
         val raw = e.message ?: return "Authentication failed. Please try again."
         return when {
@@ -132,7 +163,9 @@ class SupabaseAuthRepository @Inject constructor(
             raw.contains("already registered", ignoreCase = true) ||
                 raw.contains("already been registered", ignoreCase = true) ->
                 "That email is already registered."
-            else -> raw
+            raw.contains("Email not confirmed", ignoreCase = true) ->
+                "Please confirm your email before signing in."
+            else -> "Authentication failed. Please try again."
         }
     }
 }

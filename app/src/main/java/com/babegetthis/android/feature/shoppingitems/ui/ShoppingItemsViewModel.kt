@@ -5,13 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.model.AuthState
+import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.model.Category
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItemsUiState
+import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,10 +31,18 @@ class ShoppingItemsViewModel @Inject constructor(
     private val itemRepository: ShoppingItemRepository,
     private val categoryRepository: CategoryRepository,
     private val authStateManager: AuthStateManager,
+    private val listRepository: ShoppingListRepository,
+    @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     val listId: String = savedStateHandle.get<String>("listId") ?: ""
     val listName: String = savedStateHandle.get<String>("listName") ?: ""
+
+    // True only when we arrived here straight from creating this list (voice or
+    // the type flow pass isNew=true). Used to gate the auto-delete-if-empty in
+    // onCleared so we only clean up lists the user just made and abandoned — not
+    // an existing empty list they happened to open and back out of.
+    private val isNewlyCreated: Boolean = savedStateHandle.get<Boolean>("isNew") ?: false
 
     // Check if the user is logged in — used to gate the share feature.
     fun isAuthenticated(): Boolean {
@@ -234,6 +245,21 @@ class ShoppingItemsViewModel @Inject constructor(
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
                 }
+            }
+        }
+    }
+
+    // We launch on applicationScope, NOT viewModelScope: by the time onCleared()
+    // runs, viewModelScope is already cancelled, so the delete would never run.
+    // applicationScope outlives this screen, so the DB write completes. The
+    // repository re-checks the real item count, so a list with items is safe.
+    override fun onCleared() {
+        super.onCleared()
+        // Only auto-clean a list we just created and the user left empty. An
+        // existing empty list they opened and backed out of stays put.
+        if (isNewlyCreated) {
+            applicationScope.launch {
+                listRepository.deleteListIfEmpty(listId)
             }
         }
     }

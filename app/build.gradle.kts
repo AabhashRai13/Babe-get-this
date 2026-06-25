@@ -57,21 +57,26 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            // 10.0.2.2 = host machine's localhost from the Android emulator
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/api/\"")
+            // 10.0.2.2 = host machine's localhost from the Android emulator.
+            // No "/api/" suffix — the transcribe backend serves POST /transcribe at the root.
+            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/\"")
             buildConfigField("String", "WS_URL", "\"ws://10.0.2.2:8080/ws\"")
         }
         create("staging") {
             dimension = "environment"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            buildConfigField("String", "BASE_URL", "\"https://staging-api.babegetthis.com/api/\"")
-            buildConfigField("String", "WS_URL", "\"wss://staging-api.babegetthis.com/ws\"")
+            buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-production.up.railway.app/\"")
+            // WS_URL is a placeholder — websockets aren't implemented yet. Repointed
+            // off the dead babegetthis.com domains to the live Railway host so it
+            // isn't misleading; revisit the exact /ws path when realtime sync lands.
+            buildConfigField("String", "WS_URL", "\"wss://babegetthisapis-production.up.railway.app/ws\"")
         }
         create("prod") {
             dimension = "environment"
-            buildConfigField("String", "BASE_URL", "\"https://api.babegetthis.com/api/\"")
-            buildConfigField("String", "WS_URL", "\"wss://api.babegetthis.com/ws\"")
+            buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-production.up.railway.app/\"")
+            // Placeholder — see staging note above. Unused until websockets land.
+            buildConfigField("String", "WS_URL", "\"wss://babegetthisapis-production.up.railway.app/ws\"")
         }
     }
 
@@ -106,6 +111,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)

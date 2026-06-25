@@ -61,13 +61,16 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
 import com.babegetthis.android.core.auth.model.AuthState
+import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
+import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
+import com.babegetthis.android.feature.shoppinglist.ui.components.CreateListChooserSheet
 import com.babegetthis.android.feature.shoppinglist.ui.components.GreetingSection
 import com.babegetthis.android.feature.shoppinglist.ui.components.ShoppingListCard
 import com.babegetthis.android.feature.shoppinglist.ui.components.TabEmptyState
@@ -92,6 +95,7 @@ fun ShoppingListScreen(
     onNavigateToList: (listId: String, listName: String) -> Unit = { _, _ -> },
     onNavigateToNewList: (listId: String, listName: String) -> Unit = { _, _ -> },
     onNavigateToLogin: () -> Unit = {},
+    onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -105,6 +109,15 @@ fun ShoppingListScreen(
     val isLoggedIn = authState is AuthState.Authenticated
     val userName by authStateManager.userName.collectAsState()
     var showProfileSheet by remember { mutableStateOf(false) }
+
+    // Create-list flow has two entry-style choices now: Type or Voice.
+    // chooser → small sheet with the two options
+    // voice sheet → the full voice-capture flow
+    var showCreateChooser by remember { mutableStateOf(false) }
+    var showVoiceSheet by remember { mutableStateOf(false) }
+    // Voice is gated behind auth — show this prompt when a logged-out user
+    // tries to record instead of opening the voice sheet.
+    var showVoiceAuthPrompt by remember { mutableStateOf(false) }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -163,7 +176,7 @@ fun ShoppingListScreen(
                 ExtendedFloatingActionButton(
                     onClick = {
                         haptic(Haptic.Medium)
-                        viewModel.onCreateListClick()
+                        showCreateChooser = true
                     },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -186,7 +199,7 @@ fun ShoppingListScreen(
                     .padding(padding)
                     .padding(horizontal = 24.dp)
                     .fillMaxSize(),
-                onCreateList = { viewModel.onCreateListClick() }
+                onCreateList = { showCreateChooser = true }
             )
         } else {
             Column(
@@ -288,6 +301,49 @@ fun ShoppingListScreen(
         CreateListDialog(
             onDismiss = { viewModel.onDismissCreateDialog() },
             onCreate = { name -> viewModel.createList(name) }
+        )
+    }
+
+    if (showCreateChooser) {
+        CreateListChooserSheet(
+            onDismiss = { showCreateChooser = false },
+            onPickType = {
+                showCreateChooser = false
+                viewModel.onCreateListClick()
+            },
+            onPickVoice = {
+                showCreateChooser = false
+                if (isLoggedIn) {
+                    showVoiceSheet = true
+                } else {
+                    showVoiceAuthPrompt = true
+                }
+            },
+        )
+    }
+
+    if (showVoiceSheet) {
+        VoiceCaptureSheet(
+            onDismiss = { showVoiceSheet = false },
+            // "Type instead" — close the voice sheet and open the manual type
+            // dialog (same entry point as the chooser's "Type" tile).
+            onSwitchToType = {
+                showVoiceSheet = false
+                viewModel.onCreateListClick()
+            },
+            // The voice VM calls this with the parsed drafts (no review step).
+            // We delegate to the screen VM which auto-names, persists, and emits
+            // navigateToList, returning Result<String> so the voice VM can
+            // transition to Done.
+            onConfirm = { drafts -> viewModel.createListWithVoice(drafts) },
+        )
+    }
+
+    if (showVoiceAuthPrompt) {
+        AuthPromptDialog(
+            onLogin = onNavigateToLogin,
+            onRegister = onNavigateToRegister,
+            onDismiss = { showVoiceAuthPrompt = false },
         )
     }
 

@@ -9,6 +9,8 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
+import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
+import kotlinx.coroutines.CoroutineScope
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -39,6 +41,7 @@ class ShoppingItemsViewModelTest {
     private lateinit var itemRepository: ShoppingItemRepository
     private lateinit var categoryRepository: CategoryRepository
     private lateinit var authStateManager: AuthStateManager
+    private lateinit var listRepository: ShoppingListRepository
     private lateinit var itemsFlow: MutableStateFlow<List<ShoppingItem>>
 
     @Before
@@ -47,6 +50,7 @@ class ShoppingItemsViewModelTest {
         itemRepository = mockk(relaxed = true)
         categoryRepository = mockk(relaxed = true)
         authStateManager = mockk(relaxed = true)
+        listRepository = mockk(relaxed = true)
         itemsFlow = MutableStateFlow(emptyList())
 
         every { itemRepository.getItemsByListId(any()) } returns itemsFlow
@@ -64,6 +68,8 @@ class ShoppingItemsViewModelTest {
         itemRepository = itemRepository,
         categoryRepository = categoryRepository,
         authStateManager = authStateManager,
+        listRepository = listRepository,
+        applicationScope = CoroutineScope(testDispatcher),
     )
 
     private fun item(

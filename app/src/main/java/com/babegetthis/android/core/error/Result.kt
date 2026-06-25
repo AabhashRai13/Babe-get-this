@@ -20,9 +20,14 @@ sealed class Result<out T> {
 // authenticated endpoints where 401 truly means the token went stale. Login
 // and register override it to AuthError("Invalid email or password.") because
 // for those endpoints, 401 means wrong credentials — never "session expired".
+//
+// `onClientError` maps other 4xx codes (400/404/422/…). The default is an
+// auth-flavored message, which only fits auth endpoints — non-auth callers like
+// transcribe override it (a 400 there means "bad audio", not "auth failed").
 
 suspend fun <T> safeCall(
     onUnauthorized: () -> AppError = { AppError.UnauthorizedError() },
+    onClientError: (code: Int) -> AppError = { AppError.AuthError("Request failed.") },
     block: suspend () -> T,
 ): Result<T> {
     return try {
@@ -44,7 +49,7 @@ suspend fun <T> safeCall(
             // HTTP errors from Retrofit — server returned an error status code
             is retrofit2.HttpException -> when (e.code()) {
                 401 -> onUnauthorized()
-                in 400..499 -> AppError.AuthError(e.message ?: "Request failed.")
+                in 400..499 -> onClientError(e.code())
                 in 500..599 -> AppError.ServerError(e.code(), "Server error. Please try later.")
                 else -> AppError.ServerError(e.code(), e.message ?: "Unexpected server response.")
             }

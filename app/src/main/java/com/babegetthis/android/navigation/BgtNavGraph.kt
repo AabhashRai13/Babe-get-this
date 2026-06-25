@@ -57,6 +57,9 @@ fun BgtNavGraph(
                 },
                 onNavigateToLogin = {
                     navController.navigate(Routes.LOGIN)
+                },
+                onNavigateToRegister = {
+                    navController.navigate(Routes.REGISTER)
                 }
             )
         }
@@ -108,31 +111,38 @@ fun BgtNavGraph(
         // -- Auth screens (navigated to on demand, not on startup) --
         composable(Routes.LOGIN) {
             LoginScreen(
+                // Replace Login with Register so they never stack up.
                 onNavigateToRegister = {
-                    navController.navigate(Routes.REGISTER)
+                    navController.navigate(Routes.REGISTER) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
                 },
+                // Close/back and success both return to the app. Anchored to the
+                // start destination so it works no matter how auth was entered.
                 onNavigateBack = {
-                    navController.popBackStack()
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
-                // After successful login, go back to where the user came from
                 onLoginSuccess = {
-                    navController.popBackStack(Routes.LOGIN, inclusive = true)
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
             )
         }
 
         composable(Routes.REGISTER) {
             RegisterScreen(
+                // Replace Register with Login so they never stack up.
                 onNavigateToLogin = {
-                    navController.popBackStack()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.REGISTER) { inclusive = true }
+                    }
                 },
+                // Close/back and success both return to the app. Anchored to the
+                // start destination so it works no matter how auth was entered.
                 onNavigateBack = {
-                    // Pop back past login screen too — return to the app
-                    navController.popBackStack(Routes.LOGIN, inclusive = true)
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
-                // After successful register, pop all the way back past login too
                 onRegisterSuccess = {
-                    navController.popBackStack(Routes.LOGIN, inclusive = true)
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
             )
         }

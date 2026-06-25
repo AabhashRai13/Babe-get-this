@@ -3,6 +3,7 @@ package com.babegetthis.android.feature.shoppinglist.ui.viewModels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
@@ -165,6 +166,21 @@ class ShoppingListViewModel @Inject constructor(
         }
     }
 
+    // Voice flow's persist callback — invoked by the voice VM with the parsed
+    // drafts. There's no review step, so the name is derived from the items here
+    // (not entered by the user). Returns the new list id (so the voice VM can
+    // transition to Done) and side-effect-emits navigateToList so the existing
+    // screen-level collector handles navigation. No snackbar on error — the voice
+    // sheet renders the failure inline in its Failed state.
+    suspend fun createListWithVoice(drafts: List<ItemDraft>): Result<String> {
+        val name = autoNameVoiceList(drafts)
+        val result = repository.createListWithItems(name, drafts)
+        if (result is Result.Success) {
+            _navigateToList.emit(result.data to name)
+        }
+        return result
+    }
+
     fun undoDeleteList() {
         viewModelScope.launch {
             val list = pendingDeleteList ?: return@launch
@@ -179,4 +195,19 @@ class ShoppingListViewModel @Inject constructor(
             }
         }
     }
+}
+
+// Name an auto-created voice list from its first item — nobody wants to name a
+// grocery list. Single item → just its name; multiple → "Milk + 2 more".
+// Deriving from contents also fixes the same-day collision the old date-based
+// name had (three lists made today are no longer all "List · 24 Jun").
+//
+// Top-level + internal (not a private method) so it's unit-testable without
+// constructing the whole ViewModel — it's pure: input drafts → output name.
+internal fun autoNameVoiceList(drafts: List<ItemDraft>): String {
+    // Cap the first item's name so a mis-parsed, paragraph-length item[0] can't
+    // produce an absurd list title.
+    val first = drafts.firstOrNull()?.name?.trim().orEmpty().take(40).ifBlank { "List" }
+    val others = drafts.size - 1
+    return if (others > 0) "$first + $others more" else first
 }

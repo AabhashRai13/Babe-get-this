@@ -14,11 +14,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 // Reactive "sign in to continue" prompt for a gated feature.
-// DORMANT — not currently triggered anywhere. It used to back the Share
-// button, but Share was cut from v1 and the always-visible Home account
-// icon now owns the auth entry point. Kept to be retargeted to the real
-// gated feature (e.g. partner sync) when that ships.
-// Like a Flutter showDialog() with CupertinoAlertDialog.
+// Currently gates voice capture — logged-out users hit this instead of the
+// recorder. Like a Flutter showDialog() with CupertinoAlertDialog.
 
 @Composable
 fun AuthPromptDialog(
@@ -30,13 +27,13 @@ fun AuthPromptDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Sign in to share",
+                text = "Sign in to use voice",
                 fontWeight = FontWeight.Bold,
             )
         },
         text = {
             Text(
-                text = "Create an account to share lists with your partner and sync across devices.",
+                text = "Create an account to capture shopping lists by voice.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

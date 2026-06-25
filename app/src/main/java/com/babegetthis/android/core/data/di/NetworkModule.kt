@@ -3,6 +3,7 @@ package com.babegetthis.android.core.data.di
 import com.babegetthis.android.BuildConfig
 import com.babegetthis.android.core.data.network.AuthAuthenticator
 import com.babegetthis.android.core.data.network.AuthInterceptor
+import com.babegetthis.android.core.voice.data.remote.TranscribeApiService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -84,5 +85,29 @@ object NetworkModule {
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()
+    }
+
+    // The audio-transcribe API client. Transcription is slow: server-side STT +
+    // Claude parsing on a full 30s clip can approach or exceed the shared 30s
+    // readTimeout under load, surfacing as a SocketTimeoutException → Failed. So
+    // this endpoint gets its own client with a longer read timeout. newBuilder()
+    // copies the shared client (auth interceptor, logging, etc.) and only bumps
+    // the read timeout — connect/write stay at the shared defaults.
+    @Provides
+    @Singleton
+    fun provideTranscribeApiService(
+        okHttpClient: OkHttpClient,
+        json: Json,
+    ): TranscribeApiService {
+        val transcribeClient = okHttpClient.newBuilder()
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+        val contentType = "application/json".toMediaType()
+        val retrofit = Retrofit.Builder()
+            .baseUrl(BuildConfig.BASE_URL)
+            .client(transcribeClient)
+            .addConverterFactory(json.asConverterFactory(contentType))
+            .build()
+        return retrofit.create(TranscribeApiService::class.java)
     }
 }
