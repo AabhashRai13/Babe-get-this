@@ -2,9 +2,7 @@ package com.babegetthis.android.core.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 
 // Reusable swipe wrapper for cards.
 // Like Flutter's Dismissible widget — reveals colored backgrounds with icons on swipe.
@@ -42,21 +42,26 @@ import androidx.compose.ui.unit.dp
 fun SwipeableCard(
     onSwipeLeft: () -> Unit,
     onSwipeRight: (() -> Unit)? = null,
-    leftIcon: ImageVector = Icons.Default.Delete,
-    rightIcon: ImageVector = Icons.Default.Check,
+    leftIcon: ImageVector = Icons.Filled.Delete,
+    rightIcon: ImageVector = Icons.Filled.Check,
     leftColor: Color = Color(0xFFE53935), // Red
     rightColor: Color = Color(0xFF43A047), // Green
     content: @Composable () -> Unit,
 ) {
+    val haptic = rememberHaptic()
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { dismissValue ->
             when (dismissValue) {
                 SwipeToDismissBoxValue.EndToStart -> {
+                    // Destructive direction (delete) — firmer buzz.
+                    haptic(Haptic.Medium)
                     onSwipeLeft()
                     true
                 }
                 SwipeToDismissBoxValue.StartToEnd -> {
                     if (onSwipeRight != null) {
+                        // Toggle direction (pick up / un-pick) — matches checkbox tap.
+                        haptic(Haptic.Light)
                         onSwipeRight()
                         true
                     } else {

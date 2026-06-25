@@ -46,20 +46,31 @@ class ShoppingListViewModel @Inject constructor(
         _selectedTab,
     ) {
         lists, tab ->
-        val active = lists.filter{
-            !it.isCompleted
-        }
-        val completed = lists.filter {
-            it.isCompleted
-        }
-        val displayed = if (tab == 0) active else completed
+        val active = lists.filter { !it.isCompleted }
+        val completed = lists.filter { it.isCompleted }
 
-        val grouped = linkedMapOf<TimePeriod, MutableList<ShoppingList>>()
-        for (list in displayed){
-            val period = getTimePeriod(list.createdAt)
-            grouped.getOrPut(period) { mutableListOf() }.add(list)
+        // Group BOTH tabs up front so the AnimatedContent on the screen
+        // can render the outgoing pane with its own data during a tab
+        // swap, instead of both panes snapping to whichever tab is now
+        // selected. linkedMapOf preserves insertion order so time-period
+        // headers (Today / This week / Older) stay in the right sequence.
+        fun groupByPeriod(source: List<ShoppingList>): Map<TimePeriod, List<ShoppingList>> {
+            val out = linkedMapOf<TimePeriod, MutableList<ShoppingList>>()
+            for (list in source) {
+                val period = getTimePeriod(list.createdAt)
+                out.getOrPut(period) { mutableListOf() }.add(list)
+            }
+            return out
         }
-        ShoppingListUiState(activeLists = active, completedLists = completed, selectedTab = tab, groupedLists = grouped, activeItemsToGet = active.sumOf { it.itemCount - it.completedItemCount })
+
+        ShoppingListUiState(
+            activeLists = active,
+            completedLists = completed,
+            selectedTab = tab,
+            groupedActive = groupByPeriod(active),
+            groupedCompleted = groupByPeriod(completed),
+            activeItemsToGet = active.sumOf { it.itemCount - it.completedItemCount },
+        )
     }.stateIn(
         scope = viewModelScope,
         started =  SharingStarted.WhileSubscribed(5000),
@@ -155,26 +166,19 @@ class ShoppingListViewModel @Inject constructor(
         }
     }
 
-    // Voice flow's persist callback — invoked by VoiceCaptureViewModel.confirm
-    // with the user-reviewed drafts. Returns the new list id (so the voice VM
-    // can transition to Done), and side-effect-emits navigateToList so the
-    // existing screen-level collector handles navigation. No snackbar on error —
-    // the voice sheet renders the failure inline in its Failed state.
-    suspend fun createListWithVoice(name: String, drafts: List<ItemDraft>): Result<String> {
+    // Voice flow's persist callback — invoked by the voice VM with the parsed
+    // drafts. There's no review step, so the name is derived from the items here
+    // (not entered by the user). Returns the new list id (so the voice VM can
+    // transition to Done) and side-effect-emits navigateToList so the existing
+    // screen-level collector handles navigation. No snackbar on error — the voice
+    // sheet renders the failure inline in its Failed state.
+    suspend fun createListWithVoice(drafts: List<ItemDraft>): Result<String> {
+        val name = autoNameVoiceList(drafts)
         val result = repository.createListWithItems(name, drafts)
         if (result is Result.Success) {
             _navigateToList.emit(result.data to name)
         }
         return result
-    }
-
-    // Default name seeded into the voice review sheet. The user can edit it
-    // before confirming, so this is only a starting point — not the saved name.
-    // TODO: disambiguate same-day lists (see CLAUDE.md).
-    fun defaultVoiceListName(): String {
-        val today = java.time.LocalDate.now()
-        val fmt = java.time.format.DateTimeFormatter.ofPattern("d MMM")
-        return "List · ${today.format(fmt)}"
     }
 
     fun undoDeleteList() {
@@ -191,4 +195,19 @@ class ShoppingListViewModel @Inject constructor(
             }
         }
     }
+}
+
+// Name an auto-created voice list from its first item — nobody wants to name a
+// grocery list. Single item → just its name; multiple → "Milk + 2 more".
+// Deriving from contents also fixes the same-day collision the old date-based
+// name had (three lists made today are no longer all "List · 24 Jun").
+//
+// Top-level + internal (not a private method) so it's unit-testable without
+// constructing the whole ViewModel — it's pure: input drafts → output name.
+internal fun autoNameVoiceList(drafts: List<ItemDraft>): String {
+    // Cap the first item's name so a mis-parsed, paragraph-length item[0] can't
+    // produce an absurd list title.
+    val first = drafts.firstOrNull()?.name?.trim().orEmpty().take(40).ifBlank { "List" }
+    val others = drafts.size - 1
+    return if (others > 0) "$first + $others more" else first
 }

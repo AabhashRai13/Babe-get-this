@@ -13,10 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-// Shown when an unauthenticated user taps the Share button.
-// Prompts them to sign in or create an account — this is the main
-// entry point to auth now that the login wall is removed.
-// Like a Flutter showDialog() with CupertinoAlertDialog.
+// Reactive "sign in to continue" prompt for a gated feature.
+// Currently gates voice capture — logged-out users hit this instead of the
+// recorder. Like a Flutter showDialog() with CupertinoAlertDialog.
 
 @Composable
 fun AuthPromptDialog(
@@ -28,13 +27,13 @@ fun AuthPromptDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Sign in to share",
+                text = "Sign in to use voice",
                 fontWeight = FontWeight.Bold,
             )
         },
         text = {
             Text(
-                text = "Create an account to share lists with your partner and sync across devices.",
+                text = "Create an account to capture shopping lists by voice.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

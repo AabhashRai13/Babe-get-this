@@ -1,7 +1,6 @@
 package com.babegetthis.android.core.auth.model
 
 // Represents the user's authentication status across the app.
-// Like an AuthNotifier in Riverpod — the whole app reacts when this changes.
 
 sealed class AuthState {
     // App just launched, checking if a saved token exists

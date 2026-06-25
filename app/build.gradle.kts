@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,6 +8,21 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android.plugin)
 }
+
+// Read Supabase credentials from local.properties (which is gitignored), so the
+// project URL and anon key never get committed. This is like reading from a
+// .env file in Flutter. If the keys are missing we fall back to empty strings
+// so the project still builds — auth calls just won't work until they're set.
+// Note: the anon key is safe to ship inside the app (it's public by design);
+// real protection comes from Supabase Row-Level Security, not from hiding it.
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+val supabaseUrl: String = localProperties.getProperty("SUPABASE_URL") ?: ""
+val supabaseAnonKey: String = localProperties.getProperty("SUPABASE_ANON_KEY") ?: ""
 
 android {
     namespace = "com.babegetthis.android"
@@ -21,6 +38,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Supabase config, exposed to Kotlin as BuildConfig.SUPABASE_URL / _ANON_KEY.
+        // Lives in defaultConfig (not per-flavor) because all flavors point at the
+        // same Supabase project for now. If we add separate dev/prod Supabase
+        // projects later, these move into the productFlavors blocks like BASE_URL.
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     // Product flavors for environment switching.
@@ -33,21 +57,26 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            // 10.0.2.2 = host machine's localhost from the Android emulator
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/api/\"")
+            // 10.0.2.2 = host machine's localhost from the Android emulator.
+            // No "/api/" suffix — the transcribe backend serves POST /transcribe at the root.
+            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/\"")
             buildConfigField("String", "WS_URL", "\"ws://10.0.2.2:8080/ws\"")
         }
         create("staging") {
             dimension = "environment"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            buildConfigField("String", "BASE_URL", "\"https://staging-api.babegetthis.com/api/\"")
-            buildConfigField("String", "WS_URL", "\"wss://staging-api.babegetthis.com/ws\"")
+            buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-production.up.railway.app/\"")
+            // WS_URL is a placeholder — websockets aren't implemented yet. Repointed
+            // off the dead babegetthis.com domains to the live Railway host so it
+            // isn't misleading; revisit the exact /ws path when realtime sync lands.
+            buildConfigField("String", "WS_URL", "\"wss://babegetthisapis-production.up.railway.app/ws\"")
         }
         create("prod") {
             dimension = "environment"
-            buildConfigField("String", "BASE_URL", "\"https://api.babegetthis.com/api/\"")
-            buildConfigField("String", "WS_URL", "\"wss://api.babegetthis.com/ws\"")
+            buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-production.up.railway.app/\"")
+            // Placeholder — see staging note above. Unused until websockets land.
+            buildConfigField("String", "WS_URL", "\"wss://babegetthisapis-production.up.railway.app/ws\"")
         }
     }
 
@@ -84,6 +113,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -109,4 +141,11 @@ dependencies {
 
     // Secure token storage — EncryptedSharedPreferences (like flutter_secure_storage)
     implementation(libs.security.crypto)
+
+    // Supabase — authentication now, realtime later. The BOM (platform()) pins
+    // every supabase module to one compatible version. auth-kt is the login client;
+    // ktor-client-okhttp is the HTTP engine it sends requests through.
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.auth)
+    implementation(libs.ktor.client.okhttp)
 }

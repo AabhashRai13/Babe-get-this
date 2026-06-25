@@ -1,5 +1,11 @@
 package com.babegetthis.android.navigation
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -48,6 +54,12 @@ fun BgtNavGraph(
                 },
                 onNavigateToNewList = { listId, listName ->
                     navController.navigate(Routes.shoppingItems(listId, listName, isNew = true))
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Routes.LOGIN)
+                },
+                onNavigateToRegister = {
+                    navController.navigate(Routes.REGISTER)
                 }
             )
         }
@@ -61,43 +73,76 @@ fun BgtNavGraph(
                     type = NavType.BoolType
                     defaultValue = false
                 },
-            )
+            ),
+            // Push: new screen slides in from the right; old slides slightly left.
+            // Pop:  reverse — new screen comes back from the left; old slides off right.
+            // Matches Material motion ("forward" pattern) for sub-screen navigation.
+            // 300ms with FastOutSlowInEasing — Compose's default emphasized curve.
+            enterTransition = {
+                slideInHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    initialOffsetX = { fullWidth -> fullWidth },
+                ) + fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    targetOffsetX = { fullWidth -> -fullWidth / 4 },
+                ) + fadeOut(animationSpec = tween(300, easing = FastOutSlowInEasing))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    initialOffsetX = { fullWidth -> -fullWidth / 4 },
+                ) + fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    animationSpec = tween(300, easing = FastOutSlowInEasing),
+                    targetOffsetX = { fullWidth -> fullWidth },
+                ) + fadeOut(animationSpec = tween(300, easing = FastOutSlowInEasing))
+            },
         ) {
             ShoppingItemsScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
-                onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
             )
         }
 
         // -- Auth screens (navigated to on demand, not on startup) --
         composable(Routes.LOGIN) {
             LoginScreen(
+                // Replace Login with Register so they never stack up.
                 onNavigateToRegister = {
-                    navController.navigate(Routes.REGISTER)
+                    navController.navigate(Routes.REGISTER) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
                 },
+                // Close/back and success both return to the app. Anchored to the
+                // start destination so it works no matter how auth was entered.
                 onNavigateBack = {
-                    navController.popBackStack()
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
-                // After successful login, go back to where the user came from
                 onLoginSuccess = {
-                    navController.popBackStack(Routes.LOGIN, inclusive = true)
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
             )
         }
 
         composable(Routes.REGISTER) {
             RegisterScreen(
+                // Replace Register with Login so they never stack up.
                 onNavigateToLogin = {
-                    navController.popBackStack()
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.REGISTER) { inclusive = true }
+                    }
                 },
+                // Close/back and success both return to the app. Anchored to the
+                // start destination so it works no matter how auth was entered.
                 onNavigateBack = {
-                    // Pop back past login screen too — return to the app
-                    navController.popBackStack(Routes.LOGIN, inclusive = true)
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
-                // After successful register, pop all the way back past login too
                 onRegisterSuccess = {
-                    navController.popBackStack(Routes.LOGIN, inclusive = true)
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
             )
         }

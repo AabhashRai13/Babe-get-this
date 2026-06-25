@@ -1,9 +1,9 @@
 package com.babegetthis.android.core.data.di
 
 import com.babegetthis.android.BuildConfig
-import com.babegetthis.android.core.auth.data.AuthApiService
 import com.babegetthis.android.core.data.network.AuthAuthenticator
 import com.babegetthis.android.core.data.network.AuthInterceptor
+import com.babegetthis.android.core.voice.data.remote.TranscribeApiService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -68,6 +68,11 @@ object NetworkModule {
     // Retrofit = the API client builder. Like Dio() in Flutter.
     // It takes the OkHttpClient as its engine and the base URL from BuildConfig
     // (which changes per flavor: dev/staging/prod).
+    //
+    // NOTE: Authentication no longer goes through Retrofit — it moved to the
+    // Supabase SDK (see SupabaseModule). This Retrofit instance is kept for the
+    // upcoming audio-transcribe API, which calls our own Node backend (BASE_URL).
+    // The AuthInterceptor still attaches the Supabase access token to those calls.
     @Provides
     @Singleton
     fun provideRetrofit(
@@ -82,12 +87,27 @@ object NetworkModule {
             .build()
     }
 
-    // Create the AuthApiService from Retrofit.
-    // Retrofit generates the implementation at runtime from the interface.
-    // Like using Dio to call specific endpoints, but type-safe.
+    // The audio-transcribe API client. Transcription is slow: server-side STT +
+    // Claude parsing on a full 30s clip can approach or exceed the shared 30s
+    // readTimeout under load, surfacing as a SocketTimeoutException → Failed. So
+    // this endpoint gets its own client with a longer read timeout. newBuilder()
+    // copies the shared client (auth interceptor, logging, etc.) and only bumps
+    // the read timeout — connect/write stay at the shared defaults.
     @Provides
     @Singleton
-    fun provideAuthApiService(retrofit: Retrofit): AuthApiService {
-        return retrofit.create(AuthApiService::class.java)
+    fun provideTranscribeApiService(
+        okHttpClient: OkHttpClient,
+        json: Json,
+    ): TranscribeApiService {
+        val transcribeClient = okHttpClient.newBuilder()
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build()
+        val contentType = "application/json".toMediaType()
+        val retrofit = Retrofit.Builder()
+            .baseUrl(BuildConfig.BASE_URL)
+            .client(transcribeClient)
+            .addConverterFactory(json.asConverterFactory(contentType))
+            .build()
+        return retrofit.create(TranscribeApiService::class.java)
     }
 }

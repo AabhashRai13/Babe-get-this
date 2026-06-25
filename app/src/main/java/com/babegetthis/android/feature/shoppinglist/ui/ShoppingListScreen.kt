@@ -1,16 +1,21 @@
 package com.babegetthis.android.feature.shoppinglist.ui
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,14 +26,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -36,15 +42,10 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,19 +55,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
 import com.babegetthis.android.core.auth.model.AuthState
+import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
+import com.babegetthis.android.core.ui.haptics.Haptic
+import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
-import com.babegetthis.android.core.util.getTimePeriod
-import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
+import com.babegetthis.android.feature.shoppinglist.ui.components.CreateListChooserSheet
 import com.babegetthis.android.feature.shoppinglist.ui.components.GreetingSection
 import com.babegetthis.android.feature.shoppinglist.ui.components.ShoppingListCard
 import com.babegetthis.android.feature.shoppinglist.ui.components.TabEmptyState
@@ -78,9 +82,6 @@ import com.babegetthis.android.ui.theme.ListAccentColor
 import com.babegetthis.android.ui.theme.ListAccentPalette
 import kotlin.math.abs
 
-// Picks a stable accent color for a list based on its ID.
-// Uses the hash of the ID so the color never changes for a given list,
-// but different lists get different colors — like Google Keep.
 private fun getAccentForList(listId: String, isDark: Boolean): ListAccentColor {
     val palette = if (isDark) DarkListAccentPalette else ListAccentPalette
     val index = abs(listId.hashCode()) % palette.size
@@ -93,6 +94,8 @@ fun ShoppingListScreen(
     authStateManager: com.babegetthis.android.core.auth.data.AuthStateManager,
     onNavigateToList: (listId: String, listName: String) -> Unit = { _, _ -> },
     onNavigateToNewList: (listId: String, listName: String) -> Unit = { _, _ -> },
+    onNavigateToLogin: () -> Unit = {},
+    onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -100,9 +103,11 @@ fun ShoppingListScreen(
     val editingList by viewModel.editingList.collectAsState()
     val snackBarHostState = remember { SnackbarHostState() }
     val isDark = isSystemInDarkTheme()
+    val haptic = rememberHaptic()
 
     val authState by authStateManager.authState.collectAsState()
     val isLoggedIn = authState is AuthState.Authenticated
+    val userName by authStateManager.userName.collectAsState()
     var showProfileSheet by remember { mutableStateOf(false) }
 
     // Create-list flow has two entry-style choices now: Type or Voice.
@@ -110,6 +115,9 @@ fun ShoppingListScreen(
     // voice sheet → the full voice-capture flow
     var showCreateChooser by remember { mutableStateOf(false) }
     var showVoiceSheet by remember { mutableStateOf(false) }
+    // Voice is gated behind auth — show this prompt when a logged-out user
+    // tries to record instead of opening the voice sheet.
+    var showVoiceAuthPrompt by remember { mutableStateOf(false) }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -133,6 +141,7 @@ fun ShoppingListScreen(
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
+                haptic(Haptic.Light)
                 viewModel.undoDeleteList()
             }
         }
@@ -144,25 +153,36 @@ fun ShoppingListScreen(
         topBar = {
             BgtTopAppBar(
                 title = stringResource(R.string.app_name),
-                // Profile icon — only visible when logged in
-                showActionIcon = isLoggedIn,
-                actionIcon = Icons.Default.Person,
-                onActionClick = { showProfileSheet = true },
+                actionSlot = {
+                    AccountAction(
+                        isLoggedIn = isLoggedIn,
+                        userName = userName,
+                        onOpenProfile = {
+                            haptic(Haptic.Light)
+                            showProfileSheet = true
+                        },
+                        onSignIn = {
+                            haptic(Haptic.Light)
+                            onNavigateToLogin()
+                        },
+                    )
+                },
                 useLargeTopBar = true,
                 scrollBehavior = scrollBehavior,
             )
         },
-        // FAB only shows on the Active tab when there's at least one list —
-        // on the empty state, the centered "Create list" button is the sole CTA.
         floatingActionButton = {
             if (uiState.isActiveTab && !uiState.hasNoLists) {
                 ExtendedFloatingActionButton(
-                    onClick = { showCreateChooser = true },
+                    onClick = {
+                        haptic(Haptic.Medium)
+                        showCreateChooser = true
+                    },
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     shape = RoundedCornerShape(16.dp),
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.shopping_list_create),
@@ -172,7 +192,7 @@ fun ShoppingListScreen(
             }
         }
     ) { padding ->
-        // No lists at all — show the empty state (no tabs needed)
+
         if (uiState.hasNoLists) {
             ShoppingListEmptyState(
                 modifier = Modifier
@@ -187,70 +207,90 @@ fun ShoppingListScreen(
                     .padding(padding)
                     .fillMaxSize(),
             ) {
-                // Custom pill-style tab row — no divider line.
-                // Selected tab gets a tinted pill background with bold text.
-                // Uses ripple indication for touch feedback.
                 TabPillRow(
                     tabs = listOf(
-                        TabPill(label = "Active", icon = Icons.Outlined.ShoppingCart),
-                        TabPill(label = "Completed", icon = Icons.Default.Check)
+                        TabPill(
+                            label = "Active",
+                            iconInactive = Icons.Outlined.ShoppingCart,
+                            iconActive = Icons.Filled.ShoppingCart,
+                        ),
+                        TabPill(
+                            label = "Completed",
+                            iconInactive = Icons.Outlined.CheckCircle,
+                            iconActive = Icons.Filled.CheckCircle,
+                        )
                     ),
                     selectedIndex = uiState.selectedTab,
                     onTabSelected = { viewModel.setSelectedTab(it) },
                 )
-
-                // Tab content
-                if (uiState.displayedListsAreEmpty) {
-                    TabEmptyState(isActiveTab = uiState.isActiveTab)
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                    ) {
-                        // Greeting only on Active tab
-                        if (uiState.isActiveTab) {
-                            item(key = "greeting") {
-                                GreetingSection(
-                                    listCount = uiState.activeLists.size,
-                                    itemsToGet = uiState.activeItemsToGet,
-                                )
-                            }
+                AnimatedContent(
+                    targetState = uiState.selectedTab,
+                    transitionSpec = {
+                        val goingRight = targetState > initialState
+                        val anim = tween<IntOffset>(durationMillis = 280)
+                        val fade = tween<Float>(durationMillis = 280)
+                        if (goingRight) {
+                            (slideInHorizontally(anim) { width -> width } + fadeIn(fade)) togetherWith
+                                (slideOutHorizontally(anim) { width -> -width } + fadeOut(fade))
+                        } else {
+                            (slideInHorizontally(anim) { width -> -width } + fadeIn(fade)) togetherWith
+                                (slideOutHorizontally(anim) { width -> width } + fadeOut(fade))
                         }
+                    },
+                    label = "tab-content",
+                ) { tabIndex ->
+                    val isActiveForPane = tabIndex == 0
+                    val listsForPane =
+                        if (isActiveForPane) uiState.activeLists else uiState.completedLists
+                    val groupedForPane =
+                        if (isActiveForPane) uiState.groupedActive else uiState.groupedCompleted
 
-                       uiState.groupedLists.forEach { (period, periodLists) ->
-                            item(key = "header-$period-${uiState.selectedTab}") {
-                                TimePeriodHeader(period = period)
+                    if (listsForPane.isEmpty()) {
+                        TabEmptyState(isActiveTab = isActiveForPane)
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                        ) {
+                            // Greeting only on Active tab
+                            if (isActiveForPane) {
+                                item(key = "greeting") {
+                                    GreetingSection(
+                                        listCount = uiState.activeLists.size,
+                                        itemsToGet = uiState.activeItemsToGet,
+                                        userName = userName,
+                                    )
+                                }
                             }
 
-                            itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
-                                val accent = getAccentForList(list.id, isDark)
+                            groupedForPane.forEach { (period, periodLists) ->
+                                item(key = "header-$period-$tabIndex") {
+                                    TimePeriodHeader(period = period)
+                                }
 
-                                AnimatedVisibility(
-                                    visible = true,
-                                    enter = fadeIn() + slideInVertically(
-                                        initialOffsetY = { it / 2 }
-                                    ),
-                                ) {
+                                itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
+                                    val accent = getAccentForList(list.id, isDark)
+
                                     SwipeableCard(
                                         onSwipeLeft = { viewModel.deleteList(list.id) },
                                     ) {
                                         ShoppingListCard(
                                             list = list,
                                             accent = accent,
-                                            isCompletedTab = !uiState.isActiveTab,
+                                            isCompletedTab = !isActiveForPane,
                                             onClick = { onNavigateToList(list.id, list.name) },
                                             onLongPress = { viewModel.onEditListClick(list) },
                                         )
                                     }
+                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
+
+                                item { Spacer(modifier = Modifier.height(4.dp)) }
                             }
 
-                            item { Spacer(modifier = Modifier.height(4.dp)) }
+                            item { Spacer(modifier = Modifier.height(88.dp)) }
                         }
-
-                        item { Spacer(modifier = Modifier.height(88.dp)) }
                     }
                 }
             }
@@ -273,7 +313,11 @@ fun ShoppingListScreen(
             },
             onPickVoice = {
                 showCreateChooser = false
-                showVoiceSheet = true
+                if (isLoggedIn) {
+                    showVoiceSheet = true
+                } else {
+                    showVoiceAuthPrompt = true
+                }
             },
         )
     }
@@ -281,11 +325,25 @@ fun ShoppingListScreen(
     if (showVoiceSheet) {
         VoiceCaptureSheet(
             onDismiss = { showVoiceSheet = false },
-            defaultListName = viewModel.defaultVoiceListName(),
-            // The voice VM calls this with the user-edited name + final drafts.
-            // We delegate to the screen VM which persists + emits navigateToList,
-            // returning Result<String> so the voice VM can transition to Done.
-            onConfirm = { name, drafts -> viewModel.createListWithVoice(name, drafts) },
+            // "Type instead" — close the voice sheet and open the manual type
+            // dialog (same entry point as the chooser's "Type" tile).
+            onSwitchToType = {
+                showVoiceSheet = false
+                viewModel.onCreateListClick()
+            },
+            // The voice VM calls this with the parsed drafts (no review step).
+            // We delegate to the screen VM which auto-names, persists, and emits
+            // navigateToList, returning Result<String> so the voice VM can
+            // transition to Done.
+            onConfirm = { drafts -> viewModel.createListWithVoice(drafts) },
+        )
+    }
+
+    if (showVoiceAuthPrompt) {
+        AuthPromptDialog(
+            onLogin = onNavigateToLogin,
+            onRegister = onNavigateToRegister,
+            onDismiss = { showVoiceAuthPrompt = false },
         )
     }
 
@@ -315,88 +373,6 @@ fun ShoppingListScreen(
         )
     }
 }
-// Compact chooser: two icon tiles side-by-side. Sheet hugs its content
-// (no fillMaxSize) so it sits low on the screen instead of pulling up to
-// near-fullscreen the way the default ModalBottomSheet does.
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CreateListChooserSheet(
-    onDismiss: () -> Unit,
-    onPickType: () -> Unit,
-    onPickVoice: () -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 24.dp),
-        ) {
-            Text(
-                text = "Create a list",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
-            ) {
-                ChooserTile(
-                    icon = Icons.Outlined.Edit,
-                    label = "Type",
-                    onClick = onPickType,
-                    modifier = Modifier.weight(1f),
-                )
-                ChooserTile(
-                    icon = Icons.Default.Mic,
-                    label = "Voice",
-                    onClick = onPickVoice,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChooserTile(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
-            .clickable(onClick = onClick)
-            .padding(vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            modifier = Modifier.size(28.dp),
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-        )
-    }
-}
-
 @Composable
 private fun TimePeriodHeader(period: TimePeriod) {
     Row(
@@ -417,6 +393,70 @@ private fun TimePeriodHeader(period: TimePeriod) {
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp,
         )
+    }
+}
+
+// The Home top-bar account control. Its appearance is the visual cue for
+// auth state: an initial-avatar when signed in, a "Sign in" pill when not.
+@Composable
+private fun AccountAction(
+    isLoggedIn: Boolean,
+    userName: String?,
+    onOpenProfile: () -> Unit,
+    onSignIn: () -> Unit,
+) {
+    if (isLoggedIn) {
+        // Circular initial avatar — same language as the Profile sheet avatar.
+        val initial = userName?.trim()?.firstOrNull()?.uppercase()
+        Box(
+            modifier = Modifier
+                .padding(end = 8.dp)
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .clickable(onClick = onOpenProfile),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (initial != null) {
+                Text(
+                    text = initial,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            } else {
+                // No name cached yet — fall back to a person glyph.
+                Icon(
+                    imageVector = Icons.Outlined.Person,
+                    contentDescription = "Account",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    } else {
+        // Outlined "Sign in" pill — clearly an invitation, not just an icon.
+        val pillShape = RoundedCornerShape(percent = 50)
+        Row(
+            modifier = Modifier
+                .padding(end = 8.dp)
+                .clip(pillShape)
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = pillShape,
+                )
+                .clickable(onClick = onSignIn)
+                .padding(horizontal = 14.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Sign in",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
     }
 }
 

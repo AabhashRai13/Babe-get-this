@@ -8,21 +8,22 @@ import com.babegetthis.android.core.voice.data.repository.VoiceRepository
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.core.voice.model.VoiceCaptureUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 // Orchestrates the whole voice-capture flow:
-//   record → transcribe → review → persist → navigate.
+//   record → transcribe → persist → navigate.
+//
+// There is no review step: as soon as transcription returns items, the list is
+// created and we navigate into it. The user edits items in the list screen.
 //
 // On purpose, this ViewModel only knows about AudioRecorder + VoiceRepository.
-// It does NOT depend on ShoppingListRepository — the screen passes a `persist`
-// lambda into confirm(...) so this module stays reusable (a future "add items
-// to an existing list" feature could reuse it with a different persist lambda).
+// It does NOT depend on ShoppingListRepository — the sheet seeds a `persist`
+// lambda (via setPersist) so this module stays reusable (a future "add items to
+// an existing list" feature could reuse it with a different persist lambda).
 @HiltViewModel
 class VoiceCaptureViewModel @Inject constructor(
     private val recorder: AudioRecorder,
@@ -32,18 +33,13 @@ class VoiceCaptureViewModel @Inject constructor(
     private val _state = MutableStateFlow<VoiceCaptureUiState>(VoiceCaptureUiState.Idle)
     val state: StateFlow<VoiceCaptureUiState> = _state.asStateFlow()
 
-    // One-shot navigation event — the screen collects this and navigates to the
-    // new list. SharedFlow (not StateFlow) so re-subscribing doesn't re-fire it.
-    private val _navigateToList = MutableSharedFlow<String>()
-    val navigateToList = _navigateToList.asSharedFlow()
+    // How to persist the parsed drafts → returns the new list id. Seeded by the
+    // sheet on open so this module stays agnostic about naming + storage (those
+    // are shopping-list concerns). Must be set before transcription completes.
+    private var persist: (suspend (drafts: List<ItemDraft>) -> Result<String>)? = null
 
-    // Default list-name to seed Reviewing.listName with. Set once by the sheet
-    // host (via setDefaultListName) so this module stays agnostic about naming
-    // policy — that's a shopping-list feature decision, not a voice concern.
-    private var defaultListName: String = ""
-
-    fun setDefaultListName(name: String) {
-        defaultListName = name
+    fun setPersist(block: suspend (drafts: List<ItemDraft>) -> Result<String>) {
+        persist = block
     }
 
     // Called by the screen after the system permission dialog resolves.
@@ -67,13 +63,12 @@ class VoiceCaptureViewModel @Inject constructor(
             val file = recorder.stop()
             when (val result = voiceRepository.transcribeAndParse(file)) {
                 is Result.Success -> {
-                    _state.value = if (result.data.isEmpty()) {
-                        VoiceCaptureUiState.Failed("Didn't catch any items. Try again?")
+                    // Empty result = nothing was understood. Guard BEFORE persisting
+                    // so we never create an empty list.
+                    if (result.data.isEmpty()) {
+                        _state.value = VoiceCaptureUiState.Failed("Didn't catch any items. Try again?")
                     } else {
-                        VoiceCaptureUiState.Reviewing(
-                            drafts = result.data,
-                            listName = defaultListName,
-                        )
+                        persistDrafts(result.data)
                     }
                 }
                 is Result.Error -> {
@@ -83,54 +78,26 @@ class VoiceCaptureViewModel @Inject constructor(
         }
     }
 
-    // Inline edit in the review list — replace one draft's name.
-    // No-op unless we're actually in Reviewing state (state machine guard).
-    // current.copy(...) preserves listName + the other drafts' quantities.
-    fun editDraft(index: Int, newName: String) {
-        val current = _state.value as? VoiceCaptureUiState.Reviewing ?: return
-        val updated = current.drafts.toMutableList().apply {
-            this[index] = this[index].copy(name = newName)
+    // Auto-create the list from the parsed drafts and navigate into it — no
+    // review step. The persist lambda (seeded by the sheet) names + stores the
+    // list and returns its id.
+    private suspend fun persistDrafts(drafts: List<ItemDraft>) {
+        val persistFn = persist ?: run {
+            // Should never happen — the sheet seeds this on open. Fail loudly
+            // rather than silently dropping the user's spoken list.
+            _state.value = VoiceCaptureUiState.Failed("Something went wrong saving your list.")
+            return
         }
-        _state.value = current.copy(drafts = updated)
-    }
-
-    fun removeDraft(index: Int) {
-        val current = _state.value as? VoiceCaptureUiState.Reviewing ?: return
-        val updated = current.drafts.toMutableList().apply { removeAt(index) }
-        _state.value = current.copy(drafts = updated)
-    }
-
-    fun editListName(newName: String) {
-        val current = _state.value as? VoiceCaptureUiState.Reviewing ?: return
-        _state.value = current.copy(listName = newName)
-    }
-
-    // newQty.ifBlank { null } keeps the "model didn't extract a qty" signal
-    // when the user clears the field, rather than persisting an empty string.
-    fun editDraftQuantity(index: Int, newQty: String) {
-        val current = _state.value as? VoiceCaptureUiState.Reviewing ?: return
-        val updated = current.drafts.toMutableList().apply {
-            this[index] = this[index].copy(quantity = newQty.ifBlank { null })
-        }
-        _state.value = current.copy(drafts = updated)
-    }
-
-    // Persistence is the caller's responsibility — the screen passes a lambda
-    // that wraps shoppingListRepository.createListWithItems(...). The lambda
-    // returns Result<String> where the String is the new list id (used to
-    // navigate). This module doesn't know that — to it, it's just an opaque token.
-    fun confirm(persist: suspend (name: String, drafts: List<ItemDraft>) -> Result<String>) {
-        viewModelScope.launch {
-            val current = _state.value as? VoiceCaptureUiState.Reviewing ?: return@launch
-            _state.value = VoiceCaptureUiState.Saving
-            when (val result = persist(current.listName, current.drafts)) {
-                is Result.Success -> {
-                    _state.value = VoiceCaptureUiState.Done
-                    _navigateToList.emit(result.data)
-                }
-                is Result.Error -> {
-                    _state.value = VoiceCaptureUiState.Failed(result.error.message)
-                }
+        _state.value = VoiceCaptureUiState.Saving
+        when (val result = persistFn(drafts)) {
+            is Result.Success -> {
+                // Navigation into the new list is driven by the host via
+                // ShoppingListViewModel.navigateToList (emitted inside the persist
+                // lambda), so we only need to flip to Done here.
+                _state.value = VoiceCaptureUiState.Done
+            }
+            is Result.Error -> {
+                _state.value = VoiceCaptureUiState.Failed(result.error.message)
             }
         }
     }

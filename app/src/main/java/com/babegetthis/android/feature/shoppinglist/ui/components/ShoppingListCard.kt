@@ -81,7 +81,7 @@ internal fun ShoppingListCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = if (isCompletedTab) Icons.Default.Check
+                    imageVector = if (isCompletedTab) Icons.Filled.Check
                                   else Icons.Outlined.ShoppingCart,
                     contentDescription = null,
                     tint = accent.onContainer,

@@ -13,3 +13,12 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+CLAUDE.md
+
+# Local tooling — not for the repo
+.claude/
+openspec/
+
+# Android Studio / IntelliJ project files
+.idea/

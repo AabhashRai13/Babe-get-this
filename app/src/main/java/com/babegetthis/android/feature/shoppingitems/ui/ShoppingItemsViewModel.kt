@@ -5,17 +5,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.model.AuthState
+import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.model.Category
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
+import com.babegetthis.android.feature.shoppingitems.model.ShoppingItemsUiState
+import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -26,11 +31,18 @@ class ShoppingItemsViewModel @Inject constructor(
     private val itemRepository: ShoppingItemRepository,
     private val categoryRepository: CategoryRepository,
     private val authStateManager: AuthStateManager,
+    private val listRepository: ShoppingListRepository,
+    @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     val listId: String = savedStateHandle.get<String>("listId") ?: ""
     val listName: String = savedStateHandle.get<String>("listName") ?: ""
-    val isNewList: Boolean = savedStateHandle.get<Boolean>("isNew") ?: false
+
+    // True only when we arrived here straight from creating this list (voice or
+    // the type flow pass isNew=true). Used to gate the auto-delete-if-empty in
+    // onCleared so we only clean up lists the user just made and abandoned — not
+    // an existing empty list they happened to open and back out of.
+    private val isNewlyCreated: Boolean = savedStateHandle.get<Boolean>("isNew") ?: false
 
     // Check if the user is logged in — used to gate the share feature.
     fun isAuthenticated(): Boolean {
@@ -42,6 +54,25 @@ class ShoppingItemsViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
+        )
+
+    // Derived UI state: filter + groupBy run once per upstream emission
+    // here, instead of on every recomposition in the screen. Keeps the
+    // hot animation paths (ProgressCard color pulse) cheap.
+    val uiState: StateFlow<ShoppingItemsUiState> = items
+        .map { list ->
+            val active = list.filter { !it.isPickedUp }
+            ShoppingItemsUiState(
+                items = list,
+                activeItems = active,
+                completedItems = list.filter { it.isPickedUp },
+                activeByShop = active.groupBy { it.shop ?: "" },
+            )
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ShoppingItemsUiState(),
         )
 
     val categories: StateFlow<List<Category>> = categoryRepository.getAllCategories()
@@ -65,6 +96,33 @@ class ShoppingItemsViewModel @Inject constructor(
 
     private val _undoDeleteEvent = MutableSharedFlow<String>() // emits item name
     val undoDeleteEvent = _undoDeleteEvent.asSharedFlow()
+
+    // One-shot UI events the screen consumes (e.g. fire a Success haptic
+    // when the list just became all-done). SharedFlow keeps the pattern
+    // consistent with errorMessage / undoDeleteEvent above.
+    // Flutter analogue: a one-off Stream the View listens to and reacts to.
+    sealed class UiEvent {
+        data object ListJustCompleted : UiEvent()
+    }
+    private val _events = MutableSharedFlow<UiEvent>()
+    val events = _events.asSharedFlow()
+
+    init {
+        // Watch the items flow and detect the TRANSITION from "not all done"
+        // to "all done". We only emit on the transition itself — not on
+        // initial load of an already-completed list, otherwise opening any
+        // finished list would buzz.
+        viewModelScope.launch {
+            var wasAllDone: Boolean? = null
+            items.collect { itemList ->
+                val isAllDone = itemList.isNotEmpty() && itemList.all { it.isPickedUp }
+                if (wasAllDone == false && isAllDone) {
+                    _events.emit(UiEvent.ListJustCompleted)
+                }
+                wasAllDone = isAllDone
+            }
+        }
+    }
 
     fun onAddItemClick() {
         showAddItemDialog.value = true
@@ -187,6 +245,21 @@ class ShoppingItemsViewModel @Inject constructor(
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
                 }
+            }
+        }
+    }
+
+    // We launch on applicationScope, NOT viewModelScope: by the time onCleared()
+    // runs, viewModelScope is already cancelled, so the delete would never run.
+    // applicationScope outlives this screen, so the DB write completes. The
+    // repository re-checks the real item count, so a list with items is safe.
+    override fun onCleared() {
+        super.onCleared()
+        // Only auto-clean a list we just created and the user left empty. An
+        // existing empty list they opened and backed out of stays put.
+        if (isNewlyCreated) {
+            applicationScope.launch {
+                listRepository.deleteListIfEmpty(listId)
             }
         }
     }

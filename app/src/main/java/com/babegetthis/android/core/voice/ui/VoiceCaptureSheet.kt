@@ -44,7 +44,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.core.voice.model.VoiceCaptureUiState
-import com.babegetthis.android.core.voice.ui.reviewing.ReviewingMode
 import com.babegetthis.android.core.voice.ui.viewModels.VoiceCaptureViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -52,9 +51,10 @@ import kotlinx.coroutines.isActive
 // Modal bottom sheet that runs the whole voice-capture flow.
 //
 // The host (Lists screen) opens this sheet, hands it a `persist` lambda that
-// knows how to create the list, and listens to viewModel.navigateToList for
-// the new list id. The sheet only handles UI + permission — it does not know
-// what gets persisted.
+// knows how to name + create the list, and listens to viewModel.navigateToList
+// for the new list id. The sheet only handles UI + permission — it does not
+// know what gets persisted. There is no review step: once transcription
+// returns items, the list is created and the host navigates into it.
 //
 // Flutter analogue: showModalBottomSheet(...) with a StatefulWidget inside;
 // here `state` drives a `when` block instead of `setState` calls.
@@ -62,8 +62,11 @@ import kotlinx.coroutines.isActive
 @Composable
 fun VoiceCaptureSheet(
     onDismiss: () -> Unit,
-    defaultListName: String,
-    onConfirm: suspend (name: String, drafts: List<ItemDraft>) -> Result<String>,
+    // "Type instead" on the Failed state: close this sheet AND open the manual
+    // type flow. Without this the sheet would just vanish, leaving the user with
+    // nothing — which reads as a dead button.
+    onSwitchToType: () -> Unit,
+    onConfirm: suspend (drafts: List<ItemDraft>) -> Result<String>,
     viewModel: VoiceCaptureViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -81,12 +84,12 @@ fun VoiceCaptureSheet(
         }
     )
 
-    // Auto-start: the moment the sheet opens, seed the VM with the default
-    // list name, then either begin recording (if mic permission is already
+    // Auto-start: the moment the sheet opens, seed the VM with the persist
+    // lambda, then either begin recording (if mic permission is already
     // granted) or ask for it. LaunchedEffect(Unit) runs exactly once for the
     // lifetime of this composable.
     LaunchedEffect(Unit) {
-        viewModel.setDefaultListName(defaultListName)
+        viewModel.setPersist(onConfirm)
         val alreadyGranted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
@@ -94,10 +97,20 @@ fun VoiceCaptureSheet(
         else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
-    // Auto-dismiss when the flow completes successfully. The host collects
-    // viewModel.navigateToList separately and routes to the new list.
+    // Auto-dismiss when the flow completes successfully. Navigation into the new
+    // list is driven by ShoppingListViewModel.navigateToList (emitted when the
+    // persist lambda creates the list), which the host collects — not by this VM.
     LaunchedEffect(state) {
-        if (state is VoiceCaptureUiState.Done) onDismiss()
+        if (state is VoiceCaptureUiState.Done) {
+            onDismiss()
+            // This VM is scoped to the Lists screen, so it survives the
+            // navigation into the freshly-created list and would otherwise stay
+            // stuck in Done. Reset to Idle now (cancel is safe post-success) so
+            // reopening the sheet records immediately — without this, the stale
+            // Done auto-dismisses the first reopen ("tap mic, nothing happens,
+            // tap again, works").
+            viewModel.cancel()
+        }
     }
 
     ModalBottomSheet(
@@ -125,19 +138,6 @@ fun VoiceCaptureSheet(
                     onStop = { viewModel.stopRecording() },
                 )
                 is VoiceCaptureUiState.Transcribing -> LoadingMode("Listening to your list…")
-                is VoiceCaptureUiState.Reviewing -> ReviewingMode(
-                    drafts = s.drafts,
-                    listName = s.listName,
-                    onEditName = viewModel::editListName,
-                    onEdit = viewModel::editDraft,
-                    onEditQty = viewModel::editDraftQuantity,
-                    onRemove = viewModel::removeDraft,
-                    onCancel = {
-                        viewModel.cancel()
-                        onDismiss()
-                    },
-                    onConfirm = { viewModel.confirm(onConfirm) },
-                )
                 is VoiceCaptureUiState.Saving -> LoadingMode("Saving your list…")
                 is VoiceCaptureUiState.Done -> LoadingMode("Done!")
                 is VoiceCaptureUiState.Failed -> FailedMode(
@@ -145,7 +145,7 @@ fun VoiceCaptureSheet(
                     onRetry = { viewModel.startRecording() },
                     onTypeInstead = {
                         viewModel.cancel()
-                        onDismiss()
+                        onSwitchToType()
                     },
                 )
             }

@@ -9,7 +9,6 @@ sealed interface VoiceCaptureUiState {
     data object NeedsPermission : VoiceCaptureUiState
     data class Recording(val elapsedMs: Long = 0) : VoiceCaptureUiState
     data object Transcribing : VoiceCaptureUiState
-    data class Reviewing(val drafts: List<ItemDraft>, val listName: String) : VoiceCaptureUiState
     data object Saving : VoiceCaptureUiState
     data object Done : VoiceCaptureUiState
     data class Failed(val message: String) : VoiceCaptureUiState

@@ -18,6 +18,16 @@ okhttp = "4.12.0"
 kotlinxSerialization = "1.7.3"
 retrofitKotlinxSerialization = "1.0.0"
 securityCrypto = "1.1.0-alpha06"
+kotlinxCoroutinesTest = "1.8.1"
+mockk = "1.13.13"
+turbine = "1.1.0"
+# Supabase Kotlin SDK (auth, realtime later) + the Ktor HTTP engine it runs on.
+# supabase-kt ships a BOM, so its modules are versionless in [libraries] below.
+# Pinned to the 3.0.x line on purpose: it targets Kotlin 2.0.x / Ktor 3.0, which
+# matches this project's Kotlin 2.0.21. The newest 3.6.x needs Kotlin 2.3 and
+# would force a toolchain-wide upgrade — deferred to a dedicated task.
+supabase = "3.0.3"
+ktor = "3.0.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -48,6 +58,14 @@ okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor",
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 retrofit-kotlinx-serialization = { group = "com.jakewharton.retrofit", name = "retrofit2-kotlinx-serialization-converter", version.ref = "retrofitKotlinxSerialization" }
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+# Supabase: the BOM pins module versions; auth-kt is the GoTrue/auth client.
+# ktor-client-okhttp is the HTTP engine (reuses OkHttp, which you already have).
+supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
+supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
