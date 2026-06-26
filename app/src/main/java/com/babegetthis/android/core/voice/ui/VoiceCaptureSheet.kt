@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -137,7 +139,7 @@ fun VoiceCaptureSheet(
                 is VoiceCaptureUiState.Recording -> RecordingMode(
                     onStop = { viewModel.stopRecording() },
                 )
-                is VoiceCaptureUiState.Transcribing -> LoadingMode("Listening to your list…")
+                is VoiceCaptureUiState.Transcribing -> TranscribingMode()
                 is VoiceCaptureUiState.Saving -> LoadingMode("Saving your list…")
                 is VoiceCaptureUiState.Done -> LoadingMode("Done!")
                 is VoiceCaptureUiState.Failed -> FailedMode(
@@ -223,6 +225,40 @@ private fun RecordingMode(onStop: () -> Unit) {
         Spacer(Modifier.width(8.dp))
         Text("Stop")
     }
+}
+
+// Transcribing state: the decorative waveform plus a single line of reassurance
+// that advances through a short sequence on a timer and HOLDS on the last line.
+// We never loop back to the first line — cycling reads as "stuck", holding on
+// "Almost there…" reads as "patient". The lines are warmth, not real stages
+// (the backend exposes no progress), and the copy is placeholder for now.
+@Composable
+private fun TranscribingMode() {
+    val lines = listOf(
+        "Listening to your list…",
+        "Sorting your items…",
+        "Almost there…",
+    )
+    var lineIndex by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (lineIndex < lines.lastIndex) {
+            delay(2500)
+            lineIndex++
+        }
+    }
+
+    Spacer(Modifier.height(20.dp))
+    TranscribingWaveform()
+    Spacer(Modifier.height(20.dp))
+    // Crossfade so the line swaps smoothly instead of snapping.
+    Crossfade(targetState = lines[lineIndex], label = "reassurance") { line ->
+        Text(
+            text = line,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Spacer(Modifier.height(16.dp))
 }
 
 @Composable

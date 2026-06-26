@@ -1,7 +1,12 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -29,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
@@ -61,6 +67,16 @@ fun ShoppingItemsScreen(
 
     val snackBarHostState = remember { SnackbarHostState() }
     val haptic = rememberHaptic()
+
+    // Placement animation for item rows: when a toggle moves an item between the
+    // Active and Completed sections, it slides to its new slot instead of
+    // teleporting. No-bounce spring with medium-low stiffness = a subtle settle
+    // (bouncy would read as toy-ish).
+    val rowPlacementSpec = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow,
+        visibilityThreshold = IntOffset.VisibilityThreshold,
+    )
 
     LaunchedEffect(Unit) {
         viewModel.errorMessage.collect { message ->
@@ -170,24 +186,33 @@ fun ShoppingItemsScreen(
                         }
 
                         items(shopItems, key = { it.id }) { shoppingItem ->
-                            SwipeableCard(
-                                onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
-                                onSwipeRight = {
-                                    viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp)
-                                },
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .animateItem(placementSpec = rowPlacementSpec),
                             ) {
-                                ShoppingItemCard(
-                                    item = shoppingItem,
-                                    onClick = { viewModel.onEditItemClick(shoppingItem) },
-                                    onTogglePickedUp = {
-                                        viewModel.togglePickedUp(
-                                            shoppingItem.id,
-                                            !shoppingItem.isPickedUp
-                                        )
+                                SwipeableCard(
+                                    onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
+                                    onSwipeRight = {
+                                        viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp)
                                     },
-                                )
+                                ) {
+                                    ShoppingItemCard(
+                                        item = shoppingItem,
+                                        onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                        onTogglePickedUp = {
+                                            // The satisfying "check it off" moment — buzz to match
+                                            // the un-check path on completed items.
+                                            haptic(Haptic.Light)
+                                            viewModel.togglePickedUp(
+                                                shoppingItem.id,
+                                                !shoppingItem.isPickedUp
+                                            )
+                                        },
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
@@ -202,6 +227,11 @@ fun ShoppingItemsScreen(
                         )
                     }
                     items(completedItems, key = { it.id }) { shoppingItem ->
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .animateItem(placementSpec = rowPlacementSpec),
+                      ) {
                         SwipeableCard(
                             onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
                             onSwipeRight = {
@@ -221,6 +251,7 @@ fun ShoppingItemsScreen(
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
+                      }
                     }
                 }
 
