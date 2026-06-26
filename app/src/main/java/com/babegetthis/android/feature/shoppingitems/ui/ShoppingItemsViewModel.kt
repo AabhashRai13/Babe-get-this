@@ -9,6 +9,7 @@ import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.model.Category
+import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItemsUiState
@@ -158,6 +159,15 @@ class ShoppingItemsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    // Voice persist lambda for "add items to this list". The voice sheet calls
+    // this with the parsed drafts; we append them to the current list and return
+    // its id so the voice VM transitions to Done. No navigation — the user is
+    // already here, and the new rows appear via the items Flow (with an insert
+    // animation in the screen). Mirrors ShoppingListViewModel.createListWithVoice.
+    suspend fun addItemsWithVoice(drafts: List<ItemDraft>): Result<String> {
+        return listRepository.addItemsToList(listId, drafts)
     }
 
     fun editItem(

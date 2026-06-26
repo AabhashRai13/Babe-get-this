@@ -3,6 +3,7 @@ package com.babegetthis.android.feature.shoppingitems.ui
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,15 +13,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -30,7 +34,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +49,7 @@ import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
+import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
 import com.babegetthis.android.feature.shoppingitems.ui.components.FirstItemPrompt
 import com.babegetthis.android.feature.shoppingitems.ui.components.ProgressCard
 import com.babegetthis.android.feature.shoppingitems.ui.components.SectionHeader
@@ -68,10 +76,13 @@ fun ShoppingItemsScreen(
     val snackBarHostState = remember { SnackbarHostState() }
     val haptic = rememberHaptic()
 
+    // Drives the voice-capture sheet for adding items to THIS list.
+    var showVoiceSheet by remember { mutableStateOf(false) }
+
     // Placement animation for item rows: when a toggle moves an item between the
-    // Active and Completed sections, it slides to its new slot instead of
-    // teleporting. No-bounce spring with medium-low stiffness = a subtle settle
-    // (bouncy would read as toy-ish).
+    // Active and Completed sections (or a voice-added row inserts), it slides to
+    // its slot instead of teleporting. No-bounce spring with medium-low stiffness
+    // = a subtle settle (bouncy would read as toy-ish).
     val rowPlacementSpec = spring(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMediumLow,
@@ -122,22 +133,47 @@ fun ShoppingItemsScreen(
             )
         },
         floatingActionButton = {
-            if (!uiState.isEmpty) {
-                ExtendedFloatingActionButton(
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Mic — always available (both empty + populated states). Voice
+                // append is the headline quick-add, so it stays one tap in the
+                // thumb zone, stacked above the manual "Add" button.
+                SmallFloatingActionButton(
                     onClick = {
                         haptic(Haptic.Medium)
-                        viewModel.onAddItemClick()
+                        showVoiceSheet = true
                     },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = CircleShape,
                 ) {
-                    Icon(imageVector = Icons.Filled.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.add),
-                        fontWeight = FontWeight.SemiBold,
+                    Icon(
+                        imageVector = Icons.Filled.Mic,
+                        contentDescription = stringResource(R.string.add),
                     )
+                }
+
+                // Manual "Add" — only when the list already has items. The empty
+                // state shows its own big Add button inside FirstItemPrompt.
+                if (!uiState.isEmpty) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            haptic(Haptic.Medium)
+                            viewModel.onAddItemClick()
+                        },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Icon(imageVector = Icons.Filled.Add, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.add),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }
@@ -186,6 +222,9 @@ fun ShoppingItemsScreen(
                         }
 
                         items(shopItems, key = { it.id }) { shoppingItem ->
+                            // animateItem = native LazyColumn insert/move animation.
+                            // Voice-added rows slide in instead of popping; toggled
+                            // rows slide between sections. GPU-composited, cheap.
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -227,37 +266,53 @@ fun ShoppingItemsScreen(
                         )
                     }
                     items(completedItems, key = { it.id }) { shoppingItem ->
-                      Column(
-                          modifier = Modifier
-                              .fillMaxWidth()
-                              .animateItem(placementSpec = rowPlacementSpec),
-                      ) {
-                        SwipeableCard(
-                            onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
-                            onSwipeRight = {
-                                viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp)
-                            },
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateItem(placementSpec = rowPlacementSpec),
                         ) {
-                            ShoppingItemCard(
-                                item = shoppingItem,
-                                onClick = { viewModel.onEditItemClick(shoppingItem) },
-                                onTogglePickedUp = {
-                                    haptic(Haptic.Light)
-                                    viewModel.togglePickedUp(
-                                        shoppingItem.id,
-                                        !shoppingItem.isPickedUp
-                                    )
+                            SwipeableCard(
+                                onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
+                                onSwipeRight = {
+                                    viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp)
                                 },
-                            )
+                            ) {
+                                ShoppingItemCard(
+                                    item = shoppingItem,
+                                    onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                    onTogglePickedUp = {
+                                        haptic(Haptic.Light)
+                                        viewModel.togglePickedUp(
+                                            shoppingItem.id,
+                                            !shoppingItem.isPickedUp
+                                        )
+                                    },
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                      }
                     }
                 }
 
                 item { Spacer(modifier = Modifier.height(88.dp)) }
             }
         }
+    }
+
+    if (showVoiceSheet) {
+        VoiceCaptureSheet(
+            onDismiss = { showVoiceSheet = false },
+            // "Type instead" — close voice and open the manual add dialog.
+            onSwitchToType = {
+                showVoiceSheet = false
+                viewModel.onAddItemClick()
+            },
+            // The voice VM calls this with the parsed drafts (no review step).
+            // We append them to THIS list and return its id so the voice VM
+            // transitions to Done. The new rows appear via the items Flow and
+            // animate in. No navigation — the user is already in the list.
+            onConfirm = { drafts -> viewModel.addItemsWithVoice(drafts) },
+        )
     }
 
     if (showDialog) {

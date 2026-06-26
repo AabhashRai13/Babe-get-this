@@ -8,6 +8,7 @@ import com.babegetthis.android.core.voice.data.repository.VoiceRepository
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.core.voice.model.VoiceCaptureUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +39,11 @@ class VoiceCaptureViewModel @Inject constructor(
     // are shopping-list concerns). Must be set before transcription completes.
     private var persist: (suspend (drafts: List<ItemDraft>) -> Result<String>)? = null
 
+    // Tracks the in-flight transcribe→persist coroutine so cancel() can abort it.
+    // Without this, closing the sheet mid-request lets the request finish in the
+    // background and persist items the user thought they'd cancelled.
+    private var transcribeJob: Job? = null
+
     fun setPersist(block: suspend (drafts: List<ItemDraft>) -> Result<String>) {
         persist = block
     }
@@ -58,7 +64,7 @@ class VoiceCaptureViewModel @Inject constructor(
     }
 
     fun stopRecording() {
-        viewModelScope.launch {
+        transcribeJob = viewModelScope.launch {
             _state.value = VoiceCaptureUiState.Transcribing
             val file = recorder.stop()
             when (val result = voiceRepository.transcribeAndParse(file)) {
@@ -105,6 +111,11 @@ class VoiceCaptureViewModel @Inject constructor(
     // User aborts mid-flow — drop the audio file and reset.
     // Safe to call from any state; AudioRecorder.cancel() is idempotent.
     fun cancel() {
+        // Abort any in-flight transcribe/persist so dismissing the sheet means
+        // nothing lands. The DB insert is a single atomic transaction, so there's
+        // no half-written-list risk if we cancel mid-save.
+        transcribeJob?.cancel()
+        transcribeJob = null
         recorder.cancel()
         _state.value = VoiceCaptureUiState.Idle
     }

@@ -71,24 +71,34 @@ class ShoppingListRepository @Inject constructor(
         )
         shoppingListDao.insertList(list.toEntity())
 
-        // Trust-boundary guard: the backend now returns draft.category as a real
-        // category id ("cat-dairy-eggs"), matching our categories table. But never
-        // trust the network blindly — keep the id only if it actually exists as a
-        // row, otherwise fall back to null (uncategorized). first() reads the
-        // current snapshot of the live categories Flow.
-        val knownCategoryIds = categoryDao.getAllCategories().first().mapTo(HashSet()) { it.id }
+        val itemEntities = draftsToItems(listId, drafts, now)
+        if (itemEntities.isNotEmpty()) {
+            shoppingItemDao.insertItems(itemEntities)
+        }
 
-        val itemEntities = drafts.map { draft ->
+        listId
+    }
+
+    // Shared draft → item-entity mapping, used by both createListWithItems and
+    // addItemsToList. Centralises the trust-boundary guard (keep a backend
+    // category id only if it's a real row) so it lives in ONE place instead of
+    // being copy-pasted. suspend because it snapshots the live categories Flow
+    // via first().
+    private suspend fun draftsToItems(
+        listId: String,
+        drafts: List<ItemDraft>,
+        now: Long,
+    ): List<ShoppingItemEntity> {
+        val knownCategoryIds = categoryDao.getAllCategories().first().mapTo(HashSet()) { it.id }
+        return drafts.map { draft ->
             ShoppingItem(
                 id = UUID.randomUUID().toString(),
                 listId = listId,
                 name = draft.name,
-                // Backend returns quantity + unit; the repository already flattened
-                // them into draft.quantity. null → empty string to match the shape
-                // of manually-typed items.
+                // Backend returns quantity + unit already flattened into draft.quantity.
+                // null → empty string to match manually-typed items.
                 quantity = draft.quantity.orEmpty(),
-                // Use the backend's category id only if it's a known row; unknown
-                // or null → uncategorized.
+                // Keep the backend's category id only if it's a known row; unknown/null → uncategorized.
                 categoryId = draft.category?.takeIf { it in knownCategoryIds },
                 note = draft.note,
                 shop = null,
@@ -96,10 +106,21 @@ class ShoppingListRepository @Inject constructor(
                 updatedAt = now,
             ).toEntity()
         }
+    }
+
+    // Voice "add to existing list": append spoken drafts to a list the user is
+    // already viewing. No list is created and no navigation happens — the rows
+    // just materialise in the open list via its Room Flow. Returns the listId so
+    // the voice VM can transition to Done, mirroring createListWithItems.
+    suspend fun addItemsToList(
+        listId: String,
+        drafts: List<ItemDraft>,
+    ): Result<String> = safeCall {
+        val now = System.currentTimeMillis()
+        val itemEntities = draftsToItems(listId, drafts, now)
         if (itemEntities.isNotEmpty()) {
             shoppingItemDao.insertItems(itemEntities)
         }
-
         listId
     }
 
