@@ -13,13 +13,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// UI state for the login screen.
-// Like a Riverpod AsyncValue — tracks loading, success, and error states.
-
 data class LoginUiState(
+    val email: String = "",
+    val password: String = "",
+    val emailError: String? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-)
+) {
+    val isFormValid: Boolean
+        get() = isValidEmail(email) && password.isNotBlank()
+}
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -29,22 +32,30 @@ class LoginViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
-    // One-shot event that fires after a successful login.
-    // The screen observes this to trigger navigation (e.g., popBackStack).
     private val _loginSuccess = MutableSharedFlow<Unit>()
     val loginSuccess = _loginSuccess.asSharedFlow()
 
-    fun login(email: String, password: String) {
-        // Basic validation before making the call
-        if (email.isBlank() || password.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Please fill in all fields.")
-            return
+    fun onEmailChange(value: String) {
+        val error = if (value.isNotEmpty() && !isValidEmail(value)) {
+            "Enter a valid email address"
+        } else {
+            null
         }
+        _uiState.value = _uiState.value.copy(email = value, emailError = error)
+    }
+
+    fun onPasswordChange(value: String) {
+        _uiState.value = _uiState.value.copy(password = value)
+    }
+
+    fun login() {
+        val state = _uiState.value
+        if (!state.isFormValid) return
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            when (val result = authRepository.login(email, password)) {
+            when (val result = authRepository.login(state.email, state.password)) {
                 is Result.Success -> {
                     _uiState.value = _uiState.value.copy(isLoading = false)
                     _loginSuccess.emit(Unit)

@@ -18,6 +18,9 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -42,49 +45,76 @@ class RegisterViewModelTest {
 
     private val user = User(id = "u1", email = "a@b.com", name = "Ann")
 
+    // Helper: fill the form with valid values so the button would be enabled.
+    private fun RegisterViewModel.fillValid() {
+        onNameChange("Ann")
+        onEmailChange("a@b.com")
+        onPasswordChange("secret1")
+        onConfirmPasswordChange("secret1")
+    }
+
     // -- Client-side validation (must not hit the repository) --
 
     @Test
-    fun `blank fields show an error and do not call the repository`() = runTest {
+    fun `pristine form is invalid and calling register does not hit the repository`() = runTest {
         val viewModel = buildViewModel()
 
-        viewModel.register(name = "", email = "", password = "", confirmPassword = "")
+        assertFalse(viewModel.uiState.value.isFormValid)
+        viewModel.register()
 
-        assertEquals("Please fill in all fields.", viewModel.uiState.value.errorMessage)
         coVerify(exactly = 0) { authRepository.register(any(), any(), any()) }
     }
 
     @Test
-    fun `mismatched passwords show an error and do not call the repository`() = runTest {
+    fun `mismatched passwords set a confirm error and keep the form invalid`() = runTest {
         val viewModel = buildViewModel()
 
-        viewModel.register(
-            name = "Ann",
-            email = "a@b.com",
-            password = "secret1",
-            confirmPassword = "secret2",
-        )
+        viewModel.onNameChange("Ann")
+        viewModel.onEmailChange("a@b.com")
+        viewModel.onPasswordChange("secret1")
+        viewModel.onConfirmPasswordChange("secret2")
 
-        assertEquals("Passwords do not match.", viewModel.uiState.value.errorMessage)
+        assertNotNull(viewModel.uiState.value.confirmPasswordError)
+        assertFalse(viewModel.uiState.value.isFormValid)
+        viewModel.register()
         coVerify(exactly = 0) { authRepository.register(any(), any(), any()) }
     }
 
     @Test
-    fun `too-short password shows an error and does not call the repository`() = runTest {
+    fun `too-short password sets a password error and keeps the form invalid`() = runTest {
         val viewModel = buildViewModel()
 
-        viewModel.register(
-            name = "Ann",
-            email = "a@b.com",
-            password = "123",
-            confirmPassword = "123",
-        )
+        viewModel.onNameChange("Ann")
+        viewModel.onEmailChange("a@b.com")
+        viewModel.onPasswordChange("123")
+        viewModel.onConfirmPasswordChange("123")
 
-        assertEquals(
-            "Password must be at least 6 characters.",
-            viewModel.uiState.value.errorMessage,
-        )
+        assertNotNull(viewModel.uiState.value.passwordError)
+        assertFalse(viewModel.uiState.value.isFormValid)
+        viewModel.register()
         coVerify(exactly = 0) { authRepository.register(any(), any(), any()) }
+    }
+
+    @Test
+    fun `bad email sets an email error and keeps the form invalid`() {
+        val viewModel = buildViewModel()
+
+        viewModel.onEmailChange("not-an-email")
+
+        assertNotNull(viewModel.uiState.value.emailError)
+        assertFalse(viewModel.uiState.value.isFormValid)
+    }
+
+    @Test
+    fun `fully valid form clears errors and is valid`() {
+        val viewModel = buildViewModel()
+
+        viewModel.fillValid()
+
+        assertNull(viewModel.uiState.value.emailError)
+        assertNull(viewModel.uiState.value.passwordError)
+        assertNull(viewModel.uiState.value.confirmPasswordError)
+        assertTrue(viewModel.uiState.value.isFormValid)
     }
 
     // -- RegisterResult branching --
@@ -95,9 +125,10 @@ class RegisterViewModelTest {
             Result.Success(RegisterResult.SignedIn(user))
 
         val viewModel = buildViewModel()
+        viewModel.fillValid()
 
         viewModel.registerSuccess.test {
-            viewModel.register("Ann", "a@b.com", "secret1", "secret1")
+            viewModel.register()
             awaitItem() // success signal fired
         }
         assertFalse(viewModel.uiState.value.isLoading)
@@ -111,9 +142,10 @@ class RegisterViewModelTest {
                 Result.Success(RegisterResult.ConfirmationRequired)
 
             val viewModel = buildViewModel()
+            viewModel.fillValid()
 
             viewModel.registerSuccess.test {
-                viewModel.register("Ann", "a@b.com", "secret1", "secret1")
+                viewModel.register()
                 expectNoEvents() // confirmation is NOT a success
             }
             assertEquals(
@@ -129,8 +161,9 @@ class RegisterViewModelTest {
             Result.Error(AppError.AuthError("That email is already registered."))
 
         val viewModel = buildViewModel()
+        viewModel.fillValid()
 
-        viewModel.register("Ann", "a@b.com", "secret1", "secret1")
+        viewModel.register()
 
         assertEquals(
             "That email is already registered.",
@@ -141,9 +174,13 @@ class RegisterViewModelTest {
 
     @Test
     fun `clearError wipes the current error message`() = runTest {
+        coEvery { authRepository.register(any(), any(), any()) } returns
+            Result.Error(AppError.AuthError("That email is already registered."))
+
         val viewModel = buildViewModel()
-        viewModel.register("", "", "", "") // sets an error
-        assertEquals("Please fill in all fields.", viewModel.uiState.value.errorMessage)
+        viewModel.fillValid()
+        viewModel.register()
+        assertEquals("That email is already registered.", viewModel.uiState.value.errorMessage)
 
         viewModel.clearError()
 
