@@ -14,10 +14,35 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private const val MIN_PASSWORD_LENGTH = 6
+
 data class RegisterUiState(
+    // The ViewModel owns the field values so it can validate them — the UI
+    // just renders these and forwards keystrokes (keeps the UI dumb).
+    val name: String = "",
+    val email: String = "",
+    val password: String = "",
+    val confirmPassword: String = "",
+    // Per-field error text to show under each field. null = nothing to show.
+    // These are only filled once a field has been touched (is non-empty), so
+    // we don't yell "invalid email" before the user has typed anything.
+    val emailError: String? = null,
+    val passwordError: String? = null,
+    val confirmPasswordError: String? = null,
+    // Async / server state. errorMessage now only carries server-side results,
+    // not field validation — those are inline above.
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-)
+) {
+    // Derived: drives the submit button. Computed from the raw values (not the
+    // *Error fields) because errors stay null until a field is touched, but the
+    // button must stay disabled even on a pristine, empty form.
+    val isFormValid: Boolean
+        get() = name.isNotBlank() &&
+            isValidEmail(email) &&
+            password.length >= MIN_PASSWORD_LENGTH &&
+            confirmPassword == password
+}
 
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
@@ -31,24 +56,55 @@ class RegisterViewModel @Inject constructor(
     private val _registerSuccess = MutableSharedFlow<Unit>()
     val registerSuccess = _registerSuccess.asSharedFlow()
 
-    fun register(name: String, email: String, password: String, confirmPassword: String) {
-        if (name.isBlank() || email.isBlank() || password.isBlank()) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Please fill in all fields.")
-            return
+    fun onNameChange(value: String) {
+        _uiState.value = _uiState.value.copy(name = value)
+    }
+
+    fun onEmailChange(value: String) {
+        val error = if (value.isNotEmpty() && !isValidEmail(value)) {
+            "Enter a valid email address"
+        } else {
+            null
         }
-        if (password != confirmPassword) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Passwords do not match.")
-            return
+        _uiState.value = _uiState.value.copy(email = value, emailError = error)
+    }
+
+    fun onPasswordChange(value: String) {
+        val passwordError = if (value.isNotEmpty() && value.length < MIN_PASSWORD_LENGTH) {
+            "Password must be at least $MIN_PASSWORD_LENGTH characters"
+        } else {
+            null
         }
-        if (password.length < 6) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Password must be at least 6 characters.")
-            return
-        }
+        val current = _uiState.value
+        _uiState.value = current.copy(
+            password = value,
+            passwordError = passwordError,
+            // Confirm depends on password, so re-check it whenever password changes.
+            confirmPasswordError = confirmMismatchError(value, current.confirmPassword),
+        )
+    }
+
+    fun onConfirmPasswordChange(value: String) {
+        val current = _uiState.value
+        _uiState.value = current.copy(
+            confirmPassword = value,
+            confirmPasswordError = confirmMismatchError(current.password, value),
+        )
+    }
+
+    // Only flag a mismatch once the user has typed something in confirm.
+    private fun confirmMismatchError(password: String, confirm: String): String? =
+        if (confirm.isNotEmpty() && confirm != password) "Passwords do not match" else null
+
+    fun register() {
+        val state = _uiState.value
+        // The button is disabled when invalid, but guard here too as a safety net.
+        if (!state.isFormValid) return
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            when (val result = authRepository.register(email, password, name)) {
+            when (val result = authRepository.register(state.email, state.password, state.name)) {
                 is Result.Success -> when (result.data) {
                     is RegisterResult.SignedIn -> {
                         _uiState.value = _uiState.value.copy(isLoading = false)

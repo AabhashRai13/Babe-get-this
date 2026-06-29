@@ -63,8 +63,8 @@ fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    // Field values live in the ViewModel (uiState) so it can validate them.
+    // Only the show/hide toggle stays here — pure UI, no business logic.
     var passwordVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -183,8 +183,8 @@ fun LoginScreen(
                 ) {
                     // Email field
                     OutlinedTextField(
-                        value = email,
-                        onValueChange = { email = it },
+                        value = uiState.email,
+                        onValueChange = viewModel::onEmailChange,
                         label = { Text(stringResource(R.string.auth_email)) },
                         leadingIcon = {
                             Icon(
@@ -193,6 +193,10 @@ fun LoginScreen(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         },
+                        // isError tints the field red; supportingText shows the
+                        // message under it (null = no message).
+                        isError = uiState.emailError != null,
+                        supportingText = uiState.emailError?.let { { Text(it) } },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         modifier = Modifier.fillMaxWidth(),
@@ -204,8 +208,8 @@ fun LoginScreen(
 
                     // Password field — with a text toggle so users can check their input.
                     OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
+                        value = uiState.password,
+                        onValueChange = viewModel::onPasswordChange,
                         label = { Text(stringResource(R.string.auth_password)) },
                         leadingIcon = {
                             Icon(
@@ -240,8 +244,9 @@ fun LoginScreen(
 
             // Login button — 56dp height and 16dp corners to match the rest of the app.
             Button(
-                onClick = { viewModel.login(email, password) },
-                enabled = !uiState.isLoading,
+                onClick = { viewModel.login() },
+                // Only clickable once the email is valid and password non-empty.
+                enabled = uiState.isFormValid && !uiState.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
