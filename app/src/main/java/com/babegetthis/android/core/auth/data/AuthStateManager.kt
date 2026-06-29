@@ -52,6 +52,13 @@ class AuthStateManager @Inject constructor(
         _userName.value = userName
     }
 
+    // Supabase auto-refreshes the session in the background and rotates the
+    // access token. Persist just the rotated token (no authState/name change)
+    // so AuthInterceptor stops sending the stale one cached at login.
+    fun refreshToken(token: String) {
+        tokenManager.saveToken(token)
+    }
+
     // Called on explicit logout or when server returns 401
     fun logout() {
         tokenManager.clear()
