@@ -63,8 +63,6 @@ fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    // Field values live in the ViewModel (uiState) so it can validate them.
-    // Only the show/hide toggle stays here — pure UI, no business logic.
     var passwordVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -193,8 +191,6 @@ fun LoginScreen(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         },
-                        // isError tints the field red; supportingText shows the
-                        // message under it (null = no message).
                         isError = uiState.emailError != null,
                         supportingText = uiState.emailError?.let { { Text(it) } },
                         singleLine = true,
@@ -245,7 +241,6 @@ fun LoginScreen(
             // Login button — 56dp height and 16dp corners to match the rest of the app.
             Button(
                 onClick = { viewModel.login() },
-                // Only clickable once the email is valid and password non-empty.
                 enabled = uiState.isFormValid && !uiState.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()

@@ -63,8 +63,6 @@ fun RegisterScreen(
     viewModel: RegisterViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    // Field values now live in the ViewModel (uiState) so it can validate them.
-    // Only the show/hide toggles stay here — they're pure UI, no business logic.
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -211,9 +209,6 @@ fun RegisterScreen(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         },
-                        // isError tints the field red; supportingText shows the
-                        // message under it. The ?.let { { ... } } produces a
-                        // nullable @Composable lambda — null means no message.
                         isError = uiState.emailError != null,
                         supportingText = uiState.emailError?.let { { Text(it) } },
                         singleLine = true,
@@ -302,7 +297,6 @@ fun RegisterScreen(
             // Register button — 56dp height and 16dp corners to match the app.
             Button(
                 onClick = { viewModel.register() },
-                // Only clickable once every field passes validation.
                 enabled = uiState.isFormValid && !uiState.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()

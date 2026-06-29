@@ -13,22 +13,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// UI state for the login screen.
-// Like a Riverpod AsyncValue — tracks loading, success, and error states.
 data class LoginUiState(
-    // The ViewModel owns the field values so it can validate them (dumb UI).
     val email: String = "",
     val password: String = "",
-    // Inline email error to show under the field. null = nothing to show.
-    // Only filled once the field is touched, so a pristine form stays quiet.
     val emailError: String? = null,
-    // Async / server state. errorMessage now only carries server results.
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
 ) {
-    // Drives the login button. Login is simpler than register: just a valid
-    // email and a non-empty password (we don't enforce length on sign-in —
-    // the server decides if the password is correct).
     val isFormValid: Boolean
         get() = isValidEmail(email) && password.isNotBlank()
 }
@@ -41,8 +32,6 @@ class LoginViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
-    // One-shot event that fires after a successful login.
-    // The screen observes this to trigger navigation (e.g., popBackStack).
     private val _loginSuccess = MutableSharedFlow<Unit>()
     val loginSuccess = _loginSuccess.asSharedFlow()
 
@@ -61,7 +50,6 @@ class LoginViewModel @Inject constructor(
 
     fun login() {
         val state = _uiState.value
-        // The button is disabled when invalid, but guard here too as a safety net.
         if (!state.isFormValid) return
 
         viewModelScope.launch {

@@ -17,26 +17,16 @@ import javax.inject.Inject
 private const val MIN_PASSWORD_LENGTH = 6
 
 data class RegisterUiState(
-    // The ViewModel owns the field values so it can validate them — the UI
-    // just renders these and forwards keystrokes (keeps the UI dumb).
     val name: String = "",
     val email: String = "",
     val password: String = "",
     val confirmPassword: String = "",
-    // Per-field error text to show under each field. null = nothing to show.
-    // These are only filled once a field has been touched (is non-empty), so
-    // we don't yell "invalid email" before the user has typed anything.
     val emailError: String? = null,
     val passwordError: String? = null,
     val confirmPasswordError: String? = null,
-    // Async / server state. errorMessage now only carries server-side results,
-    // not field validation — those are inline above.
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
 ) {
-    // Derived: drives the submit button. Computed from the raw values (not the
-    // *Error fields) because errors stay null until a field is touched, but the
-    // button must stay disabled even on a pristine, empty form.
     val isFormValid: Boolean
         get() = name.isNotBlank() &&
             isValidEmail(email) &&
@@ -52,7 +42,6 @@ class RegisterViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
 
-    // One-shot event that fires after a successful registration.
     private val _registerSuccess = MutableSharedFlow<Unit>()
     val registerSuccess = _registerSuccess.asSharedFlow()
 
@@ -79,7 +68,6 @@ class RegisterViewModel @Inject constructor(
         _uiState.value = current.copy(
             password = value,
             passwordError = passwordError,
-            // Confirm depends on password, so re-check it whenever password changes.
             confirmPasswordError = confirmMismatchError(value, current.confirmPassword),
         )
     }
@@ -92,13 +80,11 @@ class RegisterViewModel @Inject constructor(
         )
     }
 
-    // Only flag a mismatch once the user has typed something in confirm.
     private fun confirmMismatchError(password: String, confirm: String): String? =
         if (confirm.isNotEmpty() && confirm != password) "Passwords do not match" else null
 
     fun register() {
         val state = _uiState.value
-        // The button is disabled when invalid, but guard here too as a safety net.
         if (!state.isFormValid) return
 
         viewModelScope.launch {
@@ -111,7 +97,6 @@ class RegisterViewModel @Inject constructor(
                         _registerSuccess.emit(Unit)
                     }
                     RegisterResult.ConfirmationRequired -> {
-                        // Not an error — the account was created, they just need to confirm.
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             errorMessage = "Check your email to confirm your account, then sign in.",
