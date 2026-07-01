@@ -1,5 +1,6 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
+import android.content.Intent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
@@ -39,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -75,6 +77,7 @@ fun ShoppingItemsScreen(
 
     val snackBarHostState = remember { SnackbarHostState() }
     val haptic = rememberHaptic()
+    val context = LocalContext.current
 
     // Drives the voice-capture sheet for adding items to THIS list.
     var showVoiceSheet by remember { mutableStateOf(false) }
@@ -103,6 +106,13 @@ fun ShoppingItemsScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is ShoppingItemsViewModel.UiEvent.ListJustCompleted -> haptic(Haptic.Success)
+                is ShoppingItemsViewModel.UiEvent.ShareList -> {
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, event.text)
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, null))
+                }
             }
         }
     }
@@ -128,8 +138,10 @@ fun ShoppingItemsScreen(
                 title = viewModel.listName,
                 navigationIcon = Icons.AutoMirrored.Outlined.ArrowBack,
                 onNavigationClick = onNavigateBack,
-                // No top-bar action on this screen — Share was removed for v1.
-                // The account entry point lives on Home only.
+                // Share the list as plain text via the OS share sheet. Default
+                // actionIcon is already Icons.Filled.Share.
+                showActionIcon = true,
+                onActionClick = viewModel::onShareClick,
             )
         },
         floatingActionButton = {

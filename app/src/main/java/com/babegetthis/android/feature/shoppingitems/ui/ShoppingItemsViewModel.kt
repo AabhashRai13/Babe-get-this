@@ -13,6 +13,7 @@ import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItemsUiState
+import com.babegetthis.android.feature.shoppingitems.share.ShoppingListShareText
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -104,6 +105,7 @@ class ShoppingItemsViewModel @Inject constructor(
     // Flutter analogue: a one-off Stream the View listens to and reacts to.
     sealed class UiEvent {
         data object ListJustCompleted : UiEvent()
+        data class ShareList(val text: String) : UiEvent()
     }
     private val _events = MutableSharedFlow<UiEvent>()
     val events = _events.asSharedFlow()
@@ -239,11 +241,12 @@ class ShoppingItemsViewModel @Inject constructor(
         }
     }
 
-    // Placeholder — sharing is a v2 feature
-    fun showComingSoonMessage() {
-        viewModelScope.launch {
-            _errorMessage.emit("Sharing is coming soon!")
-        }
+    // Builds the share text off the current item snapshot and emits it for the
+    // screen to hand to ACTION_SEND. No Context here — the ViewModel only
+    // produces the String; the screen owns the Intent.
+    fun onShareClick() {
+        val text = ShoppingListShareText.format(listName, items.value)
+        viewModelScope.launch { _events.emit(UiEvent.ShareList(text)) }
     }
 
     fun undoDeleteItem() {
