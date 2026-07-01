@@ -8,11 +8,6 @@ feature ideas and the v1/v2 roadmap below.
 ## P1 — quick, high-leverage
 
 - [ ] **Inline validation on the Register form** (`RegisterScreen.kt` / `RegisterViewModel.kt`) — validate email, password length, and confirm-match live; show per-field errors via Material 3 `supportingText` / `isError`; enable the submit button only when valid. Drop the submit-only snackbar.
-- [ ] **Notification permission pre-prompt screen** before the OS `POST_NOTIFICATIONS` dialog — value-framed copy ("We'll nudge you when your partner adds something"), Allow / Not now, shown once, never blocks list creation.
-
-## P2 — deepen the first-value moment
-
-- [ ] **Celebrate the first aha moment** — one-time light celebration when the first list is created or first item checked, beyond the existing "List created!" toast.
 
 ## P3 — polish
 

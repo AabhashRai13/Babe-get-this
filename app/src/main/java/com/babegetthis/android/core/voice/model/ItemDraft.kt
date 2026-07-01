@@ -14,4 +14,5 @@ data class ItemDraft(
     val quantity: String? = null,
     val note: String? = null,
     val category: String? = null,
+    val shop: String? = null,   // backend "location" — the store this item belongs to
 )

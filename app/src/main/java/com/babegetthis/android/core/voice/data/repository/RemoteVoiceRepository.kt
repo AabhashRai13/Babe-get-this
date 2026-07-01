@@ -58,4 +58,5 @@ internal fun TranscribeItemDto.toItemDraft(): ItemDraft = ItemDraft(
     quantity = listOfNotNull(quantity?.toString(), unit).joinToString(" ").ifBlank { null },
     note = note,
     category = category,
+    shop = location,
 )

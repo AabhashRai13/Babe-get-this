@@ -24,5 +24,6 @@ data class TranscribeItemDto(
     val quantity: Int? = null,
     val unit: String? = null,
     val category: String? = null,
+    val location: String? = null,   // backend now sends the store, e.g. "Dan Murphy's"
     val note: String? = null,
 )

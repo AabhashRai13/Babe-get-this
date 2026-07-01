@@ -101,7 +101,7 @@ class ShoppingListRepository @Inject constructor(
                 // Keep the backend's category id only if it's a known row; unknown/null → uncategorized.
                 categoryId = draft.category?.takeIf { it in knownCategoryIds },
                 note = draft.note,
-                shop = null,
+                shop = draft.shop,
                 createdAt = now,
                 updatedAt = now,
             ).toEntity()
