@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -133,11 +134,14 @@ fun ShoppingListScreen(
         }
     }
 
+    // stringResource() only works during composition, so grab a Context here
+    // to resolve the snackbar strings inside the coroutine below.
+    val context = LocalContext.current
     LaunchedEffect(Unit) {
         viewModel.undoDeleteEvent.collect { listName ->
             val result = snackBarHostState.showSnackbar(
-                message = "$listName deleted",
-                actionLabel = "Undo",
+                message = context.getString(R.string.snackbar_deleted, listName),
+                actionLabel = context.getString(R.string.undo),
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
@@ -210,12 +214,12 @@ fun ShoppingListScreen(
                 TabPillRow(
                     tabs = listOf(
                         TabPill(
-                            label = "Active",
+                            label = stringResource(R.string.tab_active),
                             iconInactive = Icons.Outlined.ShoppingCart,
                             iconActive = Icons.Filled.ShoppingCart,
                         ),
                         TabPill(
-                            label = "Completed",
+                            label = stringResource(R.string.tab_completed),
                             iconInactive = Icons.Outlined.CheckCircle,
                             iconActive = Icons.Filled.CheckCircle,
                         )
@@ -428,7 +432,7 @@ private fun AccountAction(
                 // No name cached yet — fall back to a person glyph.
                 Icon(
                     imageVector = Icons.Outlined.Person,
-                    contentDescription = "Account",
+                    contentDescription = stringResource(R.string.account),
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(20.dp),
                 )
@@ -451,7 +455,7 @@ private fun AccountAction(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Sign in",
+                text = stringResource(R.string.auth_sign_in),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary,

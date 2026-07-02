@@ -36,9 +36,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.babegetthis.android.R
 
 // MD3 Modal Bottom Sheet for profile management.
 // Shows the user's avatar, editable name, read-only email, and a logout button.
@@ -123,7 +125,7 @@ fun ProfileBottomSheet(
             OutlinedTextField(
                 value = uiState.editedName,
                 onValueChange = { viewModel.onNameChanged(it) },
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.profile_name)) },
                 leadingIcon = {
                     Icon(
                         Icons.Outlined.Person,
@@ -143,7 +145,7 @@ fun ProfileBottomSheet(
                         } else {
                             TextButton(onClick = { viewModel.saveName() }) {
                                 Text(
-                                    text = "Save",
+                                    text = stringResource(R.string.save),
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.primary,
@@ -175,7 +177,7 @@ fun ProfileBottomSheet(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = uiState.userEmail.ifBlank { "No email" },
+                    text = uiState.userEmail.ifBlank { stringResource(R.string.profile_no_email) },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -212,7 +214,7 @@ fun ProfileBottomSheet(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Log out",
+                        text = stringResource(R.string.profile_logout),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )

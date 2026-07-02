@@ -12,13 +12,10 @@ name: Build AAB
 
 on:
   # Runs automatically when prod-ready code lands on main, or on a version tag.
-  # NOTE: feat/cicd is here TEMPORARILY so this workflow runs on push to the
-  # feature branch while we test it. REMOVE feat/cicd before merging to main.
   push:
-    branches: [ main, feat/cicd ]
+    branches: [ main ]
     tags: [ 'v*' ]
-  # Lets you trigger it manually from the Actions tab on ANY branch
-  # (use this to test the workflow on feat/cicd before merging).
+  # Lets you trigger it manually from the Actions tab on any branch.
   workflow_dispatch:
 
 jobs:

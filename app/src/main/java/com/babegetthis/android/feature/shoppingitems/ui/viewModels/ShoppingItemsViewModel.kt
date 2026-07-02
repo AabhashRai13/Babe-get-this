@@ -1,4 +1,4 @@
-package com.babegetthis.android.feature.shoppingitems.ui
+package com.babegetthis.android.feature.shoppingitems.ui.viewModels
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
