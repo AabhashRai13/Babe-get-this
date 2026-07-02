@@ -99,6 +99,12 @@ class FakeAuthRepository @Inject constructor(
         return Result.Success(Unit)
     }
 
+    override suspend fun deleteAccount(): Result<Unit> {
+        delay(800)
+        authStateManager.logout()
+        return Result.Success(Unit)
+    }
+
     override suspend fun updateUserName(name: String): Result<User> {
         delay(500) // Simulate network delay
         // Persist locally so the UI reflects the change

@@ -10,6 +10,7 @@ import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.user.UserInfo
+import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -101,6 +102,23 @@ class SupabaseAuthRepository @Inject constructor(
                 fallbackEmail = email,
             )
         }
+
+    override suspend fun deleteAccount(): Result<Unit> = runCatchingAuth {
+        // The anon key can't touch auth.users, so the actual delete happens in a
+        // security-definer Postgres function (delete_user) that removes the row
+        // for auth.uid(). Created in the Supabase SQL editor, not in this repo.
+        supabaseClient.auth.currentSessionOrNull()
+            ?: error("You must be signed in to delete your account.")
+        supabaseClient.postgrest.rpc("delete_user")
+        // The user row is gone, so the server can't cleanly end the session —
+        // just clear everything locally, same as logout().
+        try {
+            supabaseClient.auth.signOut()
+        } catch (_: Exception) {
+            // ignored on purpose — the account no longer exists server-side
+        }
+        authStateManager.logout()
+    }
 
     // -- Helpers --
 

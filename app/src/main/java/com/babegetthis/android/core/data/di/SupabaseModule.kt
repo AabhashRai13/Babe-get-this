@@ -4,6 +4,7 @@ import com.babegetthis.android.BuildConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.postgrest.Postgrest
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -31,5 +32,7 @@ object SupabaseModule {
         // The Auth plugin manages sign-up/sign-in, the session, and automatic
         // token refresh for us — that's why we're not hand-rolling any of it.
         install(Auth)
+        // Postgrest is here only for the delete_user RPC (account deletion).
+        install(Postgrest)
     }
 }

@@ -147,5 +147,7 @@ dependencies {
     // ktor-client-okhttp is the HTTP engine it sends requests through.
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)
+    // postgrest-kt is only here for the delete_user RPC (account deletion).
+    implementation(libs.supabase.postgrest)
     implementation(libs.ktor.client.okhttp)
 }

@@ -15,6 +15,10 @@ interface AuthRepository {
     // a session, so a successful reset leaves the user signed in.
     suspend fun requestPasswordReset(email: String): Result<Unit>
     suspend fun resetPassword(email: String, code: String, newPassword: String): Result<User>
+
+    // Permanently deletes the account on the server and clears local auth state.
+    // Lists live only on the device, so they are untouched.
+    suspend fun deleteAccount(): Result<Unit>
 }
 
 // The two possible outcomes of a *successful* sign-up call:
