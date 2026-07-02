@@ -79,23 +79,23 @@ class ForgotPasswordViewModelTest {
     }
 
     @Test
-    fun `code input keeps only digits and caps at six`() {
+    fun `code input keeps only digits and caps at eight`() {
         val viewModel = buildViewModel()
 
-        viewModel.onCodeChange("12a3-4567 89")
+        viewModel.onCodeChange("12a3-4567 89 01")
 
-        assertEquals("123456", viewModel.uiState.value.code)
+        assertEquals("12345678", viewModel.uiState.value.code)
     }
 
     @Test
     fun `reset form needs a full code and a long-enough password`() {
         val viewModel = buildViewModel()
 
-        viewModel.onCodeChange("12345")
+        viewModel.onCodeChange("1234567")
         viewModel.onNewPasswordChange("secret1")
         assertFalse(viewModel.uiState.value.isResetFormValid)
 
-        viewModel.onCodeChange("123456")
+        viewModel.onCodeChange("12345678")
         viewModel.onNewPasswordChange("short")
         assertFalse(viewModel.uiState.value.isResetFormValid)
 
@@ -110,7 +110,7 @@ class ForgotPasswordViewModelTest {
 
         val viewModel = buildViewModel()
         viewModel.onEmailChange("a@b.com")
-        viewModel.onCodeChange("123456")
+        viewModel.onCodeChange("12345678")
         viewModel.onNewPasswordChange("secret1")
 
         viewModel.resetSuccess.test {
@@ -127,7 +127,7 @@ class ForgotPasswordViewModelTest {
 
         val viewModel = buildViewModel()
         viewModel.onEmailChange("a@b.com")
-        viewModel.onCodeChange("123456")
+        viewModel.onCodeChange("12345678")
         viewModel.onNewPasswordChange("secret1")
 
         viewModel.resetSuccess.test {

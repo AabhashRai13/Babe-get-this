@@ -76,11 +76,11 @@ class FakeAuthRepository @Inject constructor(
         }
     }
 
-    // Any 6-digit code works except "000000", which simulates a bad/expired code.
+    // Any code works except all zeros, which simulates a bad/expired code.
     override suspend fun resetPassword(email: String, code: String, newPassword: String): Result<User> {
         delay(800)
         return when {
-            code == "000000" -> Result.Error(AppError.AuthError("Invalid code. Check the email and try again."))
+            code.all { it == '0' } -> Result.Error(AppError.AuthError("Invalid code. Check the email and try again."))
             else -> {
                 val userId = UUID.randomUUID().toString()
                 authStateManager.login(

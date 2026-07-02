@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-private const val CODE_LENGTH = 6
+private const val CODE_LENGTH = 8
 
 // One screen, two steps: enter email → enter code + new password.
 // codeSent flips the UI from step one to step two.
