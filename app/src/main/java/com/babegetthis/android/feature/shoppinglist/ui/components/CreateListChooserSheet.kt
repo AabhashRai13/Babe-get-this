@@ -28,8 +28,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.babegetthis.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,7 +57,7 @@ fun CreateListChooserSheet(
         ) {
             ChooserTile(
                 icon = Icons.Outlined.Edit,
-                label = "Type",
+                label = stringResource(R.string.create_list_type),
                 // Secondary tone keeps "Type" present but lets the marquee
                 // Voice tile draw the eye.
                 badgeColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -65,7 +67,7 @@ fun CreateListChooserSheet(
             )
             ChooserTile(
                 icon = Icons.Filled.Mic,
-                label = "Voice",
+                label = stringResource(R.string.create_list_voice),
                 // Primary tone — voice is the headline create flow.
                 badgeColor = MaterialTheme.colorScheme.primaryContainer,
                 onBadgeColor = MaterialTheme.colorScheme.onPrimaryContainer,

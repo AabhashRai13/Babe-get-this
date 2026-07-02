@@ -183,8 +183,8 @@ fun AddItemDialog(
                 OutlinedTextField(
                     value = note,
                     onValueChange = { if (it.length <= 80) note = it },
-                    label = { Text("Note (optional)") },
-                    placeholder = { Text("Leave a note to make it easier") },
+                    label = { Text(stringResource(R.string.shopping_items_note)) },
+                    placeholder = { Text(stringResource(R.string.shopping_items_note_placeholder)) },
                     leadingIcon = {
                         Icon(
                             Icons.Outlined.Edit,
@@ -208,8 +208,8 @@ fun AddItemDialog(
                 OutlinedTextField(
                     value = shop,
                     onValueChange = { if (it.length <= 40) shop = it },
-                    label = { Text("Shop (optional)") },
-                    placeholder = { Text("e.g. Whole Foods, Costco") },
+                    label = { Text(stringResource(R.string.shopping_items_shop)) },
+                    placeholder = { Text(stringResource(R.string.shopping_items_shop_placeholder)) },
                     leadingIcon = {
                         Icon(
                             Icons.Outlined.Place,
@@ -235,7 +235,7 @@ fun AddItemDialog(
                     onExpandedChange = { categoryDropdownExpanded = it },
                 ) {
                     OutlinedTextField(
-                        value = if (isCreatingNewCategory) "Other" else categorySearchText,
+                        value = if (isCreatingNewCategory) stringResource(R.string.category_other) else categorySearchText,
                         onValueChange = { newValue ->
                             categorySearchText = newValue
                             selectedCategory = null
@@ -243,7 +243,7 @@ fun AddItemDialog(
                             categoryDropdownExpanded = true
                         },
                         label = { Text(stringResource(R.string.shopping_items_category)) },
-                        placeholder = { Text("Search or select category") },
+                        placeholder = { Text(stringResource(R.string.shopping_items_category_placeholder)) },
                         trailingIcon = {
                             ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded)
                         },
@@ -263,7 +263,7 @@ fun AddItemDialog(
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    "None",
+                                    stringResource(R.string.category_none),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             },
@@ -291,7 +291,7 @@ fun AddItemDialog(
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        "No categories match \"$categorySearchText\"",
+                                        stringResource(R.string.shopping_items_category_no_match, categorySearchText),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         style = MaterialTheme.typography.bodySmall,
                                     )
@@ -306,7 +306,7 @@ fun AddItemDialog(
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    "Other",
+                                    stringResource(R.string.category_other),
                                     color = MaterialTheme.colorScheme.primary,
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
@@ -328,7 +328,7 @@ fun AddItemDialog(
                         OutlinedTextField(
                             value = newCategoryName,
                             onValueChange = { newCategoryName = it },
-                            label = { Text("New category name") },
+                            label = { Text(stringResource(R.string.shopping_items_new_category)) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),

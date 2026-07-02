@@ -57,6 +57,7 @@ import com.babegetthis.android.feature.shoppingitems.ui.components.ProgressCard
 import com.babegetthis.android.feature.shoppingitems.ui.components.SectionHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShopSubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShoppingItemCard
+import com.babegetthis.android.feature.shoppingitems.ui.viewModels.ShoppingItemsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,8 +121,8 @@ fun ShoppingItemsScreen(
     LaunchedEffect(Unit) {
         viewModel.undoDeleteEvent.collect { itemName ->
             val result = snackBarHostState.showSnackbar(
-                message = "$itemName deleted",
-                actionLabel = "Undo",
+                message = context.getString(R.string.snackbar_deleted, itemName),
+                actionLabel = context.getString(R.string.undo),
                 duration = SnackbarDuration.Short,
             )
             if (result == SnackbarResult.ActionPerformed) {
