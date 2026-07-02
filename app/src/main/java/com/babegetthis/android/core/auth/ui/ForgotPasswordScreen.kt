@@ -3,7 +3,6 @@ package com.babegetthis.android.core.auth.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,10 +16,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.Pin
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -56,21 +55,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
 
 @Composable
-fun LoginScreen(
-    onNavigateToRegister: () -> Unit,
-    onNavigateToForgotPassword: () -> Unit = {},
-    onNavigateBack: () -> Unit = {},
-    onLoginSuccess: () -> Unit = {},
-    viewModel: LoginViewModel = hiltViewModel(),
+fun ForgotPasswordScreen(
+    onNavigateBack: () -> Unit,
+    onResetSuccess: () -> Unit,
+    viewModel: ForgotPasswordViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var passwordVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Navigate back after successful login
+    // A successful reset also signs the user in, so leave the auth flow entirely.
     LaunchedEffect(Unit) {
-        viewModel.loginSuccess.collect {
-            onLoginSuccess()
+        viewModel.resetSuccess.collect {
+            onResetSuccess()
         }
     }
 
@@ -101,7 +98,7 @@ fun LoginScreen(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Close button — lets the user bail out and go back to their list
+            // Back button — returns to the login screen
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -110,8 +107,8 @@ fun LoginScreen(
             ) {
                 IconButton(onClick = onNavigateBack) {
                     Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Close",
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -119,8 +116,7 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Branded icon — layered circle matching the app's empty state style.
-            // Gives the login screen a visual anchor instead of just text.
+            // Branded icon — layered circle matching the login screen's style.
             Box(contentAlignment = Alignment.Center) {
                 Box(
                     modifier = Modifier
@@ -136,7 +132,7 @@ fun LoginScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.ShoppingCart,
+                        imageVector = Icons.Outlined.Lock,
                         contentDescription = null,
                         modifier = Modifier.size(36.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -148,27 +144,25 @@ fun LoginScreen(
 
             // Header
             Text(
-                text = stringResource(R.string.auth_welcome),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineLarge,
+                text = stringResource(R.string.auth_reset_password),
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = stringResource(R.string.auth_login_subtitle),
+                text = if (uiState.codeSent) {
+                    stringResource(R.string.auth_code_sent, uiState.email)
+                } else {
+                    stringResource(R.string.auth_forgot_subtitle)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Form card — groups the fields visually on a surface container.
-            // This creates a subtle "panel" effect that separates the form from the background.
+            // Form card — same panel style as the login screen.
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
@@ -180,83 +174,94 @@ fun LoginScreen(
                 Column(
                     modifier = Modifier.padding(20.dp),
                 ) {
-                    // Email field
-                    OutlinedTextField(
-                        value = uiState.email,
-                        onValueChange = viewModel::onEmailChange,
-                        label = { Text(stringResource(R.string.auth_email)) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Outlined.Email,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        isError = uiState.emailError != null,
-                        supportingText = uiState.emailError?.let { { Text(it) } },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = fieldColors,
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Password field — with a text toggle so users can check their input.
-                    OutlinedTextField(
-                        value = uiState.password,
-                        onValueChange = viewModel::onPasswordChange,
-                        label = { Text(stringResource(R.string.auth_password)) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        trailingIcon = {
-                            TextButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Text(
-                                    text = if (passwordVisible) "Hide" else "Show",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
+                    if (!uiState.codeSent) {
+                        // Step 1: email
+                        OutlinedTextField(
+                            value = uiState.email,
+                            onValueChange = viewModel::onEmailChange,
+                            label = { Text(stringResource(R.string.auth_email)) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Email,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
                                 )
-                            }
-                        },
-                        singleLine = true,
-                        visualTransformation = if (passwordVisible)
-                            VisualTransformation.None
-                        else
-                            PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = fieldColors,
-                    )
+                            },
+                            isError = uiState.emailError != null,
+                            supportingText = uiState.emailError?.let { { Text(it) } },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = fieldColors,
+                        )
+                    } else {
+                        // Step 2: code + new password
+                        OutlinedTextField(
+                            value = uiState.code,
+                            onValueChange = viewModel::onCodeChange,
+                            label = { Text(stringResource(R.string.auth_code)) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Pin,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = fieldColors,
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        OutlinedTextField(
+                            value = uiState.newPassword,
+                            onValueChange = viewModel::onNewPasswordChange,
+                            label = { Text(stringResource(R.string.auth_new_password)) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            },
+                            trailingIcon = {
+                                TextButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Text(
+                                        text = if (passwordVisible) "Hide" else "Show",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            },
+                            isError = uiState.passwordError != null,
+                            supportingText = uiState.passwordError?.let { { Text(it) } },
+                            singleLine = true,
+                            visualTransformation = if (passwordVisible)
+                                VisualTransformation.None
+                            else
+                                PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = fieldColors,
+                        )
+                    }
                 }
             }
 
-            // Forgot password — right-aligned under the form, like most login screens.
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                TextButton(onClick = onNavigateToForgotPassword) {
-                    Text(
-                        text = stringResource(R.string.auth_forgot_password),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.height(28.dp))
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Login button — 56dp height and 16dp corners to match the rest of the app.
+            // Primary action — send the code or perform the reset, by step.
             Button(
-                onClick = { viewModel.login() },
-                enabled = uiState.isFormValid && !uiState.isLoading,
+                onClick = {
+                    if (uiState.codeSent) viewModel.resetPassword() else viewModel.sendCode()
+                },
+                enabled = !uiState.isLoading &&
+                    (if (uiState.codeSent) uiState.isResetFormValid else uiState.isEmailValid),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -274,29 +279,11 @@ fun LoginScreen(
                     )
                 } else {
                     Text(
-                        text = stringResource(R.string.auth_login),
+                        text = stringResource(
+                            if (uiState.codeSent) R.string.auth_reset_password else R.string.auth_send_code
+                        ),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Navigate to register
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.auth_no_account),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onNavigateToRegister) {
-                    Text(
-                        text = stringResource(R.string.auth_sign_up),
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }

@@ -65,6 +65,7 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 # ktor-client-okhttp is the HTTP engine (reuses OkHttp, which you already have).
 supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 
 [plugins]

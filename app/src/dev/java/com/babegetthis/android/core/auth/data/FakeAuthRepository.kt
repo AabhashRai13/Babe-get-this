@@ -68,7 +68,39 @@ class FakeAuthRepository @Inject constructor(
         }
     }
 
+    override suspend fun requestPasswordReset(email: String): Result<Unit> {
+        delay(800)
+        return when (email.lowercase()) {
+            "error@test.com" -> Result.Error(AppError.ServerError(500, "Fake server error"))
+            else -> Result.Success(Unit)
+        }
+    }
+
+    // Any code works except all zeros, which simulates a bad/expired code.
+    override suspend fun resetPassword(email: String, code: String, newPassword: String): Result<User> {
+        delay(800)
+        return when {
+            code.all { it == '0' } -> Result.Error(AppError.AuthError("Invalid code. Check the email and try again."))
+            else -> {
+                val userId = UUID.randomUUID().toString()
+                authStateManager.login(
+                    token = "fake-token-${UUID.randomUUID()}",
+                    userId = userId,
+                    userName = "Dev User",
+                    userEmail = email,
+                )
+                Result.Success(User(id = userId, email = email, name = "Dev User"))
+            }
+        }
+    }
+
     override suspend fun logout(): Result<Unit> {
+        authStateManager.logout()
+        return Result.Success(Unit)
+    }
+
+    override suspend fun deleteAccount(): Result<Unit> {
+        delay(800)
         authStateManager.logout()
         return Result.Success(Unit)
     }

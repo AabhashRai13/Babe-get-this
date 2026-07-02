@@ -11,3 +11,6 @@ package com.babegetthis.android.core.auth.ui
 private val EMAIL_REGEX = Regex("[^@\\s]+@[^@\\s]+\\.[^@\\s]+")
 
 fun isValidEmail(email: String): Boolean = EMAIL_REGEX.matches(email)
+
+// Shared by Register and ForgotPassword so the two password rules can't drift.
+const val MIN_PASSWORD_LENGTH = 6

@@ -23,6 +23,7 @@ data class ProfileUiState(
     val editedName: String = "",
     val isSaving: Boolean = false,
     val isLoggingOut: Boolean = false,
+    val isDeletingAccount: Boolean = false,
 ) {
     // True when the user has typed a different name than what's saved
     val hasNameChanged: Boolean
@@ -84,6 +85,26 @@ class ProfileViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     _uiState.value = _uiState.value.copy(isSaving = false)
+                    _toastEvent.emit(result.error.message)
+                }
+            }
+        }
+    }
+
+    // Permanent server-side deletion. Local lists are untouched — they only
+    // live on the device. On success the repository clears auth state, which
+    // flips the app back to logged-out, same as logout.
+    fun deleteAccount() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isDeletingAccount = true)
+
+            when (val result = authRepository.deleteAccount()) {
+                is Result.Success -> {
+                    _uiState.value = _uiState.value.copy(isDeletingAccount = false)
+                    _toastEvent.emit("Your account has been deleted")
+                }
+                is Result.Error -> {
+                    _uiState.value = _uiState.value.copy(isDeletingAccount = false)
                     _toastEvent.emit(result.error.message)
                 }
             }
