@@ -6,6 +6,7 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.network.NetworkMonitor
 import java.io.IOException
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.user.UserInfo
@@ -75,6 +76,31 @@ class SupabaseAuthRepository @Inject constructor(
         authStateManager.updateName(name)
         updated.toUser(fallbackName = name, fallbackEmail = authStateManager.currentEmail() ?: "")
     }
+
+    override suspend fun requestPasswordReset(email: String): Result<Unit> =
+        runCatchingAuth {
+            // Supabase emails a 6-digit OTP ({{ .Token }} in the email template).
+            // Succeeds even for unknown emails, so we can't leak who's registered.
+            supabaseClient.auth.resetPasswordForEmail(email)
+        }
+
+    override suspend fun resetPassword(email: String, code: String, newPassword: String): Result<User> =
+        runCatchingAuth {
+            // Verifying the recovery OTP signs the user in, so updateUser has a
+            // session to work with and the user lands in the app authenticated.
+            supabaseClient.auth.verifyEmailOtp(
+                type = OtpType.Email.RECOVERY,
+                email = email,
+                token = code,
+            )
+            supabaseClient.auth.updateUser {
+                password = newPassword
+            }
+            persistCurrentSession(
+                fallbackName = email.substringBefore("@"),
+                fallbackEmail = email,
+            )
+        }
 
     // -- Helpers --
 
@@ -165,6 +191,10 @@ class SupabaseAuthRepository @Inject constructor(
                 "That email is already registered."
             raw.contains("Email not confirmed", ignoreCase = true) ->
                 "Please confirm your email before signing in."
+            raw.contains("expired", ignoreCase = true) ->
+                "That code has expired. Request a new one."
+            raw.contains("otp", ignoreCase = true) || raw.contains("token", ignoreCase = true) ->
+                "Invalid code. Check the email and try again."
             else -> "Authentication failed. Please try again."
         }
     }

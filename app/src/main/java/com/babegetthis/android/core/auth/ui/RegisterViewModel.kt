@@ -14,8 +14,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-private const val MIN_PASSWORD_LENGTH = 6
-
 data class RegisterUiState(
     val name: String = "",
     val email: String = "",

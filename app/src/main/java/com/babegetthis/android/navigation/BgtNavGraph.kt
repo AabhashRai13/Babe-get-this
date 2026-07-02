@@ -14,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.auth.ui.ForgotPasswordScreen
 import com.babegetthis.android.core.auth.ui.LoginScreen
 import com.babegetthis.android.core.auth.ui.RegisterScreen
 import com.babegetthis.android.feature.shoppingitems.ui.ShoppingItemsScreen
@@ -22,6 +23,7 @@ import com.babegetthis.android.feature.shoppinglist.ui.ShoppingListScreen
 object Routes {
     const val LOGIN = "login"
     const val REGISTER = "register"
+    const val FORGOT_PASSWORD = "forgot_password"
     const val SHOPPING_LIST = "shopping_list"
     const val SHOPPING_ITEMS = "shopping_items/{listId}/{listName}?isNew={isNew}"
 
@@ -117,12 +119,27 @@ fun BgtNavGraph(
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
+                // Stacked on top of Login so the back arrow returns there.
+                onNavigateToForgotPassword = {
+                    navController.navigate(Routes.FORGOT_PASSWORD)
+                },
                 // Close/back and success both return to the app. Anchored to the
                 // start destination so it works no matter how auth was entered.
                 onNavigateBack = {
                     navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
                 onLoginSuccess = {
+                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
+                },
+            )
+        }
+
+        composable(Routes.FORGOT_PASSWORD) {
+            ForgotPasswordScreen(
+                // Back returns to Login (it's stacked on top of it).
+                onNavigateBack = { navController.popBackStack() },
+                // A successful reset signs the user in — leave auth entirely.
+                onResetSuccess = {
                     navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
                 },
             )
