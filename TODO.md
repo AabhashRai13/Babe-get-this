@@ -3,29 +3,31 @@
 Consolidated backlog for **Babe, Get This**. Prioritized work up top; longer-term
 feature ideas and the v1/v2 roadmap below.
 
----
+## Open-source polish (do before making the repo public)
 
-## P1 — quick, high-leverage
+From a full-codebase review (2026-07-02). The code itself came back clean — no dead
+code, no debug logs, no secrets in git, real unit tests. What's left is polish:
 
-- [ ] **Inline validation on the Register form** (`RegisterScreen.kt` / `RegisterViewModel.kt`) — validate email, password length, and confirm-match live; show per-field errors via Material 3 `supportingText` / `isError`; enable the submit button only when valid. Drop the submit-only snackbar.
-
-## P3 — polish
-
-- [ ] **Tighten auth + empty-state copy** in `strings.xml` to sell the shared-couple outcome (strings only; approve a before/after table first).
-
----
+- [ ] **Add a LICENSE file** — the repo has none, so nobody can legally use the code. MIT or Apache-2.0.
+- [ ] **Merge `feat/cicd`** — `.github/workflows/build-aab.yml` already exists on that branch. Merge it and add a build badge to the README.
+- [ ] **Extract ~15 hardcoded UI strings to `strings.xml`** — `AddItemDialog` (note/shop/category field labels), `ProfileBottomSheet` ("Name", "Save", "Log out"), `CreateListChooserSheet` ("Type", "Voice"), `ShoppingListScreen` ("Sign in").
+- [ ] **Naming consistency** — rename `ShoppingListModel.kt` → `ShoppingListEntity.kt` (to match `ShoppingItemEntity`); pick one ViewModel package convention (`ui/` vs `ui/viewModels/`) and apply it to both features; rename `ItemDraft.shop` → `location` to match the DTO and backend.
+- [ ] **Delete template stubs** — `ExampleUnitTest.kt` and `ExampleInstrumentedTest.kt` are untouched Android Studio boilerplate.
+- [ ] **Split the oversized composables** — `ShoppingListScreen` (462 lines: extract the create-list flow and the list pane), `AddItemDialog` (433: extract a `CategoryDropdownField`), `ShoppingItemsScreen` (357: extract the by-shop items section).
+- [ ] **Accessibility** — add `contentDescription` to the stop icon in `VoiceCaptureSheet` and a semantics label to `TranscribingWaveform`.
+- [ ] **Update CLAUDE.md** — SDK versions are stale (says min 26 / target 35; actual is min 24 / target 36), and the token-refresh bug note is obsolete: the fix already shipped (`BabeGetThisApp` observes `sessionStatus` and writes rotated tokens back).
 
 ## Bugs & tech debt
 
 - [ ] **Mic record button needs a press sound** — play an audio cue when the record button is pressed (acts as feedback / a "go ahead and talk" cue for people).
-- [ ] **Session expires too often + app records audio then fails with "session expired".**
-  Root cause: Supabase Auth auto-refreshes the session, but the app caches `accessToken`
-  ONCE at login (`TokenManager`) and `AuthInterceptor` sends that stale copy forever — the
-  refreshed token is never read. NOT a Supabase dashboard / JWT-expiry issue.
-  Short fix: observe `supabaseClient.auth.sessionStatus` at app start →
-  on Authenticated `tokenManager.saveToken(session.accessToken)` (write the rotated token
-  back), on NotAuthenticated `authStateManager.logout()`. Optional belt-and-suspenders:
-  pre-flight ensure-session before recording as a fail-fast.
+- [ ] **Edit mode in `AddItemDialog` passes a no-op `onAdd = { _, _, _, _, _ -> }`** — make the callback nullable or branch add vs edit at the call site so the modes are explicit.
+
+## Highest-ROI feature before v1: auto-categorization
+
+A local keyword → category map applied when items are added ("eggs" → Food), with an
+"Other" fallback. Why it wins: it works offline with no backend, it's a small amount of
+code, and it makes voice capture — the marquee feature — feel genuinely smart because a
+dictated list lands already sorted into categories. Promoted from the wish list.
 
 ---
 
@@ -39,9 +41,11 @@ feature ideas and the v1/v2 roadmap below.
 
 ## v1 release strategy
 
-- [ ] Complete the offline-first method (local-first, fully functional without internet).
-- [ ] Voice-to-list (capture a whole list by speaking). *(Voice add-items to an existing list already shipped.)*
-- [ ] Share Pdf version list via, message, email, whatever
+- [x] Complete the offline-first method (local-first, fully functional without internet).
+- [x] Voice-to-list (capture a whole list by speaking) — shipped, with auto-naming.
+- [x] Share text version of a list via message, email, whatever — shipped (`ShoppingListShareText`).
+- [ ] Auto-categorization (see above).
+- [ ] Open-source polish list above, then release.
 
 ## v2 roadmap
 

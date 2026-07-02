@@ -5,8 +5,10 @@ A modern, offline-first shopping list app for couples — built with Jetpack Com
 ## Features
 
 - Create and manage multiple shopping lists
+- Voice capture — dictate your groceries and get a new, auto-named list (requires internet)
 - Add items with quantities, categories, notes, and a per-item shop
 - Mark items as picked up with a single tap, with undo on accidental deletes
+- Share any list as plain text through any messaging app
 - Time-aware greeting and progress tracking on the home screen
 - Fully usable offline — Room is the single source of truth
 - Light and dark theme that follow the system setting
@@ -20,7 +22,8 @@ A modern, offline-first shopping list app for couples — built with Jetpack Com
 - **Async** — Kotlin Coroutines + Flow
 - **Dependency Injection** — Hilt
 - **Local Storage** — Room (offline-first)
-- **Networking** — Retrofit + Kotlin Serialization
+- **Auth** — Supabase (email/password sessions with automatic token refresh)
+- **Networking** — Retrofit + Kotlin Serialization (voice transcription API)
 - **Min SDK** 24, **Target SDK** 36
 
 ## Project Structure
@@ -36,8 +39,10 @@ app/src/main/java/com/babegetthis/android/
 │   ├── data/                  # Network clients and shared data sources
 │   ├── error/                 # App-wide error types and Result wrappers
 │   ├── model/                 # Shared domain models
+│   ├── network/               # Connectivity monitoring
 │   ├── ui/                    # Reusable Compose components
-│   └── util/                  # Formatters and shared helpers
+│   ├── util/                  # Formatters and shared helpers
+│   └── voice/                 # Voice recording, transcription client, capture UI
 └── feature/                   # Feature modules — each owns its data, model, ui
     ├── profile/               # Profile bottom sheet
     ├── shoppinglist/          # List catalog (home screen)
@@ -102,7 +107,10 @@ If you are not sure where to start, look for issues labeled `good first issue` o
 - [x] Offline list and item management
 - [x] Authentication and account creation
 - [x] Light and dark theme with Material 3 color roles
+- [x] Voice-to-list — dictate a whole shopping list
+- [x] Share a list as plain text
+- [ ] Auto-categorization of common items
 - [ ] Real-time sync between partners
 - [ ] Shared list invitations
-- [ ] Voice-to-list (v2)
 - [ ] Camera and gallery capture with image-driven item autofill (v2)
+- [ ] "Store room" pantry — completed grocery items carry over to the next list (v2)
