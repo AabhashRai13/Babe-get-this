@@ -104,5 +104,4 @@ If you are not sure where to start, look for issues labeled `good first issue` o
 - [x] Light and dark theme with Material 3 color roles
 - [ ] Real-time sync between partners
 - [ ] Shared list invitations
-- [ ] Voice-to-list (v2)
 - [ ] Camera and gallery capture with image-driven item autofill (v2)
