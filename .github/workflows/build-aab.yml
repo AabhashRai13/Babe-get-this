@@ -1,0 +1,67 @@
+# Builds a release Android App Bundle (.aab) and uploads it as a
+# downloadable artifact on the GitHub Actions run.
+#
+# No distribution / Play Store publish yet — that comes later once the
+# Play Console + upload keystore exist. For now this just proves the app
+# bundles cleanly in CI and parks the .aab somewhere you can grab it.
+#
+# The .aab is UNSIGNED (the `release` build type has no signingConfig).
+# That's fine for archiving; Play App Signing handles signing at publish time.
+
+name: Build AAB
+
+on:
+  # Runs automatically when prod-ready code lands on main, or on a version tag.
+  # NOTE: feat/cicd is here TEMPORARILY so this workflow runs on push to the
+  # feature branch while we test it. REMOVE feat/cicd before merging to main.
+  push:
+    branches: [ main, feat/cicd ]
+    tags: [ 'v*' ]
+  # Lets you trigger it manually from the Actions tab on ANY branch
+  # (use this to test the workflow on feat/cicd before merging).
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # AGP 8.13 requires JDK 17 to run Gradle, even though the app itself
+      # compiles to Java 11 bytecode (see compileOptions in app/build.gradle.kts).
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Caches the Gradle distribution + dependencies between runs,
+      # so the second build is much faster than the first.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Linux runners may not preserve the executable bit on the wrapper script.
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # Quality gate: run the prod-release unit tests before bundling.
+      # If a test fails, no .aab is produced.
+      - name: Run unit tests
+        run: ./gradlew testProdReleaseUnitTest
+
+      # Build the production-flavor release bundle.
+      # Output: app/build/outputs/bundle/prodRelease/app-prod-release.aab
+      - name: Build prod release AAB
+        run: ./gradlew bundleProdRelease
+
+      # Upload the .aab so you can download it from the run's "Artifacts" section.
+      # Artifacts are kept for 30 days, then auto-deleted.
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-release-aab
+          path: app/build/outputs/bundle/prodRelease/*.aab
+          retention-days: 30
+          if-no-files-found: error
