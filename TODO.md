@@ -22,12 +22,15 @@ code, no debug logs, no secrets in git, real unit tests. What's left is polish:
 - [ ] **Mic record button needs a press sound** — play an audio cue when the record button is pressed (acts as feedback / a "go ahead and talk" cue for people).
 - [ ] **Edit mode in `AddItemDialog` passes a no-op `onAdd = { _, _, _, _, _ -> }`** — make the callback nullable or branch add vs edit at the call site so the modes are explicit.
 
-## Highest-ROI feature before v1: auto-categorization
+## Highest-ROI feature before v1: auto-categorization for typed items
 
-A local keyword → category map applied when items are added ("eggs" → Food), with an
-"Other" fallback. Why it wins: it works offline with no backend, it's a small amount of
-code, and it makes voice capture — the marquee feature — feel genuinely smart because a
-dictated list lands already sorted into categories. Promoted from the wish list.
+Voice items are already auto-categorized — the transcribe backend returns a category id
+per item and the repository validates it against the local categories table. The gap is
+typed items, where the category field sits empty unless the user picks one. Fill it from
+the item name, offline, in two layers: (1) history first — reuse the category this user
+last gave the same item name (one Room query, self-improving); (2) fall back to a small
+keyword → category seed map ("eggs" → Food); else leave uncategorized. No backend, small
+code, and typed items reach parity with voice.
 
 ---
 
