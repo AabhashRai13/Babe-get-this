@@ -37,6 +37,18 @@ interface ShoppingListDao {
     // CASCADE on shopping_items foreign key means items are auto-deleted too
     @Query("DELETE FROM shopping_lists WHERE id = :listId")
     suspend fun deleteList(listId: String)
+
+    // Deletes the list ONLY if it has no items. The emptiness check and the
+    // delete are one atomic SQL statement, so a concurrent item insert can
+    // never sneak in between "count says 0" and "delete" (which would orphan
+    // the new item via the CASCADE). Returns rows deleted: 1 = was empty and
+    // deleted, 0 = had items (or didn't exist) and was kept.
+    @Query("""
+        DELETE FROM shopping_lists
+        WHERE id = :listId
+          AND NOT EXISTS (SELECT 1 FROM shopping_items WHERE listId = :listId)
+    """)
+    suspend fun deleteListIfEmpty(listId: String): Int
 }
 
 // Room can map query results to this class automatically.
