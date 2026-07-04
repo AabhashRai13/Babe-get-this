@@ -94,7 +94,6 @@ private fun getAccentForList(listId: String, isDark: Boolean): ListAccentColor {
 fun ShoppingListScreen(
     authStateManager: com.babegetthis.android.core.auth.data.AuthStateManager,
     onNavigateToList: (listId: String, listName: String) -> Unit = { _, _ -> },
-    onNavigateToNewList: (listId: String, listName: String) -> Unit = { _, _ -> },
     onNavigateToLogin: () -> Unit = {},
     onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingListViewModel = hiltViewModel()
@@ -124,7 +123,7 @@ fun ShoppingListScreen(
 
     LaunchedEffect(Unit) {
         viewModel.navigateToList.collect { (listId, listName) ->
-            onNavigateToNewList(listId, listName)
+            onNavigateToList(listId, listName)
         }
     }
 

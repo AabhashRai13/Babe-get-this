@@ -17,6 +17,7 @@ import com.babegetthis.android.feature.shoppingitems.share.ShoppingListShareText
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -39,12 +40,6 @@ class ShoppingItemsViewModel @Inject constructor(
 
     val listId: String = savedStateHandle.get<String>("listId") ?: ""
     val listName: String = savedStateHandle.get<String>("listName") ?: ""
-
-    // True only when we arrived here straight from creating this list (voice or
-    // the type flow pass isNew=true). Used to gate the auto-delete-if-empty in
-    // onCleared so we only clean up lists the user just made and abandoned — not
-    // an existing empty list they happened to open and back out of.
-    private val isNewlyCreated: Boolean = savedStateHandle.get<Boolean>("isNew") ?: false
 
     // Check if the user is logged in — used to gate the share feature.
     fun isAuthenticated(): Boolean {
@@ -91,6 +86,10 @@ class ShoppingItemsViewModel @Inject constructor(
 
     // Undo delete — temporarily stores the deleted item so it can be restored
     private var pendingDeleteItem: ShoppingItem? = null
+
+    // Tracks an in-flight undo restore so onCleared's empty-list cleanup can
+    // wait for it (see undoDeleteItem for why it runs on applicationScope).
+    private var restoreJob: Job? = null
 
     // Events for the UI to show snackbars (errors + undo)
     private val _errorMessage = MutableSharedFlow<String>()
@@ -250,7 +249,11 @@ class ShoppingItemsViewModel @Inject constructor(
     }
 
     fun undoDeleteItem() {
-        viewModelScope.launch {
+        // applicationScope, NOT viewModelScope: ViewModel.clear() cancels
+        // viewModelScope BEFORE onCleared runs, so an undo tapped right before
+        // backing out would silently die — and onCleared's empty-list cleanup
+        // would then delete the whole list the user just tried to rescue.
+        restoreJob = applicationScope.launch {
             val item = pendingDeleteItem ?: return@launch
             pendingDeleteItem = null
             when (val result = itemRepository.restoreItem(item)) {
@@ -268,12 +271,14 @@ class ShoppingItemsViewModel @Inject constructor(
     // repository re-checks the real item count, so a list with items is safe.
     override fun onCleared() {
         super.onCleared()
-        // Only auto-clean a list we just created and the user left empty. An
-        // existing empty list they opened and backed out of stays put.
-        if (isNewlyCreated) {
-            applicationScope.launch {
-                listRepository.deleteListIfEmpty(listId)
-            }
+        // Any list left with zero items gets cleaned up — whether it was just
+        // created and abandoned, or an old list the user emptied out. Empty
+        // lists have no reason to linger on the home screen.
+        applicationScope.launch {
+            // A just-tapped undo may still be restoring its item — wait for it
+            // so the emptiness check sees the restored row and keeps the list.
+            restoreJob?.join()
+            listRepository.deleteListIfEmpty(listId)
         }
     }
 }

@@ -5,8 +5,6 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -37,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -196,16 +192,12 @@ private fun RecordingMode(onStop: () -> Unit) {
     val ss = totalSec % 60
     val timer = "%d:%02d".format(mm, ss)
 
-    Spacer(Modifier.height(8.dp))
-    // Big colored disc = "recording in progress" without needing a mic glyph
-    // (Icons.Default.Mic lives in material-icons-extended, not in core).
-    Box(
-        modifier = Modifier
-            .size(88.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary),
-    )
-    Spacer(Modifier.height(12.dp))
+    // Animated pebble mascot: blinking face inside the recorder circle, with
+    // pulsing sound-rings and floating hearts. The visible circle is ~107/240
+    // of the canvas, so 200.dp keeps it close to the old 88.dp disc while
+    // leaving room for the rings to pulse outward.
+    PebbleListeningIndicator(modifier = Modifier.size(200.dp))
+    Spacer(Modifier.height(4.dp))
     Text(
         text = timer,
         style = MaterialTheme.typography.headlineSmall,

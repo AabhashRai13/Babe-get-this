@@ -25,10 +25,10 @@ object Routes {
     const val REGISTER = "register"
     const val FORGOT_PASSWORD = "forgot_password"
     const val SHOPPING_LIST = "shopping_list"
-    const val SHOPPING_ITEMS = "shopping_items/{listId}/{listName}?isNew={isNew}"
+    const val SHOPPING_ITEMS = "shopping_items/{listId}/{listName}"
 
-    fun shoppingItems(listId: String, listName: String, isNew: Boolean = false): String {
-        return "shopping_items/$listId/$listName?isNew=$isNew"
+    fun shoppingItems(listId: String, listName: String): String {
+        return "shopping_items/$listId/$listName"
     }
 }
 
@@ -54,9 +54,6 @@ fun BgtNavGraph(
                 onNavigateToList = { listId, listName ->
                     navController.navigate(Routes.shoppingItems(listId, listName))
                 },
-                onNavigateToNewList = { listId, listName ->
-                    navController.navigate(Routes.shoppingItems(listId, listName, isNew = true))
-                },
                 onNavigateToLogin = {
                     navController.navigate(Routes.LOGIN)
                 },
@@ -71,10 +68,6 @@ fun BgtNavGraph(
             arguments = listOf(
                 navArgument("listId") { type = NavType.StringType },
                 navArgument("listName") { type = NavType.StringType },
-                navArgument("isNew") {
-                    type = NavType.BoolType
-                    defaultValue = false
-                },
             ),
             // Push: new screen slides in from the right; old slides slightly left.
             // Pop:  reverse — new screen comes back from the left; old slides off right.
