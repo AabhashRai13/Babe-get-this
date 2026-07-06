@@ -141,18 +141,12 @@ class ShoppingListRepository @Inject constructor(
     }
 
     // Delete a list ONLY if it has no items. Used when the user leaves a list
-    // detail screen they never added anything to (created a list, backed out).
-    // We query the DB for the real item count rather than trusting a cached
-    // value, so a list that actually has items is never deleted by mistake.
+    // detail screen with nothing in it. The check-and-delete is a single
+    // atomic SQL statement (see the DAO), so a list that has items — or gains
+    // one mid-flight — is never deleted by mistake.
     // Returns true if the list was empty and got deleted.
     suspend fun deleteListIfEmpty(listId: String): Result<Boolean> = safeCall {
-        val items = shoppingItemDao.getItemsByListIdOnce(listId)
-        if (items.isEmpty()) {
-            shoppingListDao.deleteList(listId)
-            true
-        } else {
-            false
-        }
+        shoppingListDao.deleteListIfEmpty(listId) > 0
     }
 
     // Re-insert a previously deleted list along with its items (for undo).

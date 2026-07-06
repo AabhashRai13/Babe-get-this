@@ -44,6 +44,12 @@ class VoiceCaptureViewModel @Inject constructor(
     // background and persist items the user thought they'd cancelled.
     private var transcribeJob: Job? = null
 
+    // Tracks the in-flight start (cue tone + mic open). recorder.start() suspends
+    // for ~1s playing the tone, and that window is human-tappable: stop must WAIT
+    // for it (recorder/outputFile don't exist until it finishes), and cancel must
+    // ABORT it (dismissing the sheet mid-tone must never open the mic afterwards).
+    private var recordJob: Job? = null
+
     fun setPersist(block: suspend (drafts: List<ItemDraft>) -> Result<String>) {
         persist = block
     }
@@ -55,9 +61,14 @@ class VoiceCaptureViewModel @Inject constructor(
     }
 
     fun startRecording() {
-        viewModelScope.launch {
-            _state.value = VoiceCaptureUiState.Recording()
+        recordJob = viewModelScope.launch {
+            // start() plays the cue tone BEFORE opening the mic, so we only flip
+            // to Recording once it returns — i.e. when the mic is genuinely live.
+            // Flipping earlier made the timer run ~1s ahead of the real capture
+            // and swallowed words spoken during the tone. Until then the sheet
+            // shows its Idle spinner, which reads as "getting ready".
             recorder.start()
+            _state.value = VoiceCaptureUiState.Recording()
             // Elapsed-time tick intentionally omitted for v1 — add later if the
             // UI grows a timer/waveform. Recording state alone is enough today.
         }
@@ -66,6 +77,11 @@ class VoiceCaptureViewModel @Inject constructor(
     fun stopRecording() {
         transcribeJob = viewModelScope.launch {
             _state.value = VoiceCaptureUiState.Transcribing
+            // Wait for start() to finish (cue tone + mic open) before stopping.
+            // Without this, tapping Stop during the tone hits a recorder that
+            // doesn't exist yet and crashes. Stopping right after the mic opens
+            // just yields an ~empty file, which the flow below already handles.
+            recordJob?.join()
             val file = recorder.stop()
             when (val result = voiceRepository.transcribeAndParse(file)) {
                 is Result.Success -> {
@@ -111,6 +127,11 @@ class VoiceCaptureViewModel @Inject constructor(
     // User aborts mid-flow — drop the audio file and reset.
     // Safe to call from any state; AudioRecorder.cancel() is idempotent.
     fun cancel() {
+        // Abort a start() still playing the cue tone — cancellation releases the
+        // MediaPlayer (invokeOnCancellation in AudioRecorder) and the coroutine
+        // never reaches the mic-open step, so no orphaned recorder is left hot.
+        recordJob?.cancel()
+        recordJob = null
         // Abort any in-flight transcribe/persist so dismissing the sheet means
         // nothing lands. The DB insert is a single atomic transaction, so there's
         // no half-written-list risk if we cancel mid-save.

@@ -1,14 +1,18 @@
 package com.babegetthis.android.core.voice.data
 
 import android.content.Context
+import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.os.Build
+import com.babegetthis.android.R
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 @Singleton
 class AudioRecorder @Inject constructor(
@@ -18,6 +22,10 @@ class AudioRecorder @Inject constructor(
     private var outputFile: File? = null
 
     suspend fun start() = withContext(Dispatchers.IO) {
+        // Play the cue and WAIT for it to finish before opening the mic.
+        // That ordering is the whole "don't record our own sound" trick.
+        playStartTone()
+
         val file = File(context.cacheDir, "voice-${System.currentTimeMillis()}.m4a")
         outputFile = file
 
@@ -56,6 +64,24 @@ class AudioRecorder @Inject constructor(
         recorder = null
         outputFile?.delete()
         outputFile = null
+    }
+
+    // suspendCancellableCoroutine bridges a callback API into a suspend function —
+    // like wrapping a callback in a Completer in Dart and awaiting its future.
+    private suspend fun playStartTone() = suspendCancellableCoroutine { continuation ->
+        val player = MediaPlayer.create(context, R.raw.record_start)
+        if (player == null) {
+            // Sound failed to load — recording still works, just silently.
+            continuation.resume(Unit)
+            return@suspendCancellableCoroutine
+        }
+        player.setOnCompletionListener {
+            it.release()
+            continuation.resume(Unit)
+        }
+        // If the coroutine is cancelled (user closes the sheet mid-tone), free the player.
+        continuation.invokeOnCancellation { player.release() }
+        player.start()
     }
 
     private fun buildRecorder(): MediaRecorder =

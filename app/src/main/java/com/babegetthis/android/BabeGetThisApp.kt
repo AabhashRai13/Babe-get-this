@@ -35,7 +35,16 @@ class BabeGetThisApp : Application() {
                 when (status) {
                     is SessionStatus.Authenticated ->
                         authStateManager.refreshToken(status.session.accessToken)
-                    else -> Unit // Initializing / NotAuthenticated / RefreshFailure
+                    // Supabase has definitively lost the session (refresh token
+                    // expired/revoked). Mirror it locally — otherwise TokenManager
+                    // keeps serving a dead token and the user finds out mid-action
+                    // via a 401 ("records audio, then session expired"). Harmless
+                    // for logged-out users: logout() on empty prefs is a no-op.
+                    is SessionStatus.NotAuthenticated ->
+                        authStateManager.logout()
+                    // RefreshFailure (offline/flaky network) is deliberately NOT a
+                    // logout: we're offline-first and Supabase keeps retrying.
+                    else -> Unit // Initializing / RefreshFailure
                 }
             }
         }

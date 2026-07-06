@@ -3,16 +3,17 @@ package com.babegetthis.android.feature.shoppinglist.data.repository
 import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
-import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-// Covers deleteListIfEmpty(): deletes only when the list has no items.
+// Covers deleteListIfEmpty(): the "only when empty" decision now lives in one
+// atomic SQL statement in the DAO (so it can't race a concurrent insert), so
+// this unit test covers the row-count → Boolean mapping. The SQL itself is
+// exercised by instrumented tests / real usage.
 class DeleteListIfEmptyTest {
 
     private val listDao = mockk<ShoppingListDao>(relaxed = true)
@@ -21,31 +22,20 @@ class DeleteListIfEmptyTest {
     private val repository = ShoppingListRepository(listDao, itemDao, categoryDao)
 
     @Test
-    fun `deletes and returns true when the list is empty`() = runTest {
-        coEvery { itemDao.getItemsByListIdOnce("list-1") } returns emptyList()
+    fun `returns true when the empty list was deleted`() = runTest {
+        coEvery { listDao.deleteListIfEmpty("list-1") } returns 1
 
         val result = repository.deleteListIfEmpty("list-1")
 
         assertEquals(Result.Success(true), result)
-        coVerify(exactly = 1) { listDao.deleteList("list-1") }
     }
 
     @Test
-    fun `keeps and returns false when the list has items`() = runTest {
-        coEvery { itemDao.getItemsByListIdOnce("list-1") } returns listOf(
-            ShoppingItemEntity(
-                id = "item-1",
-                listId = "list-1",
-                name = "Milk",
-                quantity = "",
-                createdAt = 0,
-                updatedAt = 0,
-            ),
-        )
+    fun `returns false when the list had items and was kept`() = runTest {
+        coEvery { listDao.deleteListIfEmpty("list-1") } returns 0
 
         val result = repository.deleteListIfEmpty("list-1")
 
         assertEquals(Result.Success(false), result)
-        coVerify(exactly = 0) { listDao.deleteList(any()) }
     }
 }
