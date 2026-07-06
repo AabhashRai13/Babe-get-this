@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.babegetthis.android.R
+import com.babegetthis.android.core.ui.modifier.clearFocusOnTap
 import com.babegetthis.android.core.model.Category
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 
@@ -117,7 +118,9 @@ fun AddItemDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
-                .imePadding(),
+                .imePadding()
+                // Tap any blank spot in the dialog to close the keyboard.
+                .clearFocusOnTap(),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 4.dp,

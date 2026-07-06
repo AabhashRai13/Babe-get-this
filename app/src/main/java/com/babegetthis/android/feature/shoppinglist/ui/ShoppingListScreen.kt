@@ -68,6 +68,7 @@ import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
+import com.babegetthis.android.feature.feedback.ui.FeedbackBottomSheet
 import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
@@ -109,6 +110,7 @@ fun ShoppingListScreen(
     val isLoggedIn = authState is AuthState.Authenticated
     val userName by authStateManager.userName.collectAsState()
     var showProfileSheet by remember { mutableStateOf(false) }
+    var showFeedbackSheet by remember { mutableStateOf(false) }
 
     // Create-list flow has two entry-style choices now: Type or Voice.
     // chooser → small sheet with the two options
@@ -370,6 +372,20 @@ fun ShoppingListScreen(
     if (showProfileSheet && isLoggedIn) {
         ProfileBottomSheet(
             onDismiss = { showProfileSheet = false },
+            onToast = { message ->
+                viewModel.showSnackBar(message)
+            },
+            // Swap sheets instead of stacking them: profile closes, feedback opens.
+            onShareFeedback = {
+                showProfileSheet = false
+                showFeedbackSheet = true
+            },
+        )
+    }
+
+    if (showFeedbackSheet && isLoggedIn) {
+        FeedbackBottomSheet(
+            onDismiss = { showFeedbackSheet = false },
             onToast = { message ->
                 viewModel.showSnackBar(message)
             },

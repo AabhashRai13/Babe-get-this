@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.babegetthis.android.R
+import com.babegetthis.android.core.ui.modifier.clearFocusOnTap
 
 @Composable
 fun CreateListDialog(
@@ -30,6 +31,8 @@ fun CreateListDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        // Tap any blank spot in the dialog to close the keyboard.
+        modifier = Modifier.clearFocusOnTap(),
         shape = RoundedCornerShape(20.dp),
         title = {
             Text(

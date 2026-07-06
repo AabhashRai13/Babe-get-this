@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
+import com.babegetthis.android.core.ui.modifier.clearFocusOnTap
 
 // MD3 Modal Bottom Sheet for profile management.
 // Shows the user's avatar, editable name, read-only email, and a logout button.
@@ -55,6 +57,10 @@ import com.babegetthis.android.R
 fun ProfileBottomSheet(
     onDismiss: () -> Unit,
     onToast: (String) -> Unit = {},
+    // Hoisted to the host screen: opening feedback must CLOSE this sheet, and a
+    // child composable can't outlive its parent — if the feedback sheet lived in
+    // here, dismissing the profile would kill it too.
+    onShareFeedback: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -78,7 +84,9 @@ fun ProfileBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
+                .padding(bottom = 32.dp)
+                // Tap any blank spot in the sheet to close the keyboard.
+                .clearFocusOnTap(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Avatar — layered circle with the user's initial or a person icon.
@@ -191,6 +199,33 @@ fun ProfileBottomSheet(
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Share feedback — above logout, only reachable while logged in
+            // (this whole sheet is), which is also what the table's RLS enforces.
+            OutlinedButton(
+                onClick = onShareFeedback,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Share feedback",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Logout button — uses error color to signal a destructive action
             OutlinedButton(
