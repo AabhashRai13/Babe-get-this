@@ -55,3 +55,8 @@ code, and typed items reach parity with voice.
 - [ ] Shareable real time list
 - [ ] Camera/gallery → auto-fill the add-item form from an image (incl. recipe photo → list).
 - [ ] "Store room" — when a list is completed, move grocery items into a store; mark items as finished there to auto-carry into the next list.
+
+## v3 roadmap
+
+- [ ] Recommend items based on user behaviour or history. (Gemini Nano) I want to keep users data private, I don't want to collect those data therefore i want them to use a model
+  that can run locally.

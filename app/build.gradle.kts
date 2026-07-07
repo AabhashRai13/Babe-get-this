@@ -24,6 +24,14 @@ val localProperties = Properties().apply {
 val supabaseUrl: String = localProperties.getProperty("SUPABASE_URL") ?: ""
 val supabaseAnonKey: String = localProperties.getProperty("SUPABASE_ANON_KEY") ?: ""
 
+// Release signing credentials, also from local.properties so the keystore
+// password never touches git. When absent (fresh clone, CI without secrets)
+// the release build simply comes out unsigned — same behavior as before.
+val releaseStoreFile: String = localProperties.getProperty("RELEASE_STORE_FILE") ?: ""
+val releaseStorePassword: String = localProperties.getProperty("RELEASE_STORE_PASSWORD") ?: ""
+val releaseKeyAlias: String = localProperties.getProperty("RELEASE_KEY_ALIAS") ?: ""
+val releaseKeyPassword: String = localProperties.getProperty("RELEASE_KEY_PASSWORD") ?: ""
+
 android {
     namespace = "com.babegetthis.android"
     compileSdk {
@@ -80,6 +88,19 @@ android {
         }
     }
 
+    signingConfigs {
+        // Only configured when the keystore properties exist — see the
+        // local.properties read at the top of this file.
+        if (releaseStoreFile.isNotEmpty()) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -87,6 +108,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (releaseStoreFile.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
