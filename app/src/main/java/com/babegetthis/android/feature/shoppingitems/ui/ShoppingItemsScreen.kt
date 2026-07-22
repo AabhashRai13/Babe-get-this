@@ -1,6 +1,7 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
 import android.content.Intent
+import android.view.WindowManager
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
@@ -19,10 +20,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
@@ -32,6 +37,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -46,7 +52,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.babegetthis.android.R
+import com.babegetthis.android.core.pin.ui.PinPromptDialog
+import com.babegetthis.android.core.pin.ui.PinPromptPurpose
+import com.babegetthis.android.core.pin.ui.PinSetupDialog
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.ui.haptics.Haptic
@@ -69,6 +81,38 @@ fun ShoppingItemsScreen(
     val categories by viewModel.categories.collectAsState()
     val showDialog by viewModel.showAddItemDialog.collectAsState()
     val editingItem by viewModel.editingItem.collectAsState()
+
+    val isLocked by viewModel.isLocked.collectAsState()
+    val sessionUnlocked by viewModel.sessionUnlocked.collectAsState()
+    val pinExists by viewModel.pinExists.collectAsState()
+    // Locked and not yet verified this session — contents must stay hidden.
+    val needsUnlock = isLocked && !sessionUnlocked
+    var showLockSetup by remember { mutableStateOf(false) }
+    var showUnlockToDisable by remember { mutableStateOf(false) }
+
+    // Keep the OS from thumbnailing a locked list's contents (recents preview,
+    // screenshots) while they're on screen. Cleared when the list is unlocked
+    // or the screen leaves.
+    val activity = LocalContext.current as? android.app.Activity
+    DisposableEffect(isLocked) {
+        if (isLocked) activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
+
+    // Re-lock when the whole APP is backgrounded — observed on the process
+    // lifecycle, not this destination's. The NavBackStackEntry emits ON_STOP as
+    // it's popped, which would flash the unlock dialog during the back
+    // animation; the process only stops on a real background. (Leave-and-return
+    // re-prompts anyway, via the ViewModel being recreated.) ON_STOP not
+    // ON_PAUSE, so the share sheet and system dialogs don't re-lock mid-share.
+    DisposableEffect(Unit) {
+        val processLifecycle = ProcessLifecycleOwner.get().lifecycle
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.lockSession()
+        }
+        processLifecycle.addObserver(observer)
+        onDispose { processLifecycle.removeObserver(observer) }
+    }
 
     // All derived lists/maps come from uiState — computed once per data
     // emission in the ViewModel, not on every recomposition.
@@ -139,10 +183,35 @@ fun ShoppingItemsScreen(
                 title = viewModel.listName,
                 navigationIcon = Icons.AutoMirrored.Outlined.ArrowBack,
                 onNavigationClick = onNavigateBack,
-                // Share the list as plain text via the OS share sheet. Default
-                // actionIcon is already Icons.Filled.Share.
-                showActionIcon = true,
-                onActionClick = viewModel::onShareClick,
+                actionSlot = {
+                    // Lock toggle sits beside Share. Locking with no PIN yet
+                    // walks the user through creating one; unlocking a list
+                    // permanently requires the PIN.
+                    IconButton(onClick = {
+                        haptic(Haptic.Light)
+                        when {
+                            !isLocked && pinExists -> viewModel.setListLocked(true)
+                            !isLocked -> showLockSetup = true
+                            else -> showUnlockToDisable = true
+                        }
+                    }) {
+                        Icon(
+                            imageVector = if (isLocked) Icons.Filled.Lock else Icons.Outlined.LockOpen,
+                            contentDescription = stringResource(
+                                if (isLocked) R.string.unlock_list else R.string.lock_list
+                            ),
+                        )
+                    }
+                    IconButton(onClick = {
+                        haptic(Haptic.Light)
+                        viewModel.onShareClick()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = stringResource(R.string.pin_share_title),
+                        )
+                    }
+                },
             )
         },
         floatingActionButton = {
@@ -191,7 +260,14 @@ fun ShoppingItemsScreen(
             }
         }
     ) { padding ->
-        if (uiState.isEmpty) {
+        if (needsUnlock) {
+            // Gated: render no items until the PIN prompt (below) succeeds.
+            Spacer(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize(),
+            )
+        } else if (uiState.isEmpty) {
             FirstItemPrompt(
                 modifier = Modifier
                     .padding(padding)
@@ -310,6 +386,32 @@ fun ShoppingItemsScreen(
                 item { Spacer(modifier = Modifier.height(88.dp)) }
             }
         }
+    }
+
+    // Unlock-on-open: prompt before any item renders; cancel returns to the list.
+    if (needsUnlock) {
+        PinPromptDialog(
+            purpose = PinPromptPurpose.Unlock,
+            onVerified = { viewModel.onSessionUnlocked() },
+            onDismiss = onNavigateBack,
+        )
+    }
+
+    // Locking a list with no PIN yet — create one, then apply the lock.
+    if (showLockSetup) {
+        PinSetupDialog(
+            onComplete = { viewModel.setListLocked(true); showLockSetup = false },
+            onDismiss = { showLockSetup = false },
+        )
+    }
+
+    // Unlocking a list permanently requires the PIN.
+    if (showUnlockToDisable) {
+        PinPromptDialog(
+            purpose = PinPromptPurpose.VerifyCurrent,
+            onVerified = { viewModel.setListLocked(false); showUnlockToDisable = false },
+            onDismiss = { showUnlockToDisable = false },
+        )
     }
 
     if (showVoiceSheet) {

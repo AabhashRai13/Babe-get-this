@@ -80,4 +80,59 @@
     <string name="profile_no_email">No email</string>
     <string name="profile_logout">Log out</string>
     <string name="profile_name_updated">Name updated</string>
+
+    <!-- Settings -->
+    <string name="settings">Settings</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_pin_section">List lock</string>
+    <string name="settings_pin_set_up">Set up a PIN</string>
+    <string name="settings_pin_set_up_subtitle">Lock individual lists with a 4-digit PIN, stored only on this device</string>
+    <string name="settings_pin_change">Change PIN</string>
+    <string name="settings_pin_remove">Remove PIN</string>
+    <string name="settings_pin_regenerate">Regenerate recovery code</string>
+    <string name="settings_pin_forgot">Forgot your PIN?</string>
+    <string name="settings_pin_removed">PIN removed. All lists are unlocked.</string>
+    <string name="settings_pin_changed">PIN changed</string>
+    <string name="settings_pin_device_only">Your PIN is stored on this device only. It is not tied to your account and won\'t sync.</string>
+
+    <!-- PIN entry -->
+    <string name="pin_label">PIN</string>
+    <string name="pin_enter_title">Enter your PIN</string>
+    <string name="pin_unlock_title">Unlock list</string>
+    <string name="pin_unlock_body">Enter your PIN to view this list</string>
+    <string name="pin_delete_title">Delete locked list</string>
+    <string name="pin_delete_body">Enter your PIN to delete this list</string>
+    <string name="pin_share_title">Unlock to share</string>
+    <string name="pin_verify_current_title">Enter current PIN</string>
+    <string name="pin_create_title">Create a PIN</string>
+    <string name="pin_create_body">Choose a 4-digit PIN to lock your lists</string>
+    <string name="pin_confirm_title">Confirm your PIN</string>
+    <string name="pin_confirm_body">Enter your PIN again to confirm</string>
+    <string name="pin_new_title">Choose a new PIN</string>
+    <string name="pin_invalid">PIN must be 4 digits</string>
+    <string name="pin_mismatch">PINs don\'t match. Try again.</string>
+    <string name="pin_wrong">Wrong PIN. %1$d attempts left.</string>
+    <string name="pin_locked_out">Too many attempts. Try again in %1$s.</string>
+    <string name="pin_cancel">Cancel</string>
+    <string name="pin_continue">Continue</string>
+    <string name="pin_unlock">Unlock</string>
+    <string name="pin_delete">Delete</string>
+    <string name="pin_confirm">Confirm</string>
+
+    <!-- Recovery code -->
+    <string name="recovery_title">Save your recovery code</string>
+    <string name="recovery_body">This is the only way to reset your PIN if you forget it. It\'s shown once and stored only on this device — write it down now.</string>
+    <string name="recovery_acknowledge">I\'ve saved my recovery code</string>
+    <string name="recovery_enter_title">Enter recovery code</string>
+    <string name="recovery_enter_body">Enter the recovery code you saved when you set up your PIN</string>
+    <string name="recovery_label">Recovery code</string>
+    <string name="recovery_wrong">That recovery code isn\'t right</string>
+    <string name="recovery_copied">Recovery code copied</string>
+
+    <!-- Lock -->
+    <string name="lock_list">Lock list</string>
+    <string name="unlock_list">Unlock list</string>
+    <string name="lock_locked">Locked</string>
+    <string name="lock_remove_pin_warning">%1$d locked list(s) will be unlocked. Continue?</string>
+    <string name="lock_delete_cancelled">Nothing was deleted</string>
 </resources>

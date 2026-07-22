@@ -34,6 +34,13 @@ interface ShoppingListDao {
     @Update
     suspend fun updateList(list: ShoppingListEntity)
 
+    @Query("UPDATE shopping_lists SET isLocked = :locked WHERE id = :listId")
+    suspend fun setLocked(listId: String, locked: Boolean)
+
+    // Unlock every list — used when the device PIN is removed.
+    @Query("UPDATE shopping_lists SET isLocked = 0 WHERE isLocked = 1")
+    suspend fun unlockAll()
+
     // CASCADE on shopping_items foreign key means items are auto-deleted too
     @Query("DELETE FROM shopping_lists WHERE id = :listId")
     suspend fun deleteList(listId: String)
@@ -58,6 +65,7 @@ data class ShoppingListWithItemCount(
     val name: String,
     val createdAt: Long,
     val updatedAt: Long,
+    val isLocked: Boolean,
     val itemCount: Int,
     val completedItemCount: Int,
 )
