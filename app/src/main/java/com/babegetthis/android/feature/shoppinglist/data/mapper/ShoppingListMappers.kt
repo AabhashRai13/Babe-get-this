@@ -10,6 +10,7 @@ fun ShoppingListWithItemCount.toDomain(): ShoppingList =
         name = name,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        isLocked = isLocked,
         itemCount = itemCount,
         completedItemCount = completedItemCount,
     )
@@ -20,6 +21,7 @@ fun ShoppingListEntity.toDomain(): ShoppingList =
         name = name,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        isLocked = isLocked,
     )
 
 fun ShoppingList.toEntity(): ShoppingListEntity =
@@ -28,4 +30,5 @@ fun ShoppingList.toEntity(): ShoppingListEntity =
         name = name,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        isLocked = isLocked,
     )

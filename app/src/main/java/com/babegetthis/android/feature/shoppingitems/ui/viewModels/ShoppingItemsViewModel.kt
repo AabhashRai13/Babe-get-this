@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -35,11 +36,37 @@ class ShoppingItemsViewModel @Inject constructor(
     private val categoryRepository: CategoryRepository,
     private val authStateManager: AuthStateManager,
     private val listRepository: ShoppingListRepository,
+    private val pinRepository: com.babegetthis.android.core.pin.data.PinRepository,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     val listId: String = savedStateHandle.get<String>("listId") ?: ""
     val listName: String = savedStateHandle.get<String>("listName") ?: ""
+
+    // Whether this list is locked, and whether the user has entered the PIN for
+    // it this session. Rendering, deletion, and share are gated on these.
+    val isLocked: StateFlow<Boolean> = listRepository.getListById(listId)
+        .map { it?.isLocked == true }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val pinExists: StateFlow<Boolean> = pinRepository.pinExists
+
+    private val _sessionUnlocked = MutableStateFlow(false)
+    val sessionUnlocked: StateFlow<Boolean> = _sessionUnlocked.asStateFlow()
+
+    fun onSessionUnlocked() { _sessionUnlocked.value = true }
+
+    // Re-lock the session — called on ON_STOP so a backgrounded locked list
+    // re-prompts on return. Not ON_PAUSE (that fires for the share sheet).
+    fun lockSession() { _sessionUnlocked.value = false }
+
+    fun setListLocked(locked: Boolean) {
+        // Locking always happens while viewing the list, so keep this session
+        // unlocked — otherwise the list you just locked would immediately
+        // re-prompt for the PIN.
+        if (locked) _sessionUnlocked.value = true
+        viewModelScope.launch { listRepository.setLocked(listId, locked) }
+    }
 
     // Check if the user is logged in — used to gate the share feature.
     fun isAuthenticated(): Boolean {
@@ -244,6 +271,9 @@ class ShoppingItemsViewModel @Inject constructor(
     // screen to hand to ACTION_SEND. No Context here — the ViewModel only
     // produces the String; the screen owns the Intent.
     fun onShareClick() {
+        // The lock cannot be bypassed by exporting to text — a locked list only
+        // shares once verified for this session.
+        if (isLocked.value && !_sessionUnlocked.value) return
         val text = ShoppingListShareText.format(listName, items.value)
         viewModelScope.launch { _events.emit(UiEvent.ShareList(text)) }
     }

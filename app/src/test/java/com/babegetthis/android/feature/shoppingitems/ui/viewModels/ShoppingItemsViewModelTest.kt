@@ -42,6 +42,7 @@ class ShoppingItemsViewModelTest {
     private lateinit var categoryRepository: CategoryRepository
     private lateinit var authStateManager: AuthStateManager
     private lateinit var listRepository: ShoppingListRepository
+    private lateinit var pinRepository: com.babegetthis.android.core.pin.data.PinRepository
     private lateinit var itemsFlow: MutableStateFlow<List<ShoppingItem>>
 
     @Before
@@ -51,11 +52,14 @@ class ShoppingItemsViewModelTest {
         categoryRepository = mockk(relaxed = true)
         authStateManager = mockk(relaxed = true)
         listRepository = mockk(relaxed = true)
+        pinRepository = mockk(relaxed = true)
         itemsFlow = MutableStateFlow(emptyList())
 
         every { itemRepository.getItemsByListId(any()) } returns itemsFlow
         every { categoryRepository.getAllCategories() } returns MutableStateFlow(emptyList())
         every { authStateManager.authState } returns MutableStateFlow(AuthState.Unauthenticated)
+        every { listRepository.getListById(any()) } returns MutableStateFlow(null)
+        every { pinRepository.pinExists } returns MutableStateFlow(false)
     }
 
     @After
@@ -69,6 +73,7 @@ class ShoppingItemsViewModelTest {
         categoryRepository = categoryRepository,
         authStateManager = authStateManager,
         listRepository = listRepository,
+        pinRepository = pinRepository,
         applicationScope = CoroutineScope(testDispatcher),
     )
 

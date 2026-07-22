@@ -124,6 +124,21 @@ class ShoppingListRepository @Inject constructor(
         listId
     }
 
+    suspend fun setLocked(listId: String, locked: Boolean): Result<Unit> = safeCall {
+        shoppingListDao.setLocked(listId, locked)
+    }
+
+    // Unlock every list — called after the device PIN is removed so no list is
+    // left gated by a PIN that no longer exists.
+    suspend fun unlockAll(): Result<Unit> = safeCall {
+        shoppingListDao.unlockAll()
+    }
+
+    // How many lists are currently locked — Settings shows this before PIN
+    // removal so the user knows the blast radius.
+    suspend fun lockedCount(): Int =
+        shoppingListDao.getAllListsWithItemCount().first().count { it.isLocked }
+
     suspend fun updateListName(listId: String, newName: String): Result<Unit> = safeCall {
         val now = System.currentTimeMillis()
         val entity = shoppingListDao.getListById(listId).first()
