@@ -28,6 +28,12 @@ class AuthStateManager @Inject constructor(
     private val _userName = MutableStateFlow(tokenManager.getUserName())
     val userName: StateFlow<String?> = _userName.asStateFlow()
 
+    // The signed-in user's email, exposed reactively for the same reason as the
+    // name. Two accounts can share a display name, so the profile screen must
+    // react to the email changing on its own — not piggyback on the name flow.
+    private val _userEmail = MutableStateFlow(tokenManager.getUserEmail())
+    val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
+
     // Call this once when the app starts (e.g., from MainActivity or Application)
     fun initialize() {
         val token = tokenManager.getToken()
@@ -39,6 +45,7 @@ class AuthStateManager @Inject constructor(
             AuthState.Unauthenticated
         }
         _userName.value = tokenManager.getUserName()
+        _userEmail.value = tokenManager.getUserEmail()
     }
 
     // Called after successful login or register.
@@ -50,6 +57,7 @@ class AuthStateManager @Inject constructor(
         tokenManager.saveUserEmail(userEmail)
         _authState.value = AuthState.Authenticated(userId)
         _userName.value = userName
+        _userEmail.value = userEmail
     }
 
     // Supabase auto-refreshes the session in the background and rotates the
@@ -64,6 +72,7 @@ class AuthStateManager @Inject constructor(
         tokenManager.clear()
         _authState.value = AuthState.Unauthenticated
         _userName.value = null
+        _userEmail.value = null
     }
 
     // Update just the cached display name (after the user edits their profile).

@@ -58,15 +58,14 @@ class SupabaseAuthRepository @Inject constructor(
             )
         }
 
-    override suspend fun logout(): Result<Unit> = runCatchingAuth {
-        // Sign out of Supabase, but always clear local state even if the network
-        // call fails (e.g. the user is offline) so they're never stuck logged in.
-        try {
-            supabaseClient.auth.signOut()
-        } catch (_: Exception) {
-            // ignored on purpose — local logout below is what matters to the UI
-        }
+    override suspend fun logout(): Result<Unit> {
+        // NOT wrapped in runCatchingAuth: that guard fails fast when offline,
+        // which would abort logout entirely and leave the user stuck signed in.
+        // Logout must always succeed locally.
+        //
+        clearSupabaseSession()
         authStateManager.logout()
+        return Result.Success(Unit)
     }
 
     override suspend fun updateUserName(name: String): Result<User> = runCatchingAuth {
@@ -112,15 +111,28 @@ class SupabaseAuthRepository @Inject constructor(
         supabaseClient.postgrest.rpc("delete_user")
         // The user row is gone, so the server can't cleanly end the session —
         // just clear everything locally, same as logout().
-        try {
-            supabaseClient.auth.signOut()
-        } catch (_: Exception) {
-            // ignored on purpose — the account no longer exists server-side
-        }
+        clearSupabaseSession()
         authStateManager.logout()
     }
 
     // -- Helpers --
+
+    // Fully clear the persisted Supabase session. signOut() posts to /logout and
+    // only clears the local session afterward, so a network failure throws before
+    // that clear runs; we call clearSession() ourselves in that case. Without this
+    // the session lingers on disk and autoLoadFromStorage restores a dead session
+    // on next launch — the app boots "logged in" with an expired token.
+    private suspend fun clearSupabaseSession() {
+        try {
+            supabaseClient.auth.signOut()
+        } catch (_: Exception) {
+            try {
+                supabaseClient.auth.clearSession()
+            } catch (_: Exception) {
+                // clearSession is local-only; ignore if there was nothing to clear.
+            }
+        }
+    }
 
     // Reads the current Supabase session, copies it into our own storage via
     // AuthStateManager (which flips AuthState to Authenticated), and returns the
