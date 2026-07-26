@@ -6,6 +6,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.data.local.DEFAULT_CATEGORIES
+import com.babegetthis.android.core.data.local.MIGRATION_1_2
 import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
@@ -39,7 +40,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "babe_get_this.db"
         )
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_1_2)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)

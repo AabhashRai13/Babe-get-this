@@ -17,6 +17,7 @@ import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.ui.ForgotPasswordScreen
 import com.babegetthis.android.core.auth.ui.LoginScreen
 import com.babegetthis.android.core.auth.ui.RegisterScreen
+import com.babegetthis.android.feature.settings.ui.SettingsScreen
 import com.babegetthis.android.feature.shoppingitems.ui.ShoppingItemsScreen
 import com.babegetthis.android.feature.shoppinglist.ui.ShoppingListScreen
 
@@ -26,6 +27,7 @@ object Routes {
     const val FORGOT_PASSWORD = "forgot_password"
     const val SHOPPING_LIST = "shopping_list"
     const val SHOPPING_ITEMS = "shopping_items/{listId}/{listName}"
+    const val SETTINGS = "settings"
 
     fun shoppingItems(listId: String, listName: String): String {
         return "shopping_items/$listId/$listName"
@@ -59,7 +61,18 @@ fun BgtNavGraph(
                 },
                 onNavigateToRegister = {
                     navController.navigate(Routes.REGISTER)
+                },
+                onNavigateToSettings = {
+                    navController.navigate(Routes.SETTINGS)
                 }
+            )
+        }
+
+        // Settings — reachable regardless of auth state (the PIN is device-wide,
+        // not tied to an account).
+        composable(Routes.SETTINGS) {
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
             )
         }
 

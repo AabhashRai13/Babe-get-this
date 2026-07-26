@@ -30,10 +30,12 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -48,7 +50,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +67,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.auth.ui.AuthPromptDialog
+import com.babegetthis.android.core.pin.ui.PinPromptDialog
+import com.babegetthis.android.core.pin.ui.PinPromptPurpose
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
@@ -96,6 +102,7 @@ fun ShoppingListScreen(
     onNavigateToList: (listId: String, listName: String) -> Unit = { _, _ -> },
     onNavigateToLogin: () -> Unit = {},
     onNavigateToRegister: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     viewModel: ShoppingListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -109,6 +116,9 @@ fun ShoppingListScreen(
     val isLoggedIn = authState is AuthState.Authenticated
     val userName by authStateManager.userName.collectAsState()
     var showProfileSheet by remember { mutableStateOf(false) }
+    // When set, a locked list is pending deletion and awaiting the PIN.
+    var pendingLockedDelete by remember { mutableStateOf<com.babegetthis.android.feature.shoppinglist.model.ShoppingList?>(null) }
+    val scope = rememberCoroutineScope()
 
     // Create-list flow has two entry-style choices now: Type or Voice.
     // chooser → small sheet with the two options
@@ -157,6 +167,17 @@ fun ShoppingListScreen(
             BgtTopAppBar(
                 title = stringResource(R.string.app_name),
                 actionSlot = {
+                    // Gear sits before the account control. Always available —
+                    // Settings (and the device PIN) work whether signed in or not.
+                    IconButton(onClick = {
+                        haptic(Haptic.Light)
+                        onNavigateToSettings()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = stringResource(R.string.settings),
+                        )
+                    }
                     AccountAction(
                         isLoggedIn = isLoggedIn,
                         userName = userName,
@@ -276,7 +297,11 @@ fun ShoppingListScreen(
                                     val accent = getAccentForList(list.id, isDark)
 
                                     SwipeableCard(
-                                        onSwipeLeft = { viewModel.deleteList(list.id) },
+                                        onSwipeLeft = {
+                                            // A locked list can't be deleted without the PIN.
+                                            if (list.isLocked) pendingLockedDelete = list
+                                            else viewModel.deleteList(list.id)
+                                        },
                                     ) {
                                         ShoppingListCard(
                                             list = list,
@@ -364,6 +389,23 @@ fun ShoppingListScreen(
         if (!isLoggedIn) {
             showProfileSheet = false
         }
+    }
+
+    // Deleting a locked list requires the PIN. Dismissing confirms nothing was
+    // deleted — the swiped row already snapped back, so the states look alike.
+    pendingLockedDelete?.let { list ->
+        val nothingDeleted = stringResource(R.string.lock_delete_cancelled)
+        PinPromptDialog(
+            purpose = PinPromptPurpose.Delete,
+            onVerified = {
+                viewModel.deleteList(list.id)
+                pendingLockedDelete = null
+            },
+            onDismiss = {
+                pendingLockedDelete = null
+                scope.launch { snackBarHostState.showSnackbar(nothingDeleted) }
+            },
+        )
     }
 
     // Profile bottom sheet — only rendered when the user taps the profile icon

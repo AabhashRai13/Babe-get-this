@@ -5,6 +5,7 @@ data class ShoppingList(
     val name: String,
     val createdAt: Long,
     val updatedAt: Long,
+    val isLocked: Boolean = false,
     // Not stored in the entity — calculated from a query count
     val itemCount: Int = 0,
     val completedItemCount: Int = 0,
