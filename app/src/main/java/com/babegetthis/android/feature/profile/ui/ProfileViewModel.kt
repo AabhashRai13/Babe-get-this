@@ -3,7 +3,7 @@ package com.babegetthis.android.feature.profile.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
-import com.babegetthis.android.core.auth.data.TokenManager
+import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.error.Result
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,7 +34,7 @@ data class ProfileUiState(
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val tokenManager: TokenManager,
+    private val authStateManager: AuthStateManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -44,16 +45,25 @@ class ProfileViewModel @Inject constructor(
     val toastEvent = _toastEvent.asSharedFlow()
 
     init {
-        // Load persisted user info from TokenManager.
-        // If the user just logged in, these will be populated.
-        // If they were already logged in from a previous session, same deal.
-        val name = tokenManager.getUserName() ?: ""
-        val email = tokenManager.getUserEmail() ?: ""
-        _uiState.value = ProfileUiState(
-            userName = name,
-            userEmail = email,
-            editedName = name,
-        )
+        // Observe the current user instead of snapshotting it once. This
+        // ViewModel is scoped to the shopping-list start destination, so its
+        // instance outlives a logout→login: a one-time init read would keep
+        // showing the previous account's name/email. Collecting the flow means
+        // switching accounts refreshes the sheet. (email is written before the
+        // name flow emits in AuthStateManager.login, so it's already current.)
+        viewModelScope.launch {
+            combine(
+                authStateManager.userName,
+                authStateManager.userEmail,
+            ) { name, email -> (name ?: "") to (email ?: "") }
+                .collect { (name, email) ->
+                    _uiState.value = _uiState.value.copy(
+                        userName = name,
+                        userEmail = email,
+                        editedName = name,
+                    )
+                }
+        }
     }
 
     // Called as the user types in the name field

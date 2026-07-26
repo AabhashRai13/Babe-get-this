@@ -107,8 +107,10 @@ class FakeAuthRepository @Inject constructor(
 
     override suspend fun updateUserName(name: String): Result<User> {
         delay(500) // Simulate network delay
-        // Persist locally so the UI reflects the change
-        tokenManager.saveUserName(name)
+        // Go through AuthStateManager (not TokenManager directly) so the name
+        // flow updates and the UI reflects the change reactively — same as the
+        // real repo.
+        authStateManager.updateName(name)
         val userId = tokenManager.getUserId() ?: "fake-id"
         val email = tokenManager.getUserEmail() ?: "dev@test.com"
         return Result.Success(User(id = userId, email = email, name = name))
