@@ -36,4 +36,35 @@ class AutoNameVoiceListTest {
         val name = autoNameVoiceList(listOf(draft(longName), draft("Eggs")))
         assertEquals("x".repeat(40) + " + 1 more", name)
     }
+
+    // Exactly at the cap — the off-by-one either side of take(40).
+    @Test
+    fun `exactly forty chars is kept whole`() {
+        val name = "x".repeat(40)
+        assertEquals(name, autoNameVoiceList(listOf(draft(name))))
+    }
+
+    @Test
+    fun `forty-one chars loses exactly one`() {
+        assertEquals("x".repeat(40), autoNameVoiceList(listOf(draft("x".repeat(41)))))
+    }
+
+    // Trimming happens before the cap, so padding doesn't eat into the 40.
+    @Test
+    fun `surrounding whitespace is trimmed`() {
+        assertEquals("Milk", autoNameVoiceList(listOf(draft("  Milk  "))))
+    }
+
+    // A blank first item still counts toward "+ N more" — the fallback replaces
+    // the name only, it doesn't drop the item from the tally.
+    @Test
+    fun `blank first name with others still counts them`() {
+        val name = autoNameVoiceList(listOf(draft(""), draft("Eggs"), draft("Bread")))
+        assertEquals("List + 2 more", name)
+    }
+
+    @Test
+    fun `two items read as plus one more`() {
+        assertEquals("Milk + 1 more", autoNameVoiceList(listOf(draft("Milk"), draft("Eggs"))))
+    }
 }
