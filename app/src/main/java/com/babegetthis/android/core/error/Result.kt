@@ -11,6 +11,13 @@ sealed class Result<out T> {
     data class Error(val error: AppError) : Result<Nothing>()
 }
 
+// Lets code inside a safeCall block raise a SPECIFIC AppError — validation
+// failures, not-found — without safeCall needing to know about any feature's own
+// exception types. Repositories used to throw bare IllegalStateException for
+// these, which fell through to the `else` branch below and surfaced the raw
+// exception text to the user as an UnknownError.
+class AppErrorException(val appError: AppError) : Exception(appError.message)
+
 // Helper function to wrap database/network calls in try/catch.
 // Any repository function can use this instead of writing try/catch everywhere.
 // Like a reusable wrapper: final result = await safeCall(() => api.getItems());
@@ -45,6 +52,10 @@ suspend fun <T> safeCall(
     } catch (e: Exception) {
         // Map the exception to the right AppError type
         val error = when (e) {
+            // An AppError the caller chose deliberately — pass it straight
+            // through rather than re-deriving one from the exception type.
+            is AppErrorException -> e.appError
+
             // Database errors
             is android.database.sqlite.SQLiteException -> AppError.DatabaseError()
 

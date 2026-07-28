@@ -2,7 +2,9 @@ package com.babegetthis.android.feature.shoppinglist.ui.viewModels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.error.Result
+import kotlinx.coroutines.CoroutineScope
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
@@ -24,6 +26,7 @@ import com.babegetthis.android.core.util.getTimePeriod
 @HiltViewModel
 class ShoppingListViewModel @Inject constructor(
     private val repository: ShoppingListRepository,
+    @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     // Which tab is selected: 0 = Active, 1 = Completed.
@@ -157,7 +160,15 @@ class ShoppingListViewModel @Inject constructor(
                 is Result.Success -> {
                     pendingDeleteList = listToDelete
                     pendingDeleteItems = result.data
-                    _undoDeleteEvent.emit(listToDelete?.name ?: "List")
+                    // Only offer Undo when we actually captured the list to
+                    // restore. Previously a miss on find() still emitted the
+                    // undo event, so the user got an Undo button that did
+                    // nothing at all when tapped — undoDeleteList() returns
+                    // early on a null pending list, silently and with no
+                    // feedback. Don't advertise an action we can't honour.
+                    if (listToDelete != null) {
+                        _undoDeleteEvent.emit(listToDelete.name)
+                    }
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
@@ -181,14 +192,25 @@ class ShoppingListViewModel @Inject constructor(
         return result
     }
 
+    // applicationScope, NOT viewModelScope — the same reasoning
+    // ShoppingItemsViewModel.undoDeleteItem already spells out for items, which
+    // this (destroying strictly more data) somehow never got. Undo is tapped on
+    // a snackbar, and tapping it then immediately navigating away is a completely
+    // ordinary gesture; on viewModelScope that cancels the restore mid-flight and
+    // the list plus every item it held is gone for good, with no second chance.
     fun undoDeleteList() {
-        viewModelScope.launch {
+        applicationScope.launch {
             val list = pendingDeleteList ?: return@launch
             val items = pendingDeleteItems
-            pendingDeleteList = null
-            pendingDeleteItems = emptyList()
             when (val result = repository.restoreListWithItems(list, items)) {
-                is Result.Success -> { /* list + items reappear via Flow */ }
+                is Result.Success -> {
+                    // Clear only now that the data is safely back. Clearing up
+                    // front (as this used to) meant a failed restore discarded
+                    // the only copy of the list — the error snackbar told the
+                    // user to try again, and there was nothing left to retry.
+                    pendingDeleteList = null
+                    pendingDeleteItems = emptyList()
+                }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
                 }

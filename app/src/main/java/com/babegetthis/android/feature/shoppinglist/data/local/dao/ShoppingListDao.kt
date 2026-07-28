@@ -4,7 +4,9 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
+import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -40,6 +42,28 @@ interface ShoppingListDao {
     // Unlock every list — used when the device PIN is removed.
     @Query("UPDATE shopping_lists SET isLocked = 0 WHERE isLocked = 1")
     suspend fun unlockAll()
+
+    // Counted in SQL. The repository used to collect the full
+    // getAllListsWithItemCount() flow — a LEFT JOIN and GROUP BY over every list
+    // and every item — and count in Kotlin, to produce one integer that Settings
+    // asks for on every open.
+    @Query("SELECT COUNT(*) FROM shopping_lists WHERE isLocked = 1")
+    suspend fun lockedCount(): Int
+
+    // Insert a list and its items as ONE transaction, so a failure or a
+    // cancellation between the two writes can't leave a list stripped of its
+    // items. Used by list-creation-with-items and by undo-restore; both used to
+    // issue the two inserts independently.
+    @Transaction
+    suspend fun insertListWithItems(list: ShoppingListEntity, items: List<ShoppingItemEntity>) {
+        insertList(list)
+        if (items.isNotEmpty()) insertItemsForList(items)
+    }
+
+    // Lives here (rather than being called on ShoppingItemDao) purely so Room
+    // runs it inside insertListWithItems' transaction.
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertItemsForList(items: List<ShoppingItemEntity>)
 
     // CASCADE on shopping_items foreign key means items are auto-deleted too
     @Query("DELETE FROM shopping_lists WHERE id = :listId")

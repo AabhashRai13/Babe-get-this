@@ -15,6 +15,11 @@ fun ShoppingListWithItemCount.toDomain(): ShoppingList =
         completedItemCount = completedItemCount,
     )
 
+// NOTE: itemCount / completedItemCount are not on the entity, so they come back
+// as 0 here — which means the derived `isCompleted` is always false on anything
+// built through this mapper. Fine for the only current caller (getListById, used
+// for the lock flag), but read completion state off ShoppingListWithItemCount
+// above, never off this.
 fun ShoppingListEntity.toDomain(): ShoppingList =
     ShoppingList(
         id = id,
