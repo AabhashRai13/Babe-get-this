@@ -176,4 +176,7 @@ dependencies {
     // postgrest-kt is only here for the delete_user RPC (account deletion).
     implementation(libs.supabase.postgrest)
     implementation(libs.ktor.client.okhttp)
+
+    // Play Core in-app update (flexible/immediate flow).
+    implementation(libs.play.app.update.ktx)
 }

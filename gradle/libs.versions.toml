@@ -28,6 +28,7 @@ turbine = "1.1.0"
 # would force a toolchain-wide upgrade — deferred to a dedicated task.
 supabase = "3.0.3"
 ktor = "3.0.3"
+playUpdate = "2.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -68,6 +69,8 @@ supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+# Play Core: in-app update (flexible/immediate flow), no other Play Core modules needed.
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playUpdate" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
