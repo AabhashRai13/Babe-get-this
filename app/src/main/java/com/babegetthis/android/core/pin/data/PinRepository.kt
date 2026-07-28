@@ -39,8 +39,15 @@ class PinRepository @Inject constructor(
         return code
     }
 
+    // No PIN stored → no PIN can match, so this is `false`, not a crash. The
+    // `!!` this replaces was reachable: any verify racing a removal (or a stale
+    // unlock dialog left on screen after the PIN was cleared) hit a null salt and
+    // took the whole app down. Mirrors verifyRecoveryCode below, which always
+    // handled its own nulls this way.
     fun verifyPin(pin: String): PinResult = guarded {
-        PinCrypto.matches(pin, PinCrypto.decode(store.pinSalt!!), PinCrypto.decode(store.pinHash!!))
+        val salt = store.pinSalt ?: return@guarded false
+        val hash = store.pinHash ?: return@guarded false
+        PinCrypto.matches(pin, PinCrypto.decode(salt), PinCrypto.decode(hash))
     }
 
     // Change requires the current PIN. Recovery code is left untouched.
