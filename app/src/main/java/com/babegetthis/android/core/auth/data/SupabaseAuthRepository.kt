@@ -179,6 +179,12 @@ class SupabaseAuthRepository @Inject constructor(
         }
         return try {
             Result.Success(block())
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Rethrow — see the same guard in safeCall(). Swallowing this turned
+            // coroutine cancellation into AppError.AuthError, so a screen torn
+            // down mid-login reported "Authentication failed" instead of simply
+            // stopping.
+            throw e
         } catch (e: SocketTimeoutException) {
             Result.Error(AppError.TimeoutError())
         } catch (e: Exception) {

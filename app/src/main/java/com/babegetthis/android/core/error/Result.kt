@@ -32,6 +32,16 @@ suspend fun <T> safeCall(
 ): Result<T> {
     return try {
         Result.Success(block())
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        // MUST rethrow, and must come before the general catch below.
+        // CancellationException is an Exception, so `catch (e: Exception)` used to
+        // swallow it and hand back Result.Error(UnknownError) — meaning a cancelled
+        // coroutine reported itself as a failed operation and its parent never
+        // learned it was cancelled. That is a structured-concurrency break, and it
+        // had a visible symptom: dismissing the voice sheet cancels the in-flight
+        // transcribe job, the cancellation came back as an error Result, and the
+        // sheet rendered a failure for something the user deliberately dismissed.
+        throw e
     } catch (e: Exception) {
         // Map the exception to the right AppError type
         val error = when (e) {
