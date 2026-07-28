@@ -8,6 +8,7 @@ import com.babegetthis.android.core.voice.data.repository.VoiceRepository
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.core.voice.model.VoiceCaptureUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -62,40 +63,73 @@ class VoiceCaptureViewModel @Inject constructor(
 
     fun startRecording() {
         recordJob = viewModelScope.launch {
-            // start() plays the cue tone BEFORE opening the mic, so we only flip
-            // to Recording once it returns — i.e. when the mic is genuinely live.
-            // Flipping earlier made the timer run ~1s ahead of the real capture
-            // and swallowed words spoken during the tone. Until then the sheet
-            // shows its Idle spinner, which reads as "getting ready".
-            recorder.start()
-            _state.value = VoiceCaptureUiState.Recording()
-            // Elapsed-time tick intentionally omitted for v1 — add later if the
-            // UI grows a timer/waveform. Recording state alone is enough today.
+            // MediaRecorder throws for ordinary device conditions, not just bugs:
+            // prepare() raises IOException when another app holds the mic (a call,
+            // another recorder), start() raises IllegalStateException. Uncaught
+            // inside viewModelScope.launch those crashed the app — the only place
+            // in the codebase where a device-state failure wasn't turned into a
+            // Result the UI could render. CancellationException is rethrown so
+            // cancel() still aborts the cue tone rather than showing an error.
+            try {
+                // start() plays the cue tone BEFORE opening the mic, so we only flip
+                // to Recording once it returns — i.e. when the mic is genuinely live.
+                // Flipping earlier made the timer run ~1s ahead of the real capture
+                // and swallowed words spoken during the tone. Until then the sheet
+                // shows its Idle spinner, which reads as "getting ready".
+                recorder.start()
+                _state.value = VoiceCaptureUiState.Recording()
+                // Elapsed-time tick intentionally omitted for v1 — add later if the
+                // UI grows a timer/waveform. Recording state alone is enough today.
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                recorder.cancel()
+                _state.value =
+                    VoiceCaptureUiState.Failed("Couldn't start recording. Is the microphone in use?")
+            }
         }
     }
 
     fun stopRecording() {
         transcribeJob = viewModelScope.launch {
             _state.value = VoiceCaptureUiState.Transcribing
-            // Wait for start() to finish (cue tone + mic open) before stopping.
-            // Without this, tapping Stop during the tone hits a recorder that
-            // doesn't exist yet and crashes. Stopping right after the mic opens
-            // just yields an ~empty file, which the flow below already handles.
-            recordJob?.join()
-            val file = recorder.stop()
-            when (val result = voiceRepository.transcribeAndParse(file)) {
-                is Result.Success -> {
-                    // Empty result = nothing was understood. Guard BEFORE persisting
-                    // so we never create an empty list.
-                    if (result.data.isEmpty()) {
-                        _state.value = VoiceCaptureUiState.Failed("Didn't catch any items. Try again?")
-                    } else {
-                        persistDrafts(result.data)
+            try {
+                // Wait for start() to finish (cue tone + mic open) before stopping.
+                // Without this, tapping Stop during the tone hits a recorder that
+                // doesn't exist yet and crashes. Stopping right after the mic opens
+                // just yields an ~empty file, which the flow below already handles.
+                recordJob?.join()
+                val file = recorder.stop()
+                try {
+                    when (val result = voiceRepository.transcribeAndParse(file)) {
+                        is Result.Success -> {
+                            // Empty result = nothing was understood. Guard BEFORE persisting
+                            // so we never create an empty list.
+                            if (result.data.isEmpty()) {
+                                _state.value =
+                                    VoiceCaptureUiState.Failed("Didn't catch any items. Try again?")
+                            } else {
+                                persistDrafts(result.data)
+                            }
+                        }
+                        is Result.Error -> {
+                            _state.value = VoiceCaptureUiState.Failed(result.error.message)
+                        }
                     }
+                } finally {
+                    // The recording is the user's voice and we are done with it —
+                    // delete it whether the upload succeeded, failed, or was
+                    // cancelled. Previously only cancel() ever deleted, so every
+                    // SUCCESSFUL capture left an .m4a in cacheDir permanently.
+                    file.delete()
                 }
-                is Result.Error -> {
-                    _state.value = VoiceCaptureUiState.Failed(result.error.message)
-                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // stop() can throw the same way start() can (see above), and
+                // outputFile is null if stop somehow ran without a completed start.
+                recorder.cancel()
+                _state.value = VoiceCaptureUiState.Failed("Couldn't finish that recording. Try again?")
             }
         }
     }
