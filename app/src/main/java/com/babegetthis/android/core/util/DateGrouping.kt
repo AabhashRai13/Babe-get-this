@@ -13,19 +13,28 @@ enum class TimePeriod {
     OLDER,
 }
 
-fun getTimePeriod(timestampMillis: Long): TimePeriod {
-    val now = Calendar.getInstance()
+// `nowMillis` is a parameter rather than a Calendar.getInstance() call inside,
+// so a test can pin "now" instead of asserting against whatever day the suite
+// happens to run on — the boundary cases here (yesterday, the 7-day edge,
+// same-month) otherwise mean something different on the 1st of a month than on
+// the 20th, and would go green or red by calendar luck. Defaulted, so the one
+// production caller is unchanged.
+fun getTimePeriod(
+    timestampMillis: Long,
+    nowMillis: Long = System.currentTimeMillis(),
+): TimePeriod {
+    val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
     val date = Calendar.getInstance().apply { timeInMillis = timestampMillis }
 
     // Same day = Today
     if (isSameDay(now, date)) return TimePeriod.TODAY
 
     // Previous day = Yesterday
-    val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+    val yesterday = (now.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }
     if (isSameDay(yesterday, date)) return TimePeriod.YESTERDAY
 
     // Within 7 days = Last Week
-    val sevenDaysAgo = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -7) }
+    val sevenDaysAgo = (now.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -7) }
     if (date.after(sevenDaysAgo)) return TimePeriod.LAST_WEEK
 
     // Same month and year = This Month
