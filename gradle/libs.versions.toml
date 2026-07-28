@@ -21,6 +21,15 @@ securityCrypto = "1.1.0-alpha06"
 kotlinxCoroutinesTest = "1.8.1"
 mockk = "1.13.13"
 turbine = "1.1.0"
+# Test-only. Kover over JaCoCo: JaCoCo mis-attributes coverage in inline
+# functions and coroutine-generated state machines, both of which this codebase
+# is full of. 0.8.x is the last line targeting Kotlin 2.0.x.
+kover = "0.8.3"
+# Robolectric runs Android-framework code on the JVM, so Compose screen tests and
+# Room DAO tests execute in CI with no emulator. 4.13 supports compileSdk 36.
+robolectric = "4.13"
+androidxTest = "1.6.1"
+archCoreTesting = "2.2.0"
 # Supabase Kotlin SDK (auth, realtime later) + the Ktor HTTP engine it runs on.
 # supabase-kt ships a BOM, so its modules are versionless in [libraries] below.
 # Pinned to the 3.0.x line on purpose: it targets Kotlin 2.0.x / Ktor 3.0, which
@@ -62,6 +71,14 @@ security-crypto = { group = "androidx.security", name = "security-crypto", versi
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+# Test-only additions for the test suite (see openspec/changes/add-test-suite).
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTest" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTest" }
+androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "archCoreTesting" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
 # Supabase: the BOM pins module versions; auth-kt is the GoTrue/auth client.
 # ktor-client-okhttp is the HTTP engine (reuses OkHttp, which you already have).
 supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
@@ -76,4 +93,5 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt-android-plugin = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 
