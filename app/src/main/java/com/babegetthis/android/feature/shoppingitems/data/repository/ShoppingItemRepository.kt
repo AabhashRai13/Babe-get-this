@@ -1,6 +1,8 @@
 package com.babegetthis.android.feature.shoppingitems.data.repository
 
 import com.babegetthis.android.core.data.local.dao.CategoryDao
+import com.babegetthis.android.core.error.AppError
+import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
@@ -44,7 +46,10 @@ class ShoppingItemRepository @Inject constructor(
         val item = ShoppingItem(
             id = id,
             listId = listId,
-            name = name,
+            // Validated here, not only in the dialog: this is the trust boundary,
+            // and voice-transcribed drafts reach the same table without ever
+            // passing through a dialog. A blank name renders as an empty row.
+            name = name.requireItemName(),
             quantity = quantity,
             categoryId = categoryId,
             note = note,
@@ -76,5 +81,15 @@ class ShoppingItemRepository @Inject constructor(
     // Re-insert a previously deleted item with its original ID (for undo)
     suspend fun restoreItem(item: ShoppingItem): Result<Unit> = safeCall {
         shoppingItemDao.insertItem(item.toEntity())
+    }
+
+    // Mirrors ShoppingListRepository.requireListName — trims, and rejects blank
+    // through safeCall as a ValidationError rather than storing an empty row.
+    private fun String.requireItemName(): String {
+        val trimmed = trim()
+        if (trimmed.isEmpty()) {
+            throw AppErrorException(AppError.ValidationError("Item name can't be empty."))
+        }
+        return trimmed
     }
 }

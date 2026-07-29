@@ -270,7 +270,13 @@ class ShoppingItemsViewModel @Inject constructor(
             when (val result = itemRepository.deleteItem(itemId)) {
                 is Result.Success -> {
                     pendingDeleteItem = itemToDelete
-                    _undoDeleteEvent.emit(itemToDelete?.name ?: "Item")
+                    // Only offer Undo when there is something cached to restore.
+                    // Emitting unconditionally gave the user an Undo button that
+                    // did nothing when tapped — undoDeleteItem returns early on a
+                    // null pending item, silently and with no feedback.
+                    if (itemToDelete != null) {
+                        _undoDeleteEvent.emit(itemToDelete.name)
+                    }
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
@@ -297,9 +303,13 @@ class ShoppingItemsViewModel @Inject constructor(
         // would then delete the whole list the user just tried to rescue.
         restoreJob = applicationScope.launch {
             val item = pendingDeleteItem ?: return@launch
-            pendingDeleteItem = null
             when (val result = itemRepository.restoreItem(item)) {
-                is Result.Success -> { /* item reappears via Flow */ }
+                is Result.Success -> {
+                    // Cleared only once the item is safely back. Clearing up front
+                    // (as this used to) meant a failed restore threw away the only
+                    // copy while telling the user to try again.
+                    pendingDeleteItem = null
+                }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
                 }
