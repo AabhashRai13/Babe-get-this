@@ -12,5 +12,17 @@ package com.babegetthis.android.core.ui
 // Entries are added per screen as the Compose test tasks are worked (groups 3, 5,
 // 7, 9, 11 of openspec/changes/add-test-suite/tasks.md).
 object TestTags {
-    // Populated per screen — see tasks 3.1, 5.1, 7.3, 9.1, 11.3.
+
+    // --- shoppinglist ---
+    //
+    // Only two entries, and both earn their place: the list card is a Card with
+    // Modifier.combinedClickable and the tab is a Surface with Modifier.clickable,
+    // neither of which merges its descendants' semantics. So the name/label Text
+    // inside is a separate node with no click action, and a test can't reach the
+    // clickable through it. Material3 Button/TextButton DO merge, which is why the
+    // dialogs, the FAB and the empty-state CTA carry no tags — their tests match
+    // on visible text.
+    fun listCard(listId: String) = "shoppinglist.card.$listId"
+
+    fun listTab(index: Int) = "shoppinglist.tab.$index"
 }
