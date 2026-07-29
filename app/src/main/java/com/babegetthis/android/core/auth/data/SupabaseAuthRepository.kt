@@ -4,7 +4,6 @@ import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.network.NetworkMonitor
-import java.io.IOException
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
@@ -15,9 +14,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import java.net.ConnectException
 import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import javax.inject.Inject
 
 class SupabaseAuthRepository @Inject constructor(
@@ -195,43 +192,8 @@ class SupabaseAuthRepository @Inject constructor(
             if (e.isNetworkFailure()) {
                 Result.Error(AppError.NetworkError())
             } else {
-                Result.Error(AppError.AuthError(friendlyMessage(e)))
+                Result.Error(AppError.AuthError(friendlyAuthMessage(e)))
             }
-        }
-    }
-
-    // True if any exception in the cause chain is a transport-level failure.
-    private fun Throwable.isNetworkFailure(): Boolean {
-        var current: Throwable? = this
-        while (current != null) {
-            if (current is UnknownHostException ||
-                current is ConnectException ||
-                current is SocketTimeoutException ||
-                current is IOException
-            ) return true
-            current = current.cause
-        }
-        return false
-    }
-
-    // Map known Supabase error messages to friendly copy. The else branch NEVER
-    // returns the raw provider text — an unrecognized failure gets a generic
-    // message so we don't leak internal/Supabase wording to the user.
-    private fun friendlyMessage(e: Exception): String {
-        val raw = e.message ?: return "Authentication failed. Please try again."
-        return when {
-            raw.contains("Invalid login", ignoreCase = true) ->
-                "Invalid email or password."
-            raw.contains("already registered", ignoreCase = true) ||
-                raw.contains("already been registered", ignoreCase = true) ->
-                "That email is already registered."
-            raw.contains("Email not confirmed", ignoreCase = true) ->
-                "Please confirm your email before signing in."
-            raw.contains("expired", ignoreCase = true) ->
-                "That code has expired. Request a new one."
-            raw.contains("otp", ignoreCase = true) || raw.contains("token", ignoreCase = true) ->
-                "Invalid code. Check the email and try again."
-            else -> "Authentication failed. Please try again."
         }
     }
 }
