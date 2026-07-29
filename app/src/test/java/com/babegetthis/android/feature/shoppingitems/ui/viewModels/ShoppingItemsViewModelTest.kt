@@ -1,6 +1,14 @@
 package com.babegetthis.android.feature.shoppingitems.ui.viewModels
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
+import com.babegetthis.android.core.model.Category
+import com.babegetthis.android.testing.TestData
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import org.junit.Assert.assertNull
 import app.cash.turbine.test
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.model.AuthState
@@ -354,5 +362,408 @@ class ShoppingItemsViewModelTest {
             MutableStateFlow(AuthState.Unauthenticated)
         val viewModel = buildViewModel()
         assertFalse(viewModel.isAuthenticated())
+    }
+
+    // -- Derived state --
+
+    // uiState and items are stateIn(WhileSubscribed), so nothing updates unless
+    // something downstream is collecting. The screen supplies that in production.
+    private fun TestScope.collecting(viewModel: ShoppingItemsViewModel): ShoppingItemsViewModel {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect { }
+        }
+        return viewModel
+    }
+
+    @Test
+    fun `uiState splits active from completed`() = runTest {
+        val viewModel = collecting(buildViewModel())
+        itemsFlow.value = listOf(item("a"), item("b", isPickedUp = true), item("c"))
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("a", "c"), state.activeItems.map { it.id })
+        assertEquals(listOf("b"), state.completedItems.map { it.id })
+        assertEquals(3, state.totalCount)
+        assertEquals(1, state.completedCount)
+    }
+
+    @Test
+    fun `uiState is empty for an empty list`() = runTest {
+        val viewModel = collecting(buildViewModel())
+
+        assertTrue(viewModel.uiState.value.isEmpty)
+    }
+
+    @Test
+    fun `activeByShop groups by shop and buckets missing shops under empty string`() = runTest {
+        val viewModel = collecting(buildViewModel())
+        itemsFlow.value = listOf(
+            item("a").copy(shop = "Aldi"),
+            item("b").copy(shop = "Aldi"),
+            item("c").copy(shop = null),
+        )
+
+        val byShop = viewModel.uiState.value.activeByShop
+        assertEquals(listOf("a", "b"), byShop.getValue("Aldi").map { it.id })
+        assertEquals(listOf("c"), byShop.getValue("").map { it.id })
+    }
+
+    @Test
+    fun `activeByShop excludes picked-up items`() = runTest {
+        val viewModel = collecting(buildViewModel())
+        itemsFlow.value = listOf(
+            item("a").copy(shop = "Aldi"),
+            item("b", isPickedUp = true).copy(shop = "Aldi"),
+        )
+
+        assertEquals(listOf("a"), viewModel.uiState.value.activeByShop.getValue("Aldi").map { it.id })
+    }
+
+    @Test
+    fun `listId and listName come from SavedStateHandle`() {
+        val viewModel = buildViewModel()
+
+        assertEquals("L1", viewModel.listId)
+        assertEquals("Groceries", viewModel.listName)
+    }
+
+    @Test
+    fun `missing SavedStateHandle keys fall back to empty strings`() {
+        val viewModel = ShoppingItemsViewModel(
+            savedStateHandle = SavedStateHandle(),
+            itemRepository = itemRepository,
+            categoryRepository = categoryRepository,
+            authStateManager = authStateManager,
+            listRepository = listRepository,
+            pinRepository = pinRepository,
+            applicationScope = CoroutineScope(testDispatcher),
+        )
+
+        assertEquals("", viewModel.listId)
+        assertEquals("", viewModel.listName)
+    }
+
+    // -- Lock behavior --
+
+    // isLocked requires BOTH the row flag and a PIN existing, so a stale flag left
+    // behind by a failed unlockAll can never lock the user out of their own data.
+    @Test
+    fun `isLocked requires both the row flag and an existing PIN`() = runTest {
+        every { listRepository.getListById(any()) } returns
+            MutableStateFlow(TestData.list(id = "L1", isLocked = true))
+        every { pinRepository.pinExists } returns MutableStateFlow(false)
+        val viewModel = buildViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.isLocked.collect { }
+        }
+
+        assertFalse("a locked row with no PIN must not gate access", viewModel.isLocked.value)
+    }
+
+    @Test
+    fun `isLocked is true when the row is locked and a PIN exists`() = runTest {
+        every { listRepository.getListById(any()) } returns
+            MutableStateFlow(TestData.list(id = "L1", isLocked = true))
+        every { pinRepository.pinExists } returns MutableStateFlow(true)
+        val viewModel = buildViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.isLocked.collect { }
+        }
+
+        assertTrue(viewModel.isLocked.value)
+    }
+
+    @Test
+    fun `session unlock and re-lock toggle sessionUnlocked`() {
+        val viewModel = buildViewModel()
+
+        viewModel.onSessionUnlocked()
+        assertTrue(viewModel.sessionUnlocked.value)
+
+        viewModel.lockSession()
+        assertFalse(viewModel.sessionUnlocked.value)
+    }
+
+    // Locking happens while viewing the list, so the session stays unlocked —
+    // otherwise the list you just locked would immediately re-prompt for the PIN.
+    @Test
+    fun `locking keeps the current session unlocked`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.setListLocked(true)
+
+        assertTrue(viewModel.sessionUnlocked.value)
+        coVerify { listRepository.setLocked("L1", true) }
+    }
+
+    @Test
+    fun `unlocking does not touch the session flag`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.setListLocked(false)
+
+        assertFalse(viewModel.sessionUnlocked.value)
+        coVerify { listRepository.setLocked("L1", false) }
+    }
+
+    // The lock cannot be sidestepped by exporting to text.
+    @Test
+    fun `share is refused while locked and not yet verified`() = runTest {
+        every { listRepository.getListById(any()) } returns
+            MutableStateFlow(TestData.list(id = "L1", isLocked = true))
+        every { pinRepository.pinExists } returns MutableStateFlow(true)
+        val viewModel = buildViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.isLocked.collect { }
+        }
+
+        viewModel.events.test {
+            viewModel.onShareClick()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `share is allowed once the session is verified`() = runTest {
+        every { listRepository.getListById(any()) } returns
+            MutableStateFlow(TestData.list(id = "L1", isLocked = true))
+        every { pinRepository.pinExists } returns MutableStateFlow(true)
+        val viewModel = collecting(buildViewModel())
+        itemsFlow.value = listOf(item("a", name = "Milk"))
+        viewModel.onSessionUnlocked()
+
+        viewModel.events.test {
+            viewModel.onShareClick()
+            val event = awaitItem()
+            assertTrue(event is ShoppingItemsViewModel.UiEvent.ShareList)
+            assertTrue((event as ShoppingItemsViewModel.UiEvent.ShareList).text.contains("Milk"))
+        }
+    }
+
+    @Test
+    fun `share on an unlocked list emits the formatted text`() = runTest {
+        val viewModel = collecting(buildViewModel())
+        itemsFlow.value = listOf(item("a", name = "Milk"))
+
+        viewModel.events.test {
+            viewModel.onShareClick()
+            val event = awaitItem() as ShoppingItemsViewModel.UiEvent.ShareList
+            assertTrue(event.text.contains("Groceries"))
+            assertTrue(event.text.contains("Milk"))
+        }
+    }
+
+    // -- Dialog state --
+
+    @Test
+    fun `add dialog opens and dismisses`() {
+        val viewModel = buildViewModel()
+
+        viewModel.onAddItemClick()
+        assertTrue(viewModel.showAddItemDialog.value)
+
+        viewModel.onDismissAddItemDialog()
+        assertFalse(viewModel.showAddItemDialog.value)
+    }
+
+    @Test
+    fun `edit dialog holds the item being edited`() {
+        val viewModel = buildViewModel()
+        val target = item("a")
+
+        viewModel.onEditItemClick(target)
+        assertEquals(target, viewModel.editingItem.value)
+
+        viewModel.onDismissEditItemDialog()
+        assertNull(viewModel.editingItem.value)
+    }
+
+    // -- addItem / togglePickedUp / addCategory --
+
+    @Test
+    fun `addItem success closes the dialog`() = runTest {
+        coEvery { itemRepository.addItem(any(), any(), any(), any(), any(), any()) } returns
+            Result.Success("new-id")
+        val viewModel = buildViewModel()
+        viewModel.onAddItemClick()
+
+        viewModel.addItem("Milk", "2", null, null, null)
+
+        assertFalse(viewModel.showAddItemDialog.value)
+        coVerify { itemRepository.addItem("L1", "Milk", "2", null, null, null) }
+    }
+
+    @Test
+    fun `addItem failure surfaces the error and keeps the dialog open`() = runTest {
+        coEvery { itemRepository.addItem(any(), any(), any(), any(), any(), any()) } returns
+            Result.Error(AppError.ValidationError("Item name can't be empty."))
+        val viewModel = buildViewModel()
+        viewModel.onAddItemClick()
+
+        viewModel.errorMessage.test {
+            viewModel.addItem("", "", null, null, null)
+            assertEquals("Item name can't be empty.", awaitItem())
+        }
+        assertTrue(viewModel.showAddItemDialog.value)
+    }
+
+    @Test
+    fun `togglePickedUp delegates to the repository`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("a", true)
+
+        coVerify { itemRepository.togglePickedUp("a", true) }
+    }
+
+    @Test
+    fun `togglePickedUp failure surfaces the error`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns
+            Result.Error(AppError.DatabaseError())
+        val viewModel = buildViewModel()
+
+        viewModel.errorMessage.test {
+            viewModel.togglePickedUp("a", true)
+            assertEquals(AppError.DatabaseError().message, awaitItem())
+        }
+    }
+
+    // The callback receives a Category built locally from the name passed in,
+    // not a read-back of what was stored. Pinned so that if the repository ever
+    // normalises names, this stops silently disagreeing with the database.
+    @Test
+    fun `addCategory hands the new category to its callback`() = runTest {
+        coEvery { categoryRepository.addCategory("Dairy") } returns Result.Success("cat-1")
+        val viewModel = buildViewModel()
+        var created: Category? = null
+
+        viewModel.addCategory("Dairy") { created = it }
+
+        assertEquals(Category(id = "cat-1", name = "Dairy", isDefault = false), created)
+    }
+
+    @Test
+    fun `addCategory failure surfaces the error and skips the callback`() = runTest {
+        coEvery { categoryRepository.addCategory(any()) } returns
+            Result.Error(AppError.DatabaseError())
+        val viewModel = buildViewModel()
+        var called = false
+
+        viewModel.errorMessage.test {
+            viewModel.addCategory("Dairy") { called = true }
+            assertEquals(AppError.DatabaseError().message, awaitItem())
+        }
+        assertFalse(called)
+    }
+
+    // -- Voice --
+
+    @Test
+    fun `addItemsWithVoice delegates and returns the result unchanged`() = runTest {
+        val expected = Result.Success("L1")
+        coEvery { listRepository.addItemsToList(any(), any()) } returns expected
+        val viewModel = buildViewModel()
+        val drafts = listOf(TestData.draft(name = "Milk"))
+
+        val result = viewModel.addItemsWithVoice(drafts)
+
+        assertEquals(expected, result)
+        coVerify { listRepository.addItemsToList("L1", drafts) }
+    }
+
+    // -- Undo regressions fixed in task 4.2 --
+
+    @Test
+    fun `deleteItem offers no undo when the item was never in state`() = runTest {
+        coEvery { itemRepository.deleteItem("ghost") } returns Result.Success(Unit)
+        val viewModel = collecting(buildViewModel())
+
+        viewModel.undoDeleteEvent.test {
+            viewModel.deleteItem("ghost")
+            expectNoEvents()
+        }
+    }
+
+    // A failed restore used to clear the cache anyway, so the error message told
+    // the user to retry something that was already unrecoverable.
+    @Test
+    fun `a failed restore keeps the cache so undo can be retried`() = runTest {
+        coEvery { itemRepository.deleteItem("a") } returns Result.Success(Unit)
+        coEvery { itemRepository.restoreItem(any()) } returns Result.Error(AppError.DatabaseError())
+        val viewModel = collecting(buildViewModel())
+        itemsFlow.value = listOf(item("a"))
+        viewModel.deleteItem("a")
+
+        viewModel.undoDeleteItem()
+        viewModel.undoDeleteItem()
+
+        coVerify(exactly = 2) { itemRepository.restoreItem(any()) }
+    }
+
+    // -- Teardown: the highest-consequence path in the app --
+
+    // Leaving a list with nothing in it cleans the list up.
+    @Test
+    fun `onCleared deletes a list left empty`() = runTest {
+        coEvery { listRepository.deleteListIfEmpty(any()) } returns Result.Success(true)
+        val viewModel = buildViewModel()
+
+        viewModel.invokeOnCleared()
+
+        coVerify { listRepository.deleteListIfEmpty("L1") }
+    }
+
+    // The dangerous interleaving. Undo is tapped on the snackbar and the user
+    // backs out in the same breath: the restore runs on applicationScope (so it
+    // survives viewModelScope being cancelled), and onCleared joins it BEFORE
+    // asking whether the list is empty. Without that join the emptiness check
+    // races the restore, sees zero items, and deletes the very list the user
+    // just rescued — along with the item they restored.
+    @Test
+    fun `onCleared waits for an in-flight undo before deciding the list is empty`() = runTest {
+        val restoreGate = CompletableDeferred<Unit>()
+        coEvery { itemRepository.deleteItem("a") } returns Result.Success(Unit)
+        coEvery { itemRepository.restoreItem(any()) } coAnswers {
+            restoreGate.await()
+            Result.Success(Unit)
+        }
+        coEvery { listRepository.deleteListIfEmpty(any()) } returns Result.Success(false)
+
+        val viewModel = collecting(buildViewModel())
+        itemsFlow.value = listOf(item("a"))
+        viewModel.deleteItem("a")
+
+        viewModel.undoDeleteItem()
+        viewModel.invokeOnCleared()
+
+        // The restore is still parked on the gate, so the emptiness check must
+        // not have run yet.
+        coVerify(exactly = 0) { listRepository.deleteListIfEmpty(any()) }
+
+        restoreGate.complete(Unit)
+        testScheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { listRepository.deleteListIfEmpty("L1") }
+    }
+
+    @Test
+    fun `onCleared proceeds immediately when no undo is in flight`() = runTest {
+        coEvery { listRepository.deleteListIfEmpty(any()) } returns Result.Success(true)
+        val viewModel = buildViewModel()
+
+        viewModel.invokeOnCleared()
+        testScheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { listRepository.deleteListIfEmpty("L1") }
+    }
+
+    // onCleared is protected on ViewModel, so reach it the way the framework
+    // would. Reflection is confined to this one helper rather than sprinkled
+    // through the tests that need it.
+    private fun ShoppingItemsViewModel.invokeOnCleared() {
+        ViewModel::class.java.getDeclaredMethod("onCleared")
+            .apply { isAccessible = true }
+            .invoke(this)
     }
 }

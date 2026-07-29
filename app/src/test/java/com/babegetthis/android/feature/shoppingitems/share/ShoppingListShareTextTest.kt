@@ -33,6 +33,10 @@ class ShoppingListShareTextTest {
         assertFalse(text.contains("—"))
     }
 
+    // Sharing an empty message would be worse, so a fully-completed list shares
+    // everything. Side effect worth knowing: those items still render as "[ ]",
+    // so the shared text can't be told apart from an untouched list. Deliberate
+    // (see the inline comment in format()), pinned here so it stays deliberate.
     @Test
     fun allCheckedSharesWholeListWithoutSummary() {
         val text = ShoppingListShareText.format(
@@ -42,5 +46,60 @@ class ShoppingListShareTextTest {
         assertTrue(text.contains("[ ] Milk"))
         assertTrue(text.contains("[ ] Eggs"))
         assertFalse(text.contains("already picked up"))
+    }
+
+    @Test
+    fun emptyListStillCarriesTitleAndFooter() {
+        val text = ShoppingListShareText.format("Groceries", emptyList())
+
+        assertTrue(text.contains("🛒 Groceries"))
+        assertTrue(text.contains("via Babe, Get This"))
+        assertFalse(text.contains("[ ]"))
+    }
+
+    @Test
+    fun noneCheckedOmitsTheSummaryLine() {
+        val text = ShoppingListShareText.format("L", listOf(item("Milk"), item("Eggs")))
+
+        assertTrue(text.contains("[ ] Milk"))
+        assertTrue(text.contains("[ ] Eggs"))
+        assertFalse(text.contains("already picked up"))
+    }
+
+    @Test
+    fun summaryCountsEveryCheckedItem() {
+        val text = ShoppingListShareText.format(
+            "L",
+            listOf(
+                item("Milk"),
+                item("Eggs", pickedUp = true),
+                item("Bread", pickedUp = true),
+                item("Jam", pickedUp = true),
+            ),
+        )
+
+        assertTrue(text.contains("(3 already picked up)"))
+    }
+
+    @Test
+    fun whitespaceQuantityIsTreatedAsAbsent() {
+        val text = ShoppingListShareText.format("L", listOf(item("Bread", quantity = "   ")))
+
+        assertFalse(text.contains("—"))
+    }
+
+    @Test
+    fun theListNameIsUsedVerbatim() {
+        val text = ShoppingListShareText.format("Mum's list — 2024", listOf(item("Milk")))
+
+        assertTrue(text.contains("🛒 Mum's list — 2024"))
+    }
+
+    @Test
+    fun aVeryLongItemNameIsNotTruncated() {
+        val long = "x".repeat(200)
+        val text = ShoppingListShareText.format("L", listOf(item(long)))
+
+        assertTrue(text.contains("[ ] $long"))
     }
 }
