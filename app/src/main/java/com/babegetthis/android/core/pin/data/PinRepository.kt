@@ -28,10 +28,18 @@ class PinRepository @Inject constructor(
 
     fun hasPin(): Boolean = store.pinHash != null
 
-    // First-time setup. Returns the recovery code to show once. No current-PIN
-    // check — callers must ensure no PIN exists (locking a list, or Settings
-    // "set up PIN").
+    // First-time setup ONLY. Returns the recovery code to show once.
+    //
+    // The precondition is enforced here rather than trusted: this writes a new
+    // PIN without verifying the old one, so if it were ever reached while a PIN
+    // existed it would silently replace that PIN — a complete bypass of the
+    // control. Every call site is already gated on !pinExists, which is to say
+    // the invariant was being held entirely by two `if`s in the UI. Failing loudly
+    // is the right trade for a security control: changing a PIN goes through
+    // changePin(), which verifies, and recovery goes through
+    // resetPinWithRecoveryCode(), which verifies the code.
     fun setupPin(pin: String): String {
+        check(!hasPin()) { "setupPin called while a PIN exists — use changePin or resetPinWithRecoveryCode" }
         writePin(pin)
         val code = writeNewRecoveryCode()
         resetAttempts()
