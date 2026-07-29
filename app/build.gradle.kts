@@ -209,6 +209,27 @@ kover {
                     // The interface exists so tests can substitute a fake clock —
                     // testing the real one would be testing the platform.
                     "com.babegetthis.android.core.pin.data.SystemPinClock",
+                    // TokenManager is the same story as PinStore: an
+                    // EncryptedSharedPreferences wrapper, so AndroidKeyStore, so
+                    // not constructible under Robolectric. Covered by
+                    // androidTest/TokenManagerTest; AuthStateManager's logic is
+                    // covered on the JVM against an in-memory stand-in.
+                    "com.babegetthis.android.core.auth.data.TokenManager",
+                    // SupabaseAuthRepository is an adapter over the Supabase SDK,
+                    // reachable only through extension properties
+                    // (`supabaseClient.auth`) that are brittle to stub. Its actual
+                    // DECISION-MAKING was extracted to AuthErrorMapper.kt, which
+                    // IS gated and is at 100% — per this spec's rule that logic
+                    // trapped in unreachable code gets extracted rather than the
+                    // exclude-list widened. What remains here is call-and-forward
+                    // over the SDK, covered by the e2e auth journey.
+                    "com.babegetthis.android.core.auth.data.SupabaseAuthRepository",
+                    "com.babegetthis.android.core.auth.data.SupabaseAuthRepository\$*",
+                    // Dev-flavour only: a stub AuthRepository so dev builds run
+                    // without a backend. It never ships (app/src/dev/), and it is
+                    // a development aid rather than product behaviour — testing it
+                    // would be testing the test double.
+                    "com.babegetthis.android.core.auth.data.FakeAuthRepository",
                 )
             }
         }

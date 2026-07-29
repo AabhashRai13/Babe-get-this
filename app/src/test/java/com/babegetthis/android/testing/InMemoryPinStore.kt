@@ -71,3 +71,31 @@ class FakePinClock(
         elapsed += millis
     }
 }
+
+// TokenManager backed by plain fields instead of EncryptedSharedPreferences,
+// for the same reason as inMemoryPinStore(): the real one builds its MasterKey
+// through the AndroidKeyStore provider, which Robolectric does not supply.
+// AuthStateManager's own logic — what it caches, what it clears, what it emits —
+// is independent of how those bytes are stored, and is worth testing on the JVM.
+fun inMemoryTokenManager(): com.babegetthis.android.core.auth.data.TokenManager {
+    val manager = mockk<com.babegetthis.android.core.auth.data.TokenManager>()
+
+    var token: String? = null
+    var userId: String? = null
+    var userName: String? = null
+    var userEmail: String? = null
+
+    every { manager.getToken() } answers { token }
+    every { manager.saveToken(any()) } answers { token = firstArg() }
+    every { manager.getUserId() } answers { userId }
+    every { manager.saveUserId(any()) } answers { userId = firstArg() }
+    every { manager.getUserName() } answers { userName }
+    every { manager.saveUserName(any()) } answers { userName = firstArg() }
+    every { manager.getUserEmail() } answers { userEmail }
+    every { manager.saveUserEmail(any()) } answers { userEmail = firstArg() }
+    every { manager.clear() } answers {
+        token = null; userId = null; userName = null; userEmail = null
+    }
+
+    return manager
+}
