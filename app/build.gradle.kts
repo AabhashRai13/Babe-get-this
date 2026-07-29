@@ -192,6 +192,23 @@ kover {
                     "*_Impl", "*_Impl\$*",                 // Room generated DAOs/DB
                     "*ComposableSingletons*",              // Compose compiler generated
                     "*\$\$serializer",                     // kotlinx.serialization generated
+
+                    // Untestable on the JVM, not untested — both are covered by
+                    // instrumented tests instead, and neither holds logic that a
+                    // JVM test could meaningfully exercise.
+                    //
+                    // PinStore is a typed wrapper over EncryptedSharedPreferences,
+                    // whose MasterKey requires the AndroidKeyStore provider.
+                    // Robolectric has no such provider, so constructing one throws
+                    // "KeyStoreException: AndroidKeyStore not found". Covered by
+                    // androidTest/PinStoreTest; PinRepository's own logic is
+                    // covered on the JVM against an in-memory stand-in.
+                    "com.babegetthis.android.core.pin.data.PinStore",
+                    // SystemPinClock is two one-line passthroughs to
+                    // System.currentTimeMillis() and SystemClock.elapsedRealtime().
+                    // The interface exists so tests can substitute a fake clock —
+                    // testing the real one would be testing the platform.
+                    "com.babegetthis.android.core.pin.data.SystemPinClock",
                 )
             }
         }
