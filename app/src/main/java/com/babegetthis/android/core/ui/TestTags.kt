@@ -25,4 +25,15 @@ object TestTags {
     fun listCard(listId: String) = "shoppinglist.card.$listId"
 
     fun listTab(index: Int) = "shoppinglist.tab.$index"
+
+    // --- shoppingitems ---
+    //
+    // The row is a Material3 Card(onClick), which DOES merge its descendants —
+    // so the item name reaches the row's click fine, but the checkbox nested
+    // inside it needs its own handle to be tapped independently of the row.
+    // Both are parameterised by item id so a test can address one row out of
+    // several without depending on position.
+    fun itemCard(itemId: String) = "shoppingitems.card.$itemId"
+
+    fun itemCheckbox(itemId: String) = "shoppingitems.checkbox.$itemId"
 }
