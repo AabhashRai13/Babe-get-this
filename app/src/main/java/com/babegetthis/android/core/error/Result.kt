@@ -75,8 +75,18 @@ suspend fun <T> safeCall(
                 else -> AppError.ServerError(e.code(), e.message ?: "Unexpected server response.")
             }
 
-            // Everything else
-            else -> AppError.UnknownError(e.message ?: "An unexpected error occurred.")
+            // Everything else. Deliberately does NOT pass e.message through:
+            // this value is rendered straight into a snackbar, and an
+            // unrecognised exception's text is internal detail. The concrete
+            // leak was a missing cache file — FileNotFoundException's message is
+            // the full path, so the voice flow would have shown the user
+            // "/data/user/0/.../cache/voice-1717200000000.m4a (No such file or
+            // directory)". SupabaseAuthRepository already took this care with
+            // provider text; safeCall did the opposite for everyone else.
+            //
+            // The raw text was never actionable for a user. If it is ever needed
+            // for diagnosis, log it here rather than surfacing it.
+            else -> AppError.UnknownError()
         }
         Result.Error(error)
     }
