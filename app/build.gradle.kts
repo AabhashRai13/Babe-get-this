@@ -139,9 +139,10 @@ android {
 // the bar has to be a visible edit here in a reviewable commit. There is no
 // per-class or per-test suppression mechanism, on purpose.
 //
-// Currently 0: the gate is wired but not enforcing while the suite is being
-// built out. Task 13.3 raises it to 100 in a commit that changes nothing else.
-val COVERAGE_THRESHOLD = 0
+// It is a FLOOR against omissions, not evidence the tests are good. A line can
+// be executed without being asserted on; reviewers still have to read the tests.
+// What it does buy is that new logic cannot land untouched by accident.
+val COVERAGE_THRESHOLD = 100
 
 kover {
     reports {
@@ -273,6 +274,16 @@ dependencies {
     // createComposeRule() work under Robolectric.
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
+    // ui-test-manifest declares the ComponentActivity that createComposeRule()
+    // launches, and it works by MERGING INTO THE APP MANIFEST — so it has to be
+    // applied per build type, not via testImplementation (an AAR on the test
+    // classpath contributes no manifest entry). Debug only, deliberately:
+    // applying it to release would merge test scaffolding into the shipped APK.
+    //
+    // Consequence, and the reason CI runs testProdDebugUnitTest rather than
+    // testProdReleaseUnitTest: Compose tests cannot run on a release variant.
+    // They fail with "Unable to resolve activity for Intent ...
+    // androidx.activity.ComponentActivity".
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     androidTestImplementation(libs.androidx.junit)

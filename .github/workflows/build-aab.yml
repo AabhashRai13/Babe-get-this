@@ -43,10 +43,27 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      # Quality gate: run the prod-release unit tests before bundling.
-      # If a test fails, no .aab is produced.
+      # Quality gate: tests, then coverage. If either fails, no .aab is produced.
+      #
+      # prodDebug, NOT prodRelease. The Compose tests run on the JVM under
+      # Robolectric, and createComposeRule() launches a ComponentActivity that is
+      # declared by the ui-test-manifest artifact. That artifact works by merging
+      # into the app manifest, so it is applied as debugImplementation — putting it
+      # on release would merge test scaffolding into the shipped APK. On a release
+      # variant every Compose test therefore fails with "Unable to resolve
+      # activity for Intent ... androidx.activity.ComponentActivity".
+      #
+      # Still the prod FLAVOUR, so this keeps checking that the suite compiles and
+      # passes against the prod source set (which has no FakeAuthRepository).
       - name: Run unit tests
-        run: ./gradlew testProdReleaseUnitTest
+        run: ./gradlew testProdDebugUnitTest
+
+      # Coverage gate. Fails the build if the logic layer drops below the
+      # threshold in app/build.gradle.kts, so a regression cannot produce a
+      # release artifact. Runs on devDebug because that is the variant the Kover
+      # report is configured for.
+      - name: Verify coverage
+        run: ./gradlew koverVerifyDevDebug
 
       # Build the production-flavor release bundle.
       # Output: app/build/outputs/bundle/prodRelease/app-prod-release.aab
