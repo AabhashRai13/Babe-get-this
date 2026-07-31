@@ -18,9 +18,14 @@ concurrency:
 
 jobs:
   androidTest:
-    # macOS: the emulator needs hardware acceleration, and the Linux runners
-    # don't have KVM. Slower to queue but actually boots.
-    runs-on: macos-latest
+    # ubuntu, not macOS. The emulator needs hardware virtualisation to be usable
+    # at all, and GitHub's Ubuntu runners expose /dev/kvm (enabled by the step
+    # below). The first version of this file used macos-latest on the belief that
+    # Linux runners had no KVM — that is out of date, and macos-latest is now
+    # arm64, so pairing it with an x86_64 system image left the emulator with no
+    # acceleration path. It span for ~12 minutes and timed out. Ubuntu also bills
+    # at a tenth of macOS.
+    runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
@@ -37,6 +42,15 @@ jobs:
 
       - run: chmod +x ./gradlew
 
+      # Without this the emulator falls back to software CPU emulation and never
+      # finishes booting inside the timeout.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -50,8 +64,11 @@ jobs:
           arch: x86_64
           # Headless, and animations off — the suite synchronises on Compose
           # idleness and explicit waitUntil conditions, never on timing.
-          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect
+          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none
           disable-animations: true
+          # Give the boot longer than the action's default; a cold AVD on a
+          # shared runner is slower than a warm local one.
+          emulator-boot-timeout: 900
           script: ./gradlew connectedDevDebugAndroidTest
 
       - name: Upload report on failure
