@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +60,7 @@ import com.babegetthis.android.R
 import com.babegetthis.android.core.pin.ui.PinPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptPurpose
 import com.babegetthis.android.core.pin.ui.PinSetupDialog
+import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.ui.haptics.Haptic
@@ -241,6 +243,7 @@ fun ShoppingItemsScreen(
                 // state shows its own big Add button inside FirstItemPrompt.
                 if (!uiState.isEmpty) {
                     ExtendedFloatingActionButton(
+                    modifier = Modifier.testTag(TestTags.ADD_ITEM_FAB),
                         onClick = {
                             haptic(Haptic.Medium)
                             viewModel.onAddItemClick()

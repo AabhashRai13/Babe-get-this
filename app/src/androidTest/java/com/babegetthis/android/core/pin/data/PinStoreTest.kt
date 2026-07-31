@@ -8,6 +8,13 @@ import org.junit.Test
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.runner.RunWith
 
+// NOTE: method names here are camelCase, not the backticked sentences used
+// everywhere in the JVM suite. Instrumented tests are dexed, and spaces in a
+// method name need DEX 040 — which needs minSdk 30. This app is minSdk 24, so a
+// backticked name fails the build with "Space characters in SimpleName ... are
+// not allowed prior to DEX version 040". Same reason MigrationTest and
+// PinSurvivesLogoutTest were already written this way.
+//
 // Instrumented, not a JVM unit test: PinStore is backed by
 // EncryptedSharedPreferences, whose MasterKey needs the AndroidKeyStore
 // provider. Robolectric has no such provider ("KeyStoreException:
@@ -26,7 +33,7 @@ class PinStoreTest {
     }
 
     @Test
-    fun `a fresh store has no pin`() {
+    fun aFreshStoreHasNoPin() {
         assertNull(store.pinHash)
         assertNull(store.pinSalt)
         assertNull(store.recoveryHash)
@@ -34,14 +41,14 @@ class PinStoreTest {
     }
 
     @Test
-    fun `a fresh store has zeroed counters`() {
+    fun aFreshStoreHasZeroedCounters() {
         assertEquals(0, store.attempts)
         assertEquals(0L, store.lockoutUntilWall)
         assertEquals(0L, store.lockoutUntilElapsed)
     }
 
     @Test
-    fun `pin hash and salt round-trip`() {
+    fun pinHashAndSaltRoundTrip() {
         store.pinHash = "hash"
         store.pinSalt = "salt"
 
@@ -50,7 +57,7 @@ class PinStoreTest {
     }
 
     @Test
-    fun `recovery hash and salt round-trip`() {
+    fun recoveryHashAndSaltRoundTrip() {
         store.recoveryHash = "rhash"
         store.recoverySalt = "rsalt"
 
@@ -59,7 +66,7 @@ class PinStoreTest {
     }
 
     @Test
-    fun `counters round-trip`() {
+    fun countersRoundTrip() {
         store.attempts = 3
         store.lockoutUntilWall = 111L
         store.lockoutUntilElapsed = 222L
@@ -70,7 +77,7 @@ class PinStoreTest {
     }
 
     @Test
-    fun `clearAll wipes every field`() {
+    fun clearAllWipesEveryField() {
         store.pinHash = "hash"
         store.pinSalt = "salt"
         store.recoveryHash = "rhash"
@@ -93,7 +100,7 @@ class PinStoreTest {
     // The PIN lives in its own prefs file (bgt_pin_prefs) precisely so
     // TokenManager.clear() on logout cannot take it with it.
     @Test
-    fun `a second instance sees what the first wrote`() {
+    fun aSecondInstanceSeesWhatTheFirstWrote() {
         store.pinHash = "hash"
 
         val reopened = PinStore(ApplicationProvider.getApplicationContext())

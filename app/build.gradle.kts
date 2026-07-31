@@ -47,7 +47,10 @@ android {
         versionCode = 4
         versionName = "0.2.0-beta"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Custom runner so instrumented tests boot HiltTestApplication instead of
+        // BabeGetThisApp — that is what allows @TestInstallIn modules to replace
+        // the production DI graph.
+        testInstrumentationRunner = "com.babegetthis.android.testing.HiltTestRunner"
 
         // Supabase config, exposed to Kotlin as BuildConfig.SUPABASE_URL / _ANON_KEY.
         // Lives in defaultConfig (not per-flavor) because all flavors point at the

@@ -36,4 +36,14 @@ object TestTags {
     fun itemCard(itemId: String) = "shoppingitems.card.$itemId"
 
     fun itemCheckbox(itemId: String) = "shoppingitems.checkbox.$itemId"
+
+    // Prefixes, so an end-to-end test can find "the first item checkbox" without
+    // knowing the row's generated UUID.
+    const val ITEM_CHECKBOX_PREFIX = "shoppingitems.checkbox."
+
+    // The add-item FAB and the add-item dialog's confirm button BOTH read "Add",
+    // so once the dialog is open the text is ambiguous and only a tag separates
+    // them. This is the one case in the whole suite where a tag exists for a
+    // reason other than a non-merging wrapper.
+    const val ADD_ITEM_FAB = "shoppingitems.addFab"
 }
