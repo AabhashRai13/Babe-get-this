@@ -2,6 +2,8 @@ package com.babegetthis.android
 
 import android.app.Application
 import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.featureflags.FeatureFlagCache
+import com.babegetthis.android.core.featureflags.data.FeatureFlagRepository
 import dagger.hilt.android.HiltAndroidApp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -20,6 +22,8 @@ class BabeGetThisApp : Application() {
 
     @Inject lateinit var supabaseClient: SupabaseClient
     @Inject lateinit var authStateManager: AuthStateManager
+    @Inject lateinit var featureFlagRepository: FeatureFlagRepository
+    @Inject lateinit var featureFlagCache: FeatureFlagCache
 
     // App-scoped so it lives for the whole process (survives Activity recreation),
     // unlike collecting in MainActivity.
@@ -27,6 +31,11 @@ class BabeGetThisApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Fetch once per process start — non-realtime by design, see
+        // docs/technical-decisions/003-in-app-update-and-feature-flags.md.
+        appScope.launch {
+            featureFlagCache.update(featureFlagRepository.fetchFlags())
+        }
         // Supabase auto-refreshes the session in the background and rotates the
         // access token. Persist each rotated token so AuthInterceptor stops
         // sending the stale one cached at login (the "session expired" bug).
