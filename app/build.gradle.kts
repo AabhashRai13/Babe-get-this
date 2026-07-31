@@ -44,8 +44,8 @@ android {
         applicationId = "com.babegetthis.android"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.2.0-beta"
+        versionCode = 6
+        versionName = "0.3.0-beta"
 
         // Custom runner so instrumented tests boot HiltTestApplication instead of
         // BabeGetThisApp — that is what allows @TestInstallIn modules to replace
@@ -327,4 +327,7 @@ dependencies {
     // postgrest-kt is only here for the delete_user RPC (account deletion).
     implementation(libs.supabase.postgrest)
     implementation(libs.ktor.client.okhttp)
+
+    // Play Core in-app update (flexible/immediate flow).
+    implementation(libs.play.app.update.ktx)
 }
