@@ -5,6 +5,7 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onFirst
@@ -67,15 +68,27 @@ class ListLifecycleTest {
     }
 
     private fun addItem(name: String, quantity: String = "1") {
-        // The FAB and the dialog's confirm button both read "Add", so the FAB is
-        // addressed by tag and the confirm by text once the dialog is up.
-        compose.onNodeWithTag(TestTags.ADD_ITEM_FAB).performClick()
+        // The FAB only exists once the list has items — an empty list shows its
+        // own button inside FirstItemPrompt instead. Same shape as createList.
+        val fresh = compose.onAllNodes(hasText("Add first item"))
+            .fetchSemanticsNodes().isNotEmpty()
+        if (fresh) {
+            compose.onNodeWithText("Add first item").performClick()
+        } else {
+            // The FAB and the dialog's confirm button both read "Add", so the FAB
+            // is addressed by tag and the confirm by text once the dialog is up.
+            compose.onNodeWithTag(TestTags.ADD_ITEM_FAB).performClick()
+        }
         awaitText("Add Item")
 
         compose.onNodeWithText("Item name").performTextInput(name)
         compose.onNodeWithText("Quantity or notes (e.g. 2 large, slightly firm)")
             .performTextInput(quantity)
-        compose.onNodeWithText("Add").performClick()
+        // Both the FAB and the dialog's confirm read "Add", and once the list has
+        // items BOTH are on screen — so the confirm is "the Add that isn't the
+        // FAB". This is the ambiguity the FAB tag exists for; it just has to be
+        // used from both sides.
+        compose.onNode(hasText("Add") and !hasTestTag(TestTags.ADD_ITEM_FAB)).performClick()
 
         awaitText(name)
     }

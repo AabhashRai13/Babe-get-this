@@ -243,7 +243,7 @@ fun ShoppingItemsScreen(
                 // state shows its own big Add button inside FirstItemPrompt.
                 if (!uiState.isEmpty) {
                     ExtendedFloatingActionButton(
-                    modifier = Modifier.testTag(TestTags.ADD_ITEM_FAB),
+                        modifier = Modifier.testTag(TestTags.ADD_ITEM_FAB),
                         onClick = {
                             haptic(Haptic.Medium)
                             viewModel.onAddItemClick()

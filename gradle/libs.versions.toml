@@ -4,10 +4,11 @@ kotlin = "2.0.21"
 coreKtx = "1.10.1"
 junit = "4.13.2"
 junitVersion = "1.2.1"
-# 3.6.x is required to drive UI on modern Android. 3.5.1's input injection
-# reflects on android.hardware.input.InputManager.getInstance(), which no longer
-# exists — every instrumented UI test dies with NoSuchMethodException on API 34+.
-espressoCore = "3.6.1"
+# Input injection reflects on internal framework APIs, so this has to track the
+# platform. 3.5.1 used android.hardware.input.InputManager.getInstance(), removed
+# in Android 14; 3.6.1 still failed on API 37. Keep this current rather than
+# pinning the emulator to an older image.
+espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
 composeBom = "2024.09.00"
@@ -31,8 +32,8 @@ kover = "0.8.3"
 # Robolectric runs Android-framework code on the JVM, so Compose screen tests and
 # Room DAO tests execute in CI with no emulator. 4.13 supports compileSdk 36.
 robolectric = "4.13"
-androidxTest = "1.6.1"
-androidxTestRunner = "1.6.2"
+androidxTest = "1.7.0"
+androidxTestRunner = "1.7.0"
 archCoreTesting = "2.2.0"
 # Supabase Kotlin SDK (auth, realtime later) + the Ktor HTTP engine it runs on.
 # supabase-kt ships a BOM, so its modules are versionless in [libraries] below.
