@@ -2,9 +2,11 @@ package com.babegetthis.android.feature.settings.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.pin.data.PinRepository
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +20,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     pinRepository: PinRepository,
     private val listRepository: ShoppingListRepository,
+    @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     val pinExists: StateFlow<Boolean> = pinRepository.pinExists
@@ -29,9 +32,23 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { _lockedCount.value = listRepository.lockedCount() }
     }
 
-    // Called after the PIN has been removed — no list may stay gated by a PIN
-    // that no longer exists.
+    // Called after the PIN has been removed — clears the now-meaningless isLocked
+    // flag on every row so cards stop showing a lock badge.
+    //
+    // applicationScope, NOT viewModelScope: the user dismisses this dialog and
+    // very often leaves Settings in the same breath, which cancels viewModelScope
+    // before the write lands.
+    //
+    // Access is NOT gated on this succeeding — ShoppingItemsViewModel.isLocked
+    // requires pinExists as well as the row flag, so a list whose flag never got
+    // cleared is still fully reachable. That is deliberate: this used to be the
+    // only thing standing between the user and a permanently inaccessible list.
+    // A failure here is now cosmetic, so surfacing it would be noise; the next
+    // successful removal clears it.
     fun onPinRemoved() {
-        viewModelScope.launch { listRepository.unlockAll() }
+        applicationScope.launch {
+            listRepository.unlockAll()
+            _lockedCount.value = 0
+        }
     }
 }

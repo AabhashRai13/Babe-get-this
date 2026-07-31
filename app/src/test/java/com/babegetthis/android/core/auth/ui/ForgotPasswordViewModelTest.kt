@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -138,5 +139,33 @@ class ForgotPasswordViewModelTest {
             "Invalid code. Check the email and try again.",
             viewModel.uiState.value.errorMessage,
         )
+    }
+
+    // clearError() had no caller in the whole suite — the last genuinely
+    // uncovered line in core/auth. It is how the screen dismisses an error
+    // snackbar, so leaving it unexercised meant nobody had checked it clears
+    // the message without disturbing anything the user had typed.
+    @Test
+    fun `clearError removes the message and leaves the form intact`() = runTest {
+        coEvery { authRepository.requestPasswordReset(any()) } returns
+            Result.Error(AppError.NetworkError())
+        val viewModel = ForgotPasswordViewModel(authRepository)
+        viewModel.onEmailChange("a@b.c")
+        viewModel.sendCode()
+        assertEquals(AppError.NetworkError().message, viewModel.uiState.value.errorMessage)
+
+        viewModel.clearError()
+
+        assertNull(viewModel.uiState.value.errorMessage)
+        assertEquals("a@b.c", viewModel.uiState.value.email)
+    }
+
+    @Test
+    fun `clearError is harmless when there is no error`() = runTest {
+        val viewModel = ForgotPasswordViewModel(authRepository)
+
+        viewModel.clearError()
+
+        assertNull(viewModel.uiState.value.errorMessage)
     }
 }

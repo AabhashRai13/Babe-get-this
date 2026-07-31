@@ -39,8 +39,31 @@ internal object PinCrypto {
         return buildString { repeat(10) { append(ALPHABET[rng.nextInt(ALPHABET.length)]) } }
     }
 
-    // Normalize user-typed codes: strip spaces/dashes, uppercase. Keeps entry
-    // forgiving without weakening the stored hash.
+    // Normalize user-typed codes: uppercase, map look-alikes, drop everything
+    // else (spaces, dashes, stray punctuation). Keeps entry forgiving without
+    // weakening the stored hash — the mapping happens before hashing, so the
+    // stored secret is unchanged.
+    //
+    // The mapping is the half that was missing. Excluding I/L/O from the output
+    // alphabet is only useful if input maps them BACK: a written 0 read as "O",
+    // or 1 read as "I"/"l", is the single most likely transcription slip, and the
+    // generator can never legitimately produce those letters — so an O in user
+    // input is unambiguously a misread zero. Filtering alone silently DELETED
+    // them, shortening the code and failing with no explanation, on the one
+    // credential that exists for when the PIN is already forgotten.
+    //
+    // U is excluded from the alphabet for a different reason (it keeps generated
+    // codes from spelling words), so there is nothing to map it to — it stays
+    // dropped, same as any other stray character.
     fun normalizeCode(input: String): String =
-        input.uppercase().filter { it in ALPHABET }
+        input.uppercase()
+            .map {
+                when (it) {
+                    'O' -> '0'
+                    'I', 'L' -> '1'
+                    else -> it
+                }
+            }
+            .filter { it in ALPHABET }
+            .joinToString("")
 }

@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -45,8 +46,19 @@ class ShoppingItemsViewModel @Inject constructor(
 
     // Whether this list is locked, and whether the user has entered the PIN for
     // it this session. Rendering, deletion, and share are gated on these.
-    val isLocked: StateFlow<Boolean> = listRepository.getListById(listId)
-        .map { it?.isLocked == true }
+    //
+    // Gated on pinExists as well as the row's own flag, and that second term is
+    // load-bearing: it makes "locked with no PIN in existence" unrepresentable.
+    // Removing the device PIN used to rely on a separate unlockAll() pass to
+    // clear every row's flag afterwards — if that pass was cancelled or failed,
+    // the list stayed flagged with no credential left to open it, i.e. the user
+    // was permanently locked out of their own data. Deriving the gate from both
+    // means the row flag going stale is cosmetic (a lock icon on the card) rather
+    // than a lockout; unlockAll() is now tidy-up, not a correctness requirement.
+    val isLocked: StateFlow<Boolean> = combine(
+        listRepository.getListById(listId).map { it?.isLocked == true },
+        pinRepository.pinExists,
+    ) { rowLocked, hasPin -> rowLocked && hasPin }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val pinExists: StateFlow<Boolean> = pinRepository.pinExists
@@ -258,7 +270,13 @@ class ShoppingItemsViewModel @Inject constructor(
             when (val result = itemRepository.deleteItem(itemId)) {
                 is Result.Success -> {
                     pendingDeleteItem = itemToDelete
-                    _undoDeleteEvent.emit(itemToDelete?.name ?: "Item")
+                    // Only offer Undo when there is something cached to restore.
+                    // Emitting unconditionally gave the user an Undo button that
+                    // did nothing when tapped — undoDeleteItem returns early on a
+                    // null pending item, silently and with no feedback.
+                    if (itemToDelete != null) {
+                        _undoDeleteEvent.emit(itemToDelete.name)
+                    }
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
@@ -285,9 +303,13 @@ class ShoppingItemsViewModel @Inject constructor(
         // would then delete the whole list the user just tried to rescue.
         restoreJob = applicationScope.launch {
             val item = pendingDeleteItem ?: return@launch
-            pendingDeleteItem = null
             when (val result = itemRepository.restoreItem(item)) {
-                is Result.Success -> { /* item reappears via Flow */ }
+                is Result.Success -> {
+                    // Cleared only once the item is safely back. Clearing up front
+                    // (as this used to) meant a failed restore threw away the only
+                    // copy while telling the user to try again.
+                    pendingDeleteItem = null
+                }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
                 }

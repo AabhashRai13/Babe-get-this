@@ -1,6 +1,7 @@
 package com.babegetthis.android.feature.shoppinglist.data.repository
 
 import com.babegetthis.android.core.error.AppError
+import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.core.data.local.dao.CategoryDao
@@ -43,7 +44,11 @@ class ShoppingListRepository @Inject constructor(
         val id = UUID.randomUUID().toString()
         val list = ShoppingList(
             id = id,
-            name = name,
+            // Validated and trimmed HERE, not only in the UI: this is the trust
+            // boundary, and createListWithItems reaches the same table from
+            // transcribed voice input that no dialog ever validated. A blank name
+            // produces a list the user cannot identify or search for.
+            name = name.requireListName(),
             createdAt = now,
             updatedAt = now,
         )
@@ -65,16 +70,18 @@ class ShoppingListRepository @Inject constructor(
 
         val list = ShoppingList(
             id = listId,
-            name = name,
+            name = name.requireListName(),
             createdAt = now,
             updatedAt = now,
         )
-        shoppingListDao.insertList(list.toEntity())
 
-        val itemEntities = draftsToItems(listId, drafts, now)
-        if (itemEntities.isNotEmpty()) {
-            shoppingItemDao.insertItems(itemEntities)
-        }
+        // One transaction. Two independent inserts left a list with none of its
+        // items whenever anything failed or was cancelled in between — and the
+        // voice sheet cancels this exact call on dismiss.
+        shoppingListDao.insertListWithItems(
+            list = list.toEntity(),
+            items = draftsToItems(listId, drafts, now),
+        )
 
         listId
     }
@@ -124,6 +131,20 @@ class ShoppingListRepository @Inject constructor(
         listId
     }
 
+    // Trim and reject blank list names at the repository boundary. Throws through
+    // safeCall as a ValidationError, so callers get the normal Result.Error path
+    // rather than a crash or a silently-blank list.
+    private fun String.requireListName(): String {
+        val trimmed = trim()
+        if (trimmed.isEmpty()) {
+            throw AppErrorException(AppError.ValidationError("List name can't be empty."))
+        }
+        return trimmed
+    }
+
+    private fun ListNotFoundException(listId: String) =
+        AppErrorException(AppError.NotFoundError("That list no longer exists."))
+
     suspend fun setLocked(listId: String, locked: Boolean): Result<Unit> = safeCall {
         shoppingListDao.setLocked(listId, locked)
     }
@@ -135,15 +156,19 @@ class ShoppingListRepository @Inject constructor(
     }
 
     // How many lists are currently locked — Settings shows this before PIN
-    // removal so the user knows the blast radius.
-    suspend fun lockedCount(): Int =
-        shoppingListDao.getAllListsWithItemCount().first().count { it.isLocked }
+    // removal so the user knows the blast radius. Counted in SQL rather than by
+    // collecting every list with its joined item counts and filtering in Kotlin.
+    suspend fun lockedCount(): Int = shoppingListDao.lockedCount()
 
     suspend fun updateListName(listId: String, newName: String): Result<Unit> = safeCall {
         val now = System.currentTimeMillis()
         val entity = shoppingListDao.getListById(listId).first()
-            ?: throw IllegalStateException("List not found")
-        shoppingListDao.updateList(entity.copy(name = newName, updatedAt = now))
+        // NotFoundError rather than the bare IllegalStateException this used to
+        // throw — safeCall maps unrecognised exceptions to UnknownError carrying
+        // the raw exception text, so "List not found" was rendered to the user
+        // verbatim in a snackbar.
+            ?: throw ListNotFoundException(listId)
+        shoppingListDao.updateList(entity.copy(name = newName.requireListName(), updatedAt = now))
     }
 
     // Captures items before deleting the list. The shopping_items foreign key
@@ -170,9 +195,8 @@ class ShoppingListRepository @Inject constructor(
         list: ShoppingList,
         items: List<ShoppingItemEntity>,
     ): Result<Unit> = safeCall {
-        shoppingListDao.insertList(list.toEntity())
-        if (items.isNotEmpty()) {
-            shoppingItemDao.insertItems(items)
-        }
+        // One transaction — a half-completed restore would put the list back
+        // empty and drop exactly the items the undo cache exists to protect.
+        shoppingListDao.insertListWithItems(list.toEntity(), items)
     }
 }

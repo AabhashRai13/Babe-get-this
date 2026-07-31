@@ -38,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import com.babegetthis.android.core.ui.TestTags
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
@@ -111,6 +113,7 @@ fun ShoppingItemCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
+            .testTag(TestTags.itemCard(item.id))
             .animateContentSize(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = cardColor),
@@ -141,6 +144,7 @@ fun ShoppingItemCard(
                     null,
                 modifier = Modifier
                     .size(30.dp)
+                    .testTag(TestTags.itemCheckbox(item.id))
                     .scale(checkboxScale),
             ) {
                 Crossfade(

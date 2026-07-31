@@ -68,4 +68,76 @@ class PinThrottleTest {
         )
         assertEquals(0L, remaining)
     }
+
+    // Every tier boundary, not just the first two and the cap.
+    @Test
+    fun everyTierHasItsDocumentedDelay() {
+        val expected = mapOf(5 to 30_000L, 10 to 120_000L, 15 to 600_000L, 20 to 3_600_000L)
+
+        expected.forEach { (attempts, delay) ->
+            val n = failNTimes(attempts, 1_000, 1_000)
+            assertEquals(
+                "after $attempts failures",
+                delay,
+                PinThrottle.remainingMs(n.untilWall, n.untilElapsed, 1_000, 1_000),
+            )
+        }
+    }
+
+    // Failures between thresholds carry the previous expiry forward untouched
+    // rather than extending it — the lockout escalates in steps, not per keypress.
+    @Test
+    fun failuresWithinATierDoNotExtendTheLockout() {
+        val atFive = failNTimes(5, 1_000, 1_000)
+        val atSix = PinThrottle.onFailure(5, atFive.untilWall, atFive.untilElapsed, 1_000, 1_000)
+
+        assertEquals(atFive.untilWall, atSix.untilWall)
+        assertEquals(atFive.untilElapsed, atSix.untilElapsed)
+        assertEquals(6, atSix.attempts)
+    }
+
+    @Test
+    fun theTierCapHoldsFarBeyondTheLastDelay() {
+        val n = failNTimes(100, 1_000, 1_000)
+
+        assertEquals(
+            3_600_000L,
+            PinThrottle.remainingMs(n.untilWall, n.untilElapsed, 1_000, 1_000),
+        )
+    }
+
+    @Test
+    fun remainingIsClampedAtZeroRatherThanGoingNegative() {
+        assertEquals(0L, PinThrottle.remainingMs(0L, 0L, nowWall = 5_000, nowElapsed = 5_000))
+    }
+
+    @Test
+    fun remainingHonoursWhicheverClockLeavesMoreTime() {
+        // Wall says 10s left, elapsed says 40s. The longer one wins.
+        assertEquals(
+            40_000L,
+            PinThrottle.remainingMs(
+                untilWall = 11_000, untilElapsed = 41_000,
+                nowWall = 1_000, nowElapsed = 1_000,
+            ),
+        )
+    }
+
+    @Test
+    fun anExactlyExpiredLockoutIsOver() {
+        val n = failNTimes(5, 1_000, 1_000)
+
+        assertEquals(
+            0L,
+            PinThrottle.remainingMs(n.untilWall, n.untilElapsed, 31_000, 31_000),
+        )
+    }
+
+    @Test
+    fun theFirstFailureCountsAndLocksNothing() {
+        val n = failNTimes(1, 1_000, 1_000)
+
+        assertEquals(1, n.attempts)
+        assertEquals(0L, PinThrottle.remainingMs(n.untilWall, n.untilElapsed, 1_000, 1_000))
+    }
 }

@@ -1,0 +1,49 @@
+package com.babegetthis.android.core.ui
+
+// Semantics tags for elements that Compose tests cannot address by user-visible
+// text. Lives in `main`, not `test`, because both sides reference these — a
+// rename is then a compile error in both places rather than a test that silently
+// finds nothing.
+//
+// Add a tag ONLY when text won't do. If a button's label is unique on its screen,
+// the test should match on that label and the composable stays untouched;
+// over-tagging turns every copy tweak into test churn.
+//
+// Entries are added per screen as the Compose test tasks are worked (groups 3, 5,
+// 7, 9, 11 of openspec/changes/add-test-suite/tasks.md).
+object TestTags {
+
+    // --- shoppinglist ---
+    //
+    // Only two entries, and both earn their place: the list card is a Card with
+    // Modifier.combinedClickable and the tab is a Surface with Modifier.clickable,
+    // neither of which merges its descendants' semantics. So the name/label Text
+    // inside is a separate node with no click action, and a test can't reach the
+    // clickable through it. Material3 Button/TextButton DO merge, which is why the
+    // dialogs, the FAB and the empty-state CTA carry no tags — their tests match
+    // on visible text.
+    fun listCard(listId: String) = "shoppinglist.card.$listId"
+
+    fun listTab(index: Int) = "shoppinglist.tab.$index"
+
+    // --- shoppingitems ---
+    //
+    // The row is a Material3 Card(onClick), which DOES merge its descendants —
+    // so the item name reaches the row's click fine, but the checkbox nested
+    // inside it needs its own handle to be tapped independently of the row.
+    // Both are parameterised by item id so a test can address one row out of
+    // several without depending on position.
+    fun itemCard(itemId: String) = "shoppingitems.card.$itemId"
+
+    fun itemCheckbox(itemId: String) = "shoppingitems.checkbox.$itemId"
+
+    // Prefixes, so an end-to-end test can find "the first item checkbox" without
+    // knowing the row's generated UUID.
+    const val ITEM_CHECKBOX_PREFIX = "shoppingitems.checkbox."
+
+    // The add-item FAB and the add-item dialog's confirm button BOTH read "Add",
+    // so once the dialog is open the text is ambiguous and only a tag separates
+    // them. This is the one case in the whole suite where a tag exists for a
+    // reason other than a non-merging wrapper.
+    const val ADD_ITEM_FAB = "shoppingitems.addFab"
+}

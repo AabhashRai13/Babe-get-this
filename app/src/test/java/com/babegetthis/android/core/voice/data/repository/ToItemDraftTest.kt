@@ -43,4 +43,47 @@ class ToItemDraftTest {
         assertEquals("cat-dairy-eggs", draft.category)
         assertEquals("the cold one", draft.note)
     }
+
+    // The backend field is "location"; the app calls it shop.
+    @Test
+    fun `location becomes shop`() {
+        assertEquals(
+            "Dan Murphy's",
+            TranscribeItemDto(name = "Wine", location = "Dan Murphy's").toItemDraft().shop,
+        )
+    }
+
+    @Test
+    fun `absent optional fields stay null`() {
+        val draft = TranscribeItemDto(name = "Bread").toItemDraft()
+
+        assertNull(draft.category)
+        assertNull(draft.note)
+        assertNull(draft.shop)
+        assertNull(draft.quantity)
+    }
+
+    // ifBlank collapses a whitespace-only unit rather than storing " ".
+    @Test
+    fun `a blank unit with no quantity collapses to null`() {
+        assertNull(TranscribeItemDto(name = "Water", quantity = null, unit = "   ").toItemDraft().quantity)
+    }
+
+    @Test
+    fun `a zero quantity is kept rather than treated as absent`() {
+        assertEquals("0", TranscribeItemDto(name = "Milk", quantity = 0).toItemDraft().quantity)
+    }
+
+    @Test
+    fun `a negative quantity is carried through as-is`() {
+        // Nothing validates this today; pinned so a future guard is a deliberate
+        // change rather than an accident.
+        assertEquals("-1", TranscribeItemDto(name = "Milk", quantity = -1).toItemDraft().quantity)
+    }
+
+    @Test
+    fun `an empty name is carried through`() {
+        // The repository, not the mapper, is where blank names are rejected.
+        assertEquals("", TranscribeItemDto(name = "").toItemDraft().name)
+    }
 }

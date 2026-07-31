@@ -50,34 +50,38 @@ fun SwipeableCard(
 ) {
     val haptic = rememberHaptic()
     val dismissState = rememberSwipeToDismissBoxState(
+        // Decides only WHETHER a direction is allowed. It must stay free of side
+        // effects: Compose may invoke it more than once for a single gesture, and
+        // it used to call onSwipeLeft() from in here — so one swipe fired the
+        // delete twice. The second delete found the row already gone, which
+        // (because the caller caches the deleted row for undo by looking it up in
+        // current state) overwrote that cache with null and left the user an Undo
+        // button that silently did nothing.
         confirmValueChange = { dismissValue ->
-            when (dismissValue) {
-                SwipeToDismissBoxValue.EndToStart -> {
-                    // Destructive direction (delete) — firmer buzz.
-                    haptic(Haptic.Medium)
-                    onSwipeLeft()
-                    true
-                }
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    if (onSwipeRight != null) {
-                        // Toggle direction (pick up / un-pick) — matches checkbox tap.
-                        haptic(Haptic.Light)
-                        onSwipeRight()
-                        true
-                    } else {
-                        false // Don't allow right swipe if no action
-                    }
-                }
-                SwipeToDismissBoxValue.Settled -> false
-            }
+            dismissValue != SwipeToDismissBoxValue.StartToEnd || onSwipeRight != null
         }
     )
 
-    // Reset the swipe state after action completes (so the card snaps back)
+    // The action fires HERE instead, keyed on the settled value, so it runs
+    // exactly once per swipe however many times the predicate above is consulted.
+    // Snapping back to Settled afterwards both restores the card and re-arms it.
     LaunchedEffect(dismissState.currentValue) {
-        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
-            dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+        when (dismissState.currentValue) {
+            SwipeToDismissBoxValue.EndToStart -> {
+                // Destructive direction (delete) — firmer buzz.
+                haptic(Haptic.Medium)
+                onSwipeLeft()
+            }
+            SwipeToDismissBoxValue.StartToEnd -> {
+                // Toggle direction (pick up / un-pick) — matches checkbox tap.
+                onSwipeRight?.let {
+                    haptic(Haptic.Light)
+                    it()
+                }
+            }
+            SwipeToDismissBoxValue.Settled -> return@LaunchedEffect
         }
+        dismissState.snapTo(SwipeToDismissBoxValue.Settled)
     }
 
     SwipeToDismissBox(

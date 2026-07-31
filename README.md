@@ -89,6 +89,41 @@ The app ships with three variants that can be installed side by side:
 
 We deliberately stay close to MVVM + Repository. Use cases and a full Clean Architecture split are not introduced unless a screen genuinely needs them.
 
+## Testing
+
+```bash
+./gradlew testDevDebugUnitTest        # unit + Compose, on the JVM, seconds
+./gradlew koverVerifyDevDebug         # coverage gate
+./gradlew connectedDevDebugAndroidTest  # end-to-end, needs an emulator
+```
+
+Three layers, each answering a different question:
+
+| Layer | Where | Question it answers |
+|---|---|---|
+| Unit | `src/test/` | Is this logic correct? |
+| Compose | `src/test/` (Robolectric) | Does the screen render and dispatch correctly? |
+| End-to-end | `src/androidTest/` | Are the pieces actually wired together? |
+
+Compose tests run on the JVM under Robolectric, so only the five end-to-end
+journeys need a device. Nothing in either suite touches the network — auth,
+Supabase and voice transcription are replaced with local fakes, so no
+credentials are needed anywhere.
+
+**The coverage gate is a floor, not a grade.** It enforces 100% line coverage on
+the logic layer — ViewModels, repositories, mappers, error handling, PIN, auth —
+and fails the build below that, so new logic cannot land untested by accident.
+Composables sit outside it and are covered by Compose tests instead; a handful of
+classes that cannot run on the JVM at all (anything behind `EncryptedSharedPreferences`,
+which needs the AndroidKeyStore) are excluded with the reason stated in
+`app/build.gradle.kts` and covered by instrumented tests.
+
+It says nothing about whether the tests are any good — a line can execute without
+being asserted on. Reviewers still have to read them.
+
+See [docs/running-tests.md](docs/running-tests.md) for running from Android
+Studio and for the failure modes worth recognising.
+
 ## Contributing
 
 Contributions are welcome. The project is in an early stage and there is plenty of room to shape what comes next.

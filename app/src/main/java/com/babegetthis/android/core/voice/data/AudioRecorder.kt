@@ -57,8 +57,19 @@ class AudioRecorder @Inject constructor(
     }
 
     fun cancel() {
-        recorder?.runCatching {
-            stop()
+        // release() must run even when stop() throws — and stop() throwing here is
+        // the COMMON case, not the rare one: cancelling right after starting is
+        // exactly the "stopped before any audio was captured" condition documented
+        // in stop() above. The previous version had both calls inside one
+        // runCatching, so a throwing stop() skipped release() and leaked the
+        // recorder with the mic still held, and the next capture couldn't acquire
+        // it. Same try/release shape as stop() now.
+        recorder?.apply {
+            try {
+                stop()
+            } catch (_: RuntimeException) {
+                // Nothing captured; the file is discarded below regardless.
+            }
             release()
         }
         recorder = null

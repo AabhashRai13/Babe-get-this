@@ -26,8 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
 
@@ -84,6 +86,7 @@ internal fun TabPillRow(
                 modifier = Modifier
                     .weight(1f)
                     .clip(CircleShape)
+                    .testTag(TestTags.listTab(index))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(

@@ -11,6 +11,13 @@ sealed class Result<out T> {
     data class Error(val error: AppError) : Result<Nothing>()
 }
 
+// Lets code inside a safeCall block raise a SPECIFIC AppError — validation
+// failures, not-found — without safeCall needing to know about any feature's own
+// exception types. Repositories used to throw bare IllegalStateException for
+// these, which fell through to the `else` branch below and surfaced the raw
+// exception text to the user as an UnknownError.
+class AppErrorException(val appError: AppError) : Exception(appError.message)
+
 // Helper function to wrap database/network calls in try/catch.
 // Any repository function can use this instead of writing try/catch everywhere.
 // Like a reusable wrapper: final result = await safeCall(() => api.getItems());
@@ -32,9 +39,23 @@ suspend fun <T> safeCall(
 ): Result<T> {
     return try {
         Result.Success(block())
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        // MUST rethrow, and must come before the general catch below.
+        // CancellationException is an Exception, so `catch (e: Exception)` used to
+        // swallow it and hand back Result.Error(UnknownError) — meaning a cancelled
+        // coroutine reported itself as a failed operation and its parent never
+        // learned it was cancelled. That is a structured-concurrency break, and it
+        // had a visible symptom: dismissing the voice sheet cancels the in-flight
+        // transcribe job, the cancellation came back as an error Result, and the
+        // sheet rendered a failure for something the user deliberately dismissed.
+        throw e
     } catch (e: Exception) {
         // Map the exception to the right AppError type
         val error = when (e) {
+            // An AppError the caller chose deliberately — pass it straight
+            // through rather than re-deriving one from the exception type.
+            is AppErrorException -> e.appError
+
             // Database errors
             is android.database.sqlite.SQLiteException -> AppError.DatabaseError()
 
@@ -54,8 +75,18 @@ suspend fun <T> safeCall(
                 else -> AppError.ServerError(e.code(), e.message ?: "Unexpected server response.")
             }
 
-            // Everything else
-            else -> AppError.UnknownError(e.message ?: "An unexpected error occurred.")
+            // Everything else. Deliberately does NOT pass e.message through:
+            // this value is rendered straight into a snackbar, and an
+            // unrecognised exception's text is internal detail. The concrete
+            // leak was a missing cache file — FileNotFoundException's message is
+            // the full path, so the voice flow would have shown the user
+            // "/data/user/0/.../cache/voice-1717200000000.m4a (No such file or
+            // directory)". SupabaseAuthRepository already took this care with
+            // provider text; safeCall did the opposite for everyone else.
+            //
+            // The raw text was never actionable for a user. If it is ever needed
+            // for diagnosis, log it here rather than surfacing it.
+            else -> AppError.UnknownError()
         }
         Result.Error(error)
     }
