@@ -143,27 +143,51 @@ class PinCryptoTest {
         assertEquals("", PinCrypto.normalizeCode("---"))
     }
 
-    // Pins CURRENT behavior, which is a known rough edge rather than an
-    // endorsement — see the Medium finding in findings.md. The alphabet omits
-    // I/L/O/U precisely because they are misread, but normalize DELETES them
-    // instead of mapping them the way Crockford base32 specifies (O -> 0,
-    // I/L -> 1). So the single most likely transcription slip silently shortens
-    // the code and the recovery just fails, with no explanation offered.
+    // The look-alike mapping, which is the whole reason I/L/O are absent from the
+    // generated alphabet: a written 0 read back as "O" is the likeliest possible
+    // transcription slip, and the generator can never legitimately emit an O, so
+    // one in user input is unambiguously a misread zero.
     @Test
-    fun `normalize deletes look-alike letters rather than mapping them`() {
-        // Each excluded letter is dropped. Crockford would map O to 0 and I/L
-        // to 1; here they simply vanish, shortening the code.
-        assertEquals("123", PinCrypto.normalizeCode("1O23"))
-        assertEquals("123", PinCrypto.normalizeCode("1I23"))
-        assertEquals("123", PinCrypto.normalizeCode("1L23"))
-        assertEquals("123", PinCrypto.normalizeCode("1U23"))
+    fun `normalize maps letter O to zero`() {
+        assertEquals("1023", PinCrypto.normalizeCode("1O23"))
     }
 
     @Test
-    fun `a code misread with letter O fails to normalize back to the original`() {
+    fun `normalize maps I and L to one`() {
+        assertEquals("1123", PinCrypto.normalizeCode("1I23"))
+        assertEquals("1123", PinCrypto.normalizeCode("1L23"))
+    }
+
+    @Test
+    fun `normalize maps lowercase look-alikes too`() {
+        assertEquals("1023", PinCrypto.normalizeCode("1o23"))
+        assertEquals("1123", PinCrypto.normalizeCode("1l23"))
+    }
+
+    // U is excluded from the alphabet to stop generated codes spelling words, not
+    // because it looks like anything — so there is nothing to map it to and it
+    // stays dropped.
+    @Test
+    fun `normalize still drops U, which maps to nothing`() {
+        assertEquals("123", PinCrypto.normalizeCode("1U23"))
+    }
+
+    // The case that motivated the change: someone reads the printed code off
+    // paper, mistakes the leading zero for a letter, and gets back in anyway.
+    @Test
+    fun `a code misread with letter O still normalizes to the original`() {
         val original = "0AB12CD34E"
         val misread = "OAB12CD34E"
 
-        assertNotEquals(original, PinCrypto.normalizeCode(misread))
+        assertEquals(original, PinCrypto.normalizeCode(misread))
+    }
+
+    @Test
+    fun `a messily transcribed code still verifies against the real one`() {
+        val original = "01ABC2DEF3"
+        // Lowercased, spaced out, and with both look-alike slips.
+        val misread = "o1 abc2 def3".replace("1", "l")
+
+        assertEquals(original, PinCrypto.normalizeCode(misread))
     }
 }
