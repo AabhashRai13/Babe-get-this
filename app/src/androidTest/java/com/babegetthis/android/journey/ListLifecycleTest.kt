@@ -19,6 +19,11 @@ import com.babegetthis.android.MainActivity
 import com.babegetthis.android.core.ui.TestTags
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.data.local.AppDatabase
+import com.babegetthis.android.core.pin.data.PinStore
+import com.babegetthis.android.testing.ResetAppStateRule
+import javax.inject.Inject
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,7 +41,16 @@ class ListLifecycleTest {
 
     // Order matters: Hilt must inject before the Activity launches.
     @get:Rule(order = 0) val hilt = HiltAndroidRule(this)
-    @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
+    @Inject lateinit var database: AppDatabase
+    @Inject lateinit var authStateManager: AuthStateManager
+    @Inject lateinit var pinStore: PinStore
+
+    // Order 1: injects, then wipes state left by the previous test — before the
+    // Activity rule below composes anything.
+    @get:Rule(order = 1)
+    val reset = ResetAppStateRule(hilt, { database }, { authStateManager }, { pinStore })
+
+    @get:Rule(order = 2) val compose = createAndroidComposeRule<MainActivity>()
 
     // Explicit conditions, never sleeps — a fixed delay is how instrumented
     // suites become flaky, and the e2e spec forbids it outright.
