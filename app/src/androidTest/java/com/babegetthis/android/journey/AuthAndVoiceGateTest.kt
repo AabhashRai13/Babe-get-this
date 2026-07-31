@@ -119,12 +119,20 @@ class AuthAndVoiceGateTest {
 
     // Signing in must actually open the gate: the same action that produced the
     // prompt now proceeds instead.
+    //
+    // Synchronises on the account action losing its "Sign in" label, NOT on the
+    // home screen reappearing. "No lists yet" comes back the instant the list
+    // screen is visible, which can be BEFORE the auth state has propagated to the
+    // create-chooser — so the next tap read a stale isLoggedIn and got the prompt
+    // again. Passed locally and failed on a slower CI runner, which is the
+    // signature of a test racing the app rather than waiting on it.
     @Test
     fun signingInOpensTheVoiceGate() {
         awaitText("No lists yet")
         signIn()
 
-        awaitText("No lists yet")
+        compose.waitUntil(timeoutMillis = 10_000) { !present("Sign in") }
+
         openCreateChooser()
         compose.onNodeWithText("Voice").performClick()
 
