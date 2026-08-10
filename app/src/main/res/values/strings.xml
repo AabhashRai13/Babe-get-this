@@ -135,4 +135,19 @@
     <string name="lock_locked">Locked</string>
     <string name="lock_remove_pin_warning">%1$d locked list(s) will be unlocked. Continue?</string>
     <string name="lock_delete_cancelled">Nothing was deleted</string>
+
+    <!-- Auth prompts (one dialog, per-feature copy — task 8.4) -->
+    <string name="voice_auth_title">Sign in to use voice</string>
+    <string name="voice_auth_body">Create an account to capture shopping lists by voice.</string>
+
+    <!-- Realtime list sharing -->
+    <string name="done">Done</string>
+    <string name="share_live_title">Share list live</string>
+    <string name="share_live_hint">Anyone with this code can see and edit this list. Text it to them — they enter it under "Join a shared list".</string>
+    <string name="share_live_copy">Copy</string>
+    <string name="share_live_action">Share live</string>
+    <string name="join_list_title">Join a shared list</string>
+    <string name="join_list_hint">6-character code</string>
+    <string name="join_list_button">Join</string>
+    <string name="join_list_action">Join a shared list</string>
 </resources>

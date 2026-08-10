@@ -2,8 +2,11 @@ package com.babegetthis.android.feature.shoppinglist.ui.viewModels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import kotlinx.coroutines.CoroutineScope
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
@@ -26,6 +29,8 @@ import com.babegetthis.android.core.util.getTimePeriod
 @HiltViewModel
 class ShoppingListViewModel @Inject constructor(
     private val repository: ShoppingListRepository,
+    private val shareRepository: ShareRepository,
+    private val authStateManager: AuthStateManager,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
@@ -107,6 +112,44 @@ class ShoppingListViewModel @Inject constructor(
     fun showSnackBar(message: String) {
         viewModelScope.launch {
             _errorMessage.emit(message)
+        }
+    }
+
+    // --- Join a shared list by code ---
+
+    val showJoinDialog = MutableStateFlow(false)
+    val showJoinAuthPrompt = MutableStateFlow(false)
+    val joinInProgress = MutableStateFlow(false)
+    val joinError = MutableStateFlow<String?>(null)
+
+    fun onJoinListClick() {
+        if (authStateManager.authState.value is AuthState.Authenticated) {
+            joinError.value = null
+            showJoinDialog.value = true
+        } else {
+            showJoinAuthPrompt.value = true
+        }
+    }
+
+    fun onDismissJoinDialog() {
+        showJoinDialog.value = false
+    }
+
+    fun onDismissJoinAuthPrompt() {
+        showJoinAuthPrompt.value = false
+    }
+
+    fun joinList(code: String) {
+        viewModelScope.launch {
+            joinInProgress.value = true
+            joinError.value = null
+            when (val result = shareRepository.join(code)) {
+                // The replica landed in Room — the list appears via the
+                // existing Flow, no navigation or refresh needed.
+                is Result.Success -> showJoinDialog.value = false
+                is Result.Error -> joinError.value = result.error.message
+            }
+            joinInProgress.value = false
         }
     }
 

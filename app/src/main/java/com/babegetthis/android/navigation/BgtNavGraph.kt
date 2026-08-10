@@ -113,6 +113,10 @@ fun BgtNavGraph(
         ) {
             ShoppingItemsScreen(
                 onNavigateBack = { navController.popBackStack() },
+                // Live-share sign-in prompt — same destinations the list
+                // screen's auth prompt uses.
+                onNavigateToLogin = { navController.navigate(Routes.LOGIN) },
+                onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
             )
         }
 

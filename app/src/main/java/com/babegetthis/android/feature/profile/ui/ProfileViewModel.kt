@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,7 @@ data class ProfileUiState(
 class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val authStateManager: AuthStateManager,
+    private val syncEngine: SyncEngine,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -108,6 +110,12 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeletingAccount = true)
 
+            // Shared replicas leave with the account (technical decision 004).
+            // Before, not after: the final best-effort push inside needs the
+            // session that deleteAccount is about to destroy. If deletion then
+            // fails, discovery on the next sync kick restores the replicas.
+            syncEngine.evictSharedReplicas()
+
             when (val result = authRepository.deleteAccount()) {
                 is Result.Success -> {
                     _uiState.value = _uiState.value.copy(isDeletingAccount = false)
@@ -124,6 +132,13 @@ class ProfileViewModel @Inject constructor(
     fun logout() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoggingOut = true)
+
+            // Shared replicas leave with the account (technical decision 004).
+            // This is the EXPLICIT sign-out path only — session loss in
+            // BabeGetThisApp never evicts. Runs before logout so the final
+            // push still has a session; if logout then fails, the next sync
+            // kick's discovery restores the replicas.
+            syncEngine.evictSharedReplicas()
 
             when (val result = authRepository.logout()) {
                 is Result.Success -> {

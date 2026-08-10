@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingCart
@@ -108,6 +109,10 @@ fun ShoppingListScreen(
     val uiState by viewModel.uiState.collectAsState()
     val showDialog by viewModel.showCreateDialog.collectAsState()
     val editingList by viewModel.editingList.collectAsState()
+    val showJoinDialog by viewModel.showJoinDialog.collectAsState()
+    val showJoinAuthPrompt by viewModel.showJoinAuthPrompt.collectAsState()
+    val joinError by viewModel.joinError.collectAsState()
+    val joinInProgress by viewModel.joinInProgress.collectAsState()
     val snackBarHostState = remember { SnackbarHostState() }
     val isDark = isSystemInDarkTheme()
     val haptic = rememberHaptic()
@@ -167,6 +172,16 @@ fun ShoppingListScreen(
             BgtTopAppBar(
                 title = stringResource(R.string.app_name),
                 actionSlot = {
+                    // Join a shared list by code (auth-gated in the VM).
+                    IconButton(onClick = {
+                        haptic(Haptic.Light)
+                        viewModel.onJoinListClick()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Outlined.GroupAdd,
+                            contentDescription = stringResource(R.string.join_list_action),
+                        )
+                    }
                     // Gear sits before the account control. Always available —
                     // Settings (and the device PIN) work whether signed in or not.
                     IconButton(onClick = {
@@ -369,9 +384,30 @@ fun ShoppingListScreen(
 
     if (showVoiceAuthPrompt) {
         AuthPromptDialog(
+            title = stringResource(R.string.voice_auth_title),
+            body = stringResource(R.string.voice_auth_body),
             onLogin = onNavigateToLogin,
             onRegister = onNavigateToRegister,
             onDismiss = { showVoiceAuthPrompt = false },
+        )
+    }
+
+    if (showJoinDialog) {
+        JoinListDialog(
+            onDismiss = { viewModel.onDismissJoinDialog() },
+            onJoin = { code -> viewModel.joinList(code) },
+            error = joinError,
+            inProgress = joinInProgress,
+        )
+    }
+
+    if (showJoinAuthPrompt) {
+        AuthPromptDialog(
+            title = stringResource(R.string.share_auth_title),
+            body = stringResource(R.string.share_auth_body),
+            onLogin = onNavigateToLogin,
+            onRegister = onNavigateToRegister,
+            onDismiss = { viewModel.onDismissJoinAuthPrompt() },
         )
     }
 

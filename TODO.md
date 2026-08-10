@@ -19,6 +19,7 @@ code, no debug logs, no secrets in git, real unit tests. What's left is polish:
 
 ## Bugs & tech debt
 
+- [ ] **Voice-to-note API is really slow** — transcription round-trip (Railway Node backend) takes noticeably long; investigate where the time goes (audio upload size, model latency, cold starts on Railway) and fix. Noticed 2026-08-08 while testing on a physical device.
 - [ ] **Mic record button needs a press sound** — play an audio cue when the record button is pressed (acts as feedback / a "go ahead and talk" cue for people).
 - [ ] **Edit mode in `AddItemDialog` passes a no-op `onAdd = { _, _, _, _, _ -> }`** — make the callback nullable or branch add vs edit at the call site so the modes are explicit.
 
@@ -52,6 +53,11 @@ code, and typed items reach parity with voice.
 
 ## v2 roadmap
 
-- [ ] Shareable real time list
+- [ ] Shareable real time list — built on `feat/real_time_list_sharing`; follow-ups:
+  - [ ] **Explainer dialog for shared-list eviction** — a small visual/dialog telling the
+    user "shared lists are only accessible while you're logged in — this protects your
+    list" (rationale: docs/technical-decisions/004, the borrowed-phone chain). WHEN to
+    show it is deliberately undecided — candidates: first share, first sign-out with
+    shared lists present, or the sign-in that rediscovers them. Decide with real usage.
 - [ ] Camera/gallery → auto-fill the add-item form from an image (incl. recipe photo → list).
 - [ ] "Store room" — when a list is completed, move grocery items into a store; mark items as finished there to auto-carry into the next list.

@@ -83,6 +83,8 @@ class ShoppingListScreenTest {
 
         val vm = ShoppingListViewModel(
             repository,
+            mockk(relaxed = true),
+            authStateManager,
             CoroutineScope(UnconfinedTestDispatcher()),
         )
         compose.setContent {

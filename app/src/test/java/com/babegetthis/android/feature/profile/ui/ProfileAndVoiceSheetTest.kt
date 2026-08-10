@@ -49,7 +49,7 @@ class ProfileAndVoiceSheetTest {
             every { userName } returns MutableStateFlow(name)
             every { userEmail } returns MutableStateFlow(email)
         }
-        val vm = ProfileViewModel(authRepository, authStateManager)
+        val vm = ProfileViewModel(authRepository, authStateManager, mockk(relaxed = true))
         compose.setContent { ProfileBottomSheet(onDismiss = {}, viewModel = vm) }
         return vm
     }

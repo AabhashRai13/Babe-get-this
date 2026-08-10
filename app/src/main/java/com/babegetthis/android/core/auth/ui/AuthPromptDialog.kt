@@ -13,12 +13,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-// Reactive "sign in to continue" prompt for a gated feature.
-// Currently gates voice capture — logged-out users hit this instead of the
-// recorder. Like a Flutter showDialog() with CupertinoAlertDialog.
+// Reactive "sign in to continue" prompt for a gated feature (voice, live
+// share, join). Title/body are REQUIRED so each gate names itself — the
+// hardcoded voice copy this used to carry made the share gate tell signed-out
+// users to "Sign in to use voice" (caught on device, task 8.4).
 
 @Composable
 fun AuthPromptDialog(
+    title: String,
+    body: String,
     onLogin: () -> Unit,
     onRegister: () -> Unit,
     onDismiss: () -> Unit,
@@ -27,13 +30,13 @@ fun AuthPromptDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = "Sign in to use voice",
+                text = title,
                 fontWeight = FontWeight.Bold,
             )
         },
         text = {
             Text(
-                text = "Create an account to capture shopping lists by voice.",
+                text = body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

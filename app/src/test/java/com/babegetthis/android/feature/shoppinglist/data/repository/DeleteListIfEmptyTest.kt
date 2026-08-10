@@ -19,10 +19,13 @@ class DeleteListIfEmptyTest {
     private val listDao = mockk<ShoppingListDao>(relaxed = true)
     private val itemDao = mockk<ShoppingItemDao>(relaxed = true)
     private val categoryDao = mockk<CategoryDao>(relaxed = true)
-    private val repository = ShoppingListRepository(listDao, itemDao, categoryDao)
+    private val repository = ShoppingListRepository(listDao, itemDao, categoryDao) {}
 
     @Test
     fun `returns true when the empty list was deleted`() = runTest {
+        // Relaxed mockk would fabricate a non-null entity here; the shared-list
+        // guard must see "local-only" (null) to reach the delete at all.
+        coEvery { listDao.getListRaw("list-1") } returns null
         coEvery { listDao.deleteListIfEmpty("list-1") } returns 1
 
         val result = repository.deleteListIfEmpty("list-1")
@@ -32,6 +35,7 @@ class DeleteListIfEmptyTest {
 
     @Test
     fun `returns false when the list had items and was kept`() = runTest {
+        coEvery { listDao.getListRaw("list-1") } returns null
         coEvery { listDao.deleteListIfEmpty("list-1") } returns 0
 
         val result = repository.deleteListIfEmpty("list-1")

@@ -14,3 +14,16 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         )
     }
 }
+
+// v2 -> v3: sync columns for realtime list sharing. Additive only — every
+// existing row stays a plain local-only list (shareCode NULL, no tombstone,
+// nothing pending), so users who never share see zero behavior change.
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE shopping_lists ADD COLUMN shareCode TEXT")
+        db.execSQL("ALTER TABLE shopping_lists ADD COLUMN deletedAt INTEGER")
+        db.execSQL("ALTER TABLE shopping_lists ADD COLUMN pendingSync INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE shopping_items ADD COLUMN deletedAt INTEGER")
+        db.execSQL("ALTER TABLE shopping_items ADD COLUMN pendingSync INTEGER NOT NULL DEFAULT 0")
+    }
+}

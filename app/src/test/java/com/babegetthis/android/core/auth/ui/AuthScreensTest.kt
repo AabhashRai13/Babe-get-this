@@ -337,11 +337,19 @@ class AuthScreensTest {
     // --- AuthPromptDialog ---
 
     @Test
-    fun `the auth prompt explains why sign-in is needed`() {
-        compose.setContent { AuthPromptDialog(onLogin = {}, onRegister = {}, onDismiss = {}) }
+    fun `the auth prompt shows the copy for the feature that raised it`() {
+        compose.setContent {
+            AuthPromptDialog(
+                title = "Sign in to share",
+                body = "Create an account to share lists with your partner and sync across devices.",
+                onLogin = {}, onRegister = {}, onDismiss = {},
+            )
+        }
 
-        compose.onNodeWithText("Sign in to use voice").assertExists()
-        compose.onNodeWithText("Create an account to capture shopping lists by voice.").assertExists()
+        compose.onNodeWithText("Sign in to share").assertExists()
+        compose.onNodeWithText(
+            "Create an account to share lists with your partner and sync across devices."
+        ).assertExists()
     }
 
     // Both actions close the dialog first and then navigate — asserting the
@@ -354,6 +362,8 @@ class AuthScreensTest {
         var dismissed = false
         compose.setContent {
             AuthPromptDialog(
+                title = "Sign in to use voice",
+                body = "Create an account to capture shopping lists by voice.",
                 onLogin = { login = true },
                 onRegister = { register = true },
                 onDismiss = { dismissed = true },
@@ -374,6 +384,8 @@ class AuthScreensTest {
         var dismissed = false
         compose.setContent {
             AuthPromptDialog(
+                title = "Sign in to use voice",
+                body = "Create an account to capture shopping lists by voice.",
                 onLogin = { login = true },
                 onRegister = { register = true },
                 onDismiss = { dismissed = true },

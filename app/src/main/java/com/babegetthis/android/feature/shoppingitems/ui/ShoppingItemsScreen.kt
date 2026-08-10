@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +58,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.babegetthis.android.R
+import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptPurpose
 import com.babegetthis.android.core.pin.ui.PinSetupDialog
@@ -77,12 +79,16 @@ import com.babegetthis.android.feature.shoppingitems.ui.viewModels.ShoppingItems
 @Composable
 fun ShoppingItemsScreen(
     onNavigateBack: () -> Unit = {},
+    onNavigateToLogin: () -> Unit = {},
+    onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingItemsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val showDialog by viewModel.showAddItemDialog.collectAsState()
     val editingItem by viewModel.editingItem.collectAsState()
+    val shareCodeDialog by viewModel.shareCodeDialog.collectAsState()
+    val showShareAuthPrompt by viewModel.showShareAuthPrompt.collectAsState()
 
     val isLocked by viewModel.isLocked.collectAsState()
     val sessionUnlocked by viewModel.sessionUnlocked.collectAsState()
@@ -128,6 +134,11 @@ fun ShoppingItemsScreen(
 
     // Drives the voice-capture sheet for adding items to THIS list.
     var showVoiceSheet by remember { mutableStateOf(false) }
+
+    // Voice needs the backend, so it needs an account — same gate the home
+    // screen's create-by-voice flow has. This FAB shipped ungated for a while
+    // because only the home-screen gate had a test.
+    var showVoiceAuthPrompt by remember { mutableStateOf(false) }
 
     // Placement animation for item rows: when a toggle moves an item between the
     // Active and Completed sections (or a voice-added row inserts), it slides to
@@ -204,6 +215,16 @@ fun ShoppingItemsScreen(
                             ),
                         )
                     }
+                    // Live share (code-based) sits beside the text export.
+                    IconButton(onClick = {
+                        haptic(Haptic.Light)
+                        viewModel.onShareLiveClick()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Filled.GroupAdd,
+                            contentDescription = stringResource(R.string.share_live_action),
+                        )
+                    }
                     IconButton(onClick = {
                         haptic(Haptic.Light)
                         viewModel.onShareClick()
@@ -225,9 +246,14 @@ fun ShoppingItemsScreen(
                 // append is the headline quick-add, so it stays one tap in the
                 // thumb zone, stacked above the manual "Add" button.
                 SmallFloatingActionButton(
+                    modifier = Modifier.testTag(TestTags.VOICE_FAB),
                     onClick = {
                         haptic(Haptic.Medium)
-                        showVoiceSheet = true
+                        if (viewModel.isAuthenticated()) {
+                            showVoiceSheet = true
+                        } else {
+                            showVoiceAuthPrompt = true
+                        }
                     },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -430,6 +456,33 @@ fun ShoppingItemsScreen(
             // transitions to Done. The new rows appear via the items Flow and
             // animate in. No navigation — the user is already in the list.
             onConfirm = { drafts -> viewModel.addItemsWithVoice(drafts) },
+        )
+    }
+
+    shareCodeDialog?.let { code ->
+        ShareCodeDialog(
+            code = code,
+            onDismiss = { viewModel.onDismissShareCodeDialog() },
+        )
+    }
+
+    // One prompt serves both auth-gated features on this screen (live share
+    // and voice); dismiss clears whichever flag raised it, and the copy names
+    // whichever feature was actually tapped (task 8.4).
+    if (showShareAuthPrompt || showVoiceAuthPrompt) {
+        AuthPromptDialog(
+            title = stringResource(
+                if (showShareAuthPrompt) R.string.share_auth_title else R.string.voice_auth_title
+            ),
+            body = stringResource(
+                if (showShareAuthPrompt) R.string.share_auth_body else R.string.voice_auth_body
+            ),
+            onLogin = onNavigateToLogin,
+            onRegister = onNavigateToRegister,
+            onDismiss = {
+                viewModel.onDismissShareAuthPrompt()
+                showVoiceAuthPrompt = false
+            },
         )
     }
 

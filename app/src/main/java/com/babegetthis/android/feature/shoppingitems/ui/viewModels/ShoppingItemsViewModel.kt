@@ -9,6 +9,9 @@ import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.model.Category
+import com.babegetthis.android.core.sync.data.remote.SharedListRemote
+import com.babegetthis.android.core.sync.data.repository.ShareRepository
+import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
@@ -24,7 +27,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -38,6 +43,9 @@ class ShoppingItemsViewModel @Inject constructor(
     private val authStateManager: AuthStateManager,
     private val listRepository: ShoppingListRepository,
     private val pinRepository: com.babegetthis.android.core.pin.data.PinRepository,
+    private val shareRepository: ShareRepository,
+    private val syncEngine: SyncEngine,
+    private val sharedListRemote: SharedListRemote,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
@@ -148,7 +156,30 @@ class ShoppingItemsViewModel @Inject constructor(
     private val _events = MutableSharedFlow<UiEvent>()
     val events = _events.asSharedFlow()
 
+    // When non-null, the share-code dialog is showing this code.
+    val shareCodeDialog = MutableStateFlow<String?>(null)
+
+    // Live sharing needs an account; this prompts sign-in when there isn't one.
+    val showShareAuthPrompt = MutableStateFlow(false)
+
     init {
+        // Live sync while this screen is open. Catch up immediately, then treat
+        // every realtime emission (events AND channel re-joins) as "worth
+        // asking again" — realtime never carries data, it only triggers the
+        // same catch-up query. collectLatest tears the subscription down if
+        // the list stops being shared (tombstoned remotely), and viewModelScope
+        // cancellation on screen close closes the channel.
+        viewModelScope.launch {
+            listRepository.getShareCode(listId)
+                .map { it != null }
+                .distinctUntilChanged()
+                .collectLatest { shared ->
+                    if (shared) {
+                        syncEngine.catchUp(listId)
+                        sharedListRemote.changes(listId).collect { syncEngine.catchUp(listId) }
+                    }
+                }
+        }
         // Watch the items flow and detect the TRANSITION from "not all done"
         // to "all done". We only emit on the transition itself — not on
         // initial load of an already-completed list, otherwise opening any
@@ -294,6 +325,30 @@ class ShoppingItemsViewModel @Inject constructor(
         if (isLocked.value && !_sessionUnlocked.value) return
         val text = ShoppingListShareText.format(listName, items.value)
         viewModelScope.launch { _events.emit(UiEvent.ShareList(text)) }
+    }
+
+    // Live sharing: generate (or re-show) the list's code. Same lock gate as
+    // the text share — a locked list shares nothing until verified.
+    fun onShareLiveClick() {
+        if (isLocked.value && !_sessionUnlocked.value) return
+        if (!isAuthenticated()) {
+            showShareAuthPrompt.value = true
+            return
+        }
+        viewModelScope.launch {
+            when (val result = shareRepository.share(listId)) {
+                is Result.Success -> shareCodeDialog.value = result.data
+                is Result.Error -> _errorMessage.emit(result.error.message)
+            }
+        }
+    }
+
+    fun onDismissShareCodeDialog() {
+        shareCodeDialog.value = null
+    }
+
+    fun onDismissShareAuthPrompt() {
+        showShareAuthPrompt.value = false
     }
 
     fun undoDeleteItem() {
