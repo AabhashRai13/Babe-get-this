@@ -1,8 +1,11 @@
 package com.babegetthis.android.feature.shoppinglist.ui.viewModels
 
 import app.cash.turbine.test
+import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
@@ -34,6 +37,9 @@ class ShoppingListViewModelTest {
     @get:Rule val mainDispatcherRule = MainDispatcherRule()
 
     private val repository = mockk<ShoppingListRepository>(relaxed = true)
+    private val shareRepository = mockk<ShareRepository>(relaxed = true)
+    private val authStateManager = mockk<AuthStateManager>(relaxed = true)
+    private val authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
     private val listsFlow = MutableStateFlow<List<ShoppingList>>(emptyList())
 
     // Separate from the main dispatcher on purpose. undoDeleteList must run on
@@ -49,7 +55,8 @@ class ShoppingListViewModelTest {
     // supply it too or it is exercising a ViewModel nobody is watching.
     private fun TestScope.viewModel(): ShoppingListViewModel {
         every { repository.getAllLists() } returns listsFlow
-        val vm = ShoppingListViewModel(repository, applicationScope)
+        every { authStateManager.authState } returns authState
+        val vm = ShoppingListViewModel(repository, shareRepository, authStateManager, applicationScope)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect { } }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.shoppingLists.collect { }
@@ -446,5 +453,77 @@ class ShoppingListViewModelTest {
             assertEquals(failure, result)
             expectNoEvents()
         }
+    }
+
+    // --- join a shared list ---
+
+    @Test
+    fun `join click opens the dialog when signed in`() = runTest {
+        authState.value = AuthState.Authenticated("user-1")
+        val vm = viewModel()
+
+        vm.onJoinListClick()
+
+        assertTrue(vm.showJoinDialog.value)
+        assertFalse(vm.showJoinAuthPrompt.value)
+    }
+
+    @Test
+    fun `join click prompts sign-in when signed out`() = runTest {
+        authState.value = AuthState.Unauthenticated
+        val vm = viewModel()
+
+        vm.onJoinListClick()
+
+        assertFalse(vm.showJoinDialog.value)
+        assertTrue(vm.showJoinAuthPrompt.value)
+
+        vm.onDismissJoinAuthPrompt()
+        assertFalse(vm.showJoinAuthPrompt.value)
+    }
+
+    @Test
+    fun `successful join closes the dialog`() = runTest {
+        authState.value = AuthState.Authenticated("user-1")
+        coEvery { shareRepository.join("ABC234") } returns Result.Success("list-9")
+        val vm = viewModel()
+        vm.onJoinListClick()
+
+        vm.joinList("ABC234")
+
+        assertFalse(vm.showJoinDialog.value)
+        assertNull(vm.joinError.value)
+        assertFalse(vm.joinInProgress.value)
+    }
+
+    @Test
+    fun `failed join keeps the dialog open with the error inline`() = runTest {
+        authState.value = AuthState.Authenticated("user-1")
+        coEvery { shareRepository.join(any()) } returns
+            Result.Error(AppError.NotFoundError("That code didn't match any list."))
+        val vm = viewModel()
+        vm.onJoinListClick()
+
+        vm.joinList("XXXXXX")
+
+        assertTrue(vm.showJoinDialog.value)
+        assertEquals("That code didn't match any list.", vm.joinError.value)
+        assertFalse(vm.joinInProgress.value)
+    }
+
+    @Test
+    fun `reopening the join dialog clears a stale error`() = runTest {
+        authState.value = AuthState.Authenticated("user-1")
+        coEvery { shareRepository.join(any()) } returns
+            Result.Error(AppError.NotFoundError("nope"))
+        val vm = viewModel()
+        vm.onJoinListClick()
+        vm.joinList("XXXXXX")
+        vm.onDismissJoinDialog()
+
+        vm.onJoinListClick()
+
+        assertNull(vm.joinError.value)
+        assertTrue(vm.showJoinDialog.value)
     }
 }

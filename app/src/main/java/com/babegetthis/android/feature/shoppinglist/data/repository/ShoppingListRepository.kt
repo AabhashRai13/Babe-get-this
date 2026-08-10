@@ -5,6 +5,7 @@ import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.core.data.local.dao.CategoryDao
+import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
@@ -26,6 +27,7 @@ class ShoppingListRepository @Inject constructor(
     private val shoppingListDao: ShoppingListDao,
     private val shoppingItemDao: ShoppingItemDao,
     private val categoryDao: CategoryDao,
+    private val syncKicker: SyncKicker,
 ) {
     // Flows don't need Result wrapping — Room handles errors internally
     // and the Flow just stops emitting. We wrap write operations only.
@@ -37,6 +39,13 @@ class ShoppingListRepository @Inject constructor(
 
     fun getListById(listId: String): Flow<ShoppingList?> {
         return shoppingListDao.getListById(listId).map { it?.toDomain() }
+    }
+
+    // Live share state of a list — null while it's local-only (and again if it
+    // gets tombstoned; getListById filters tombstones). Drives the realtime
+    // subscription lifecycle in the items ViewModel.
+    fun getShareCode(listId: String): Flow<String?> {
+        return shoppingListDao.getListById(listId).map { it?.shareCode }
     }
 
     suspend fun createList(name: String): Result<String> = safeCall {
@@ -124,9 +133,12 @@ class ShoppingListRepository @Inject constructor(
         drafts: List<ItemDraft>,
     ): Result<String> = safeCall {
         val now = System.currentTimeMillis()
+        val isShared = shoppingListDao.getListRaw(listId)?.shareCode != null
         val itemEntities = draftsToItems(listId, drafts, now)
+            .map { if (isShared) it.copy(pendingSync = true) else it }
         if (itemEntities.isNotEmpty()) {
             shoppingItemDao.insertItems(itemEntities)
+            if (isShared) syncKicker.pushSoon()
         }
         listId
     }
@@ -168,15 +180,31 @@ class ShoppingListRepository @Inject constructor(
         // the raw exception text, so "List not found" was rendered to the user
         // verbatim in a snackbar.
             ?: throw ListNotFoundException(listId)
-        shoppingListDao.updateList(entity.copy(name = newName.requireListName(), updatedAt = now))
+        val isShared = entity.shareCode != null
+        shoppingListDao.updateList(
+            entity.copy(
+                name = newName.requireListName(),
+                updatedAt = now,
+                pendingSync = entity.pendingSync || isShared,
+            )
+        )
+        if (isShared) syncKicker.pushSoon()
     }
 
     // Captures items before deleting the list. The shopping_items foreign key
     // CASCADEs on list delete, so items are wiped from the DB — we return them
     // so the caller can hold them for undo and re-insert if needed.
+    // Shared lists soft-delete instead: the tombstone must survive (and sync)
+    // for the deletion to reach other members, and the item rows stay in Room
+    // hidden behind the tombstoned list.
     suspend fun deleteListAndCaptureItems(listId: String): Result<List<ShoppingItemEntity>> = safeCall {
         val items = shoppingItemDao.getItemsByListIdOnce(listId)
-        shoppingListDao.deleteList(listId)
+        if (shoppingListDao.getListRaw(listId)?.shareCode != null) {
+            shoppingListDao.softDeleteList(listId, now = System.currentTimeMillis())
+            syncKicker.pushSoon()
+        } else {
+            shoppingListDao.deleteList(listId)
+        }
         items
     }
 
@@ -186,7 +214,13 @@ class ShoppingListRepository @Inject constructor(
     // one mid-flight — is never deleted by mistake.
     // Returns true if the list was empty and got deleted.
     suspend fun deleteListIfEmpty(listId: String): Result<Boolean> = safeCall {
-        shoppingListDao.deleteListIfEmpty(listId) > 0
+        // Never auto-delete a shared list: "empty" on this phone says nothing
+        // about what the partner is doing with it right now.
+        if (shoppingListDao.getListRaw(listId)?.shareCode != null) {
+            false
+        } else {
+            shoppingListDao.deleteListIfEmpty(listId) > 0
+        }
     }
 
     // Re-insert a previously deleted list along with its items (for undo).
@@ -195,8 +229,20 @@ class ShoppingListRepository @Inject constructor(
         list: ShoppingList,
         items: List<ShoppingItemEntity>,
     ): Result<Unit> = safeCall {
-        // One transaction — a half-completed restore would put the list back
-        // empty and drop exactly the items the undo cache exists to protect.
-        shoppingListDao.insertListWithItems(list.toEntity(), items)
+        val raw = shoppingListDao.getListRaw(list.id)
+        if (raw?.shareCode != null) {
+            // Shared soft-deleted list: the rows never left Room, so undo is
+            // just clearing the tombstone (and pushing so members get it back
+            // too). Re-inserting from the domain model instead would wipe
+            // shareCode and silently detach the list from sync.
+            shoppingListDao.insertList(
+                raw.copy(deletedAt = null, updatedAt = System.currentTimeMillis(), pendingSync = true)
+            )
+            syncKicker.pushSoon()
+        } else {
+            // One transaction — a half-completed restore would put the list back
+            // empty and drop exactly the items the undo cache exists to protect.
+            shoppingListDao.insertListWithItems(list.toEntity(), items)
+        }
     }
 }

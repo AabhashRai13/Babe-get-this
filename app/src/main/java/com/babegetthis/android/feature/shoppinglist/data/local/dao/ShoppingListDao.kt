@@ -16,18 +16,22 @@ interface ShoppingListDao {
     // Returns all lists with their item counts and completion counts.
     // Both counts are calculated live by counting rows in shopping_items.
     // A list is "completed" when itemCount > 0 and completedItemCount == itemCount.
+    // Tombstoned (deletedAt set) lists and items are invisible everywhere in the
+    // UI; explicit columns instead of l.* so the sync columns never leak into
+    // the projection.
     @Query("""
-        SELECT l.*,
+        SELECT l.id, l.name, l.createdAt, l.updatedAt, l.isLocked,
                COUNT(i.id) AS itemCount,
                SUM(CASE WHEN i.isPickedUp = 1 THEN 1 ELSE 0 END) AS completedItemCount
         FROM shopping_lists l
-        LEFT JOIN shopping_items i ON l.id = i.listId
+        LEFT JOIN shopping_items i ON l.id = i.listId AND i.deletedAt IS NULL
+        WHERE l.deletedAt IS NULL
         GROUP BY l.id
         ORDER BY l.createdAt DESC
     """)
     fun getAllListsWithItemCount(): Flow<List<ShoppingListWithItemCount>>
 
-    @Query("SELECT * FROM shopping_lists WHERE id = :listId")
+    @Query("SELECT * FROM shopping_lists WHERE id = :listId AND deletedAt IS NULL")
     fun getListById(listId: String): Flow<ShoppingListEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -80,6 +84,41 @@ interface ShoppingListDao {
           AND NOT EXISTS (SELECT 1 FROM shopping_items WHERE listId = :listId)
     """)
     suspend fun deleteListIfEmpty(listId: String): Int
+
+    // ── Sync primitives (shared lists only; repositories route here when the
+    //    list has a shareCode) ──────────────────────────────────────────────
+
+    // Soft delete: the tombstone must survive locally so the deletion itself
+    // can sync. deletedAt doubles as the row's last-modified time.
+    @Query("""
+        UPDATE shopping_lists
+        SET deletedAt = :now, updatedAt = :now, pendingSync = 1
+        WHERE id = :listId
+    """)
+    suspend fun softDeleteList(listId: String, now: Long)
+
+    // Everything not yet pushed — includes tombstoned rows on purpose.
+    @Query("SELECT * FROM shopping_lists WHERE pendingSync = 1")
+    suspend fun getPendingSyncLists(): List<ShoppingListEntity>
+
+    // Guarded clear: only if the row wasn't edited again mid-push (updatedAt
+    // still matches the pushed snapshot). Otherwise the newer edit would be
+    // silently stranded with its flag wiped.
+    @Query("UPDATE shopping_lists SET pendingSync = 0 WHERE id = :id AND updatedAt = :updatedAt")
+    suspend fun markListSynced(id: String, updatedAt: Long)
+
+    // Sync-internal read: NO tombstone filter — LWW must see deleted rows too.
+    @Query("SELECT * FROM shopping_lists WHERE id = :listId")
+    suspend fun getListRaw(listId: String): ShoppingListEntity?
+
+    @Query("SELECT id FROM shopping_lists WHERE shareCode IS NOT NULL AND deletedAt IS NULL")
+    suspend fun getSharedListIds(): List<String>
+
+    // Shared-replica eviction on explicit sign-out (technical decision 004).
+    // Hard delete on purpose — eviction, not a deletion to sync; CASCADE
+    // clears the items. Local-only lists (shareCode NULL) are untouched.
+    @Query("DELETE FROM shopping_lists WHERE shareCode IS NOT NULL")
+    suspend fun deleteSharedLists()
 }
 
 // Room can map query results to this class automatically.

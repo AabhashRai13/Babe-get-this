@@ -21,8 +21,9 @@ class ShoppingListRepositoryTest {
 
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
+    private var kicks = 0
     private val repository by lazy {
-        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao)
+        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao) { kicks++ }
     }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data

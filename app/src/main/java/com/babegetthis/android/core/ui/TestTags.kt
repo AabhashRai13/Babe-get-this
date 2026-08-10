@@ -46,4 +46,5 @@ object TestTags {
     // them. This is the one case in the whole suite where a tag exists for a
     // reason other than a non-merging wrapper.
     const val ADD_ITEM_FAB = "shoppingitems.addFab"
+    const val VOICE_FAB = "shoppingitems.voiceFab"
 }

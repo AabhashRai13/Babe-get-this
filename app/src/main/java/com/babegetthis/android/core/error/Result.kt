@@ -84,9 +84,14 @@ suspend fun <T> safeCall(
             // directory)". SupabaseAuthRepository already took this care with
             // provider text; safeCall did the opposite for everyone else.
             //
-            // The raw text was never actionable for a user. If it is ever needed
-            // for diagnosis, log it here rather than surfacing it.
-            else -> AppError.UnknownError()
+            // The raw text was never actionable for a user, so it is logged for
+            // diagnosis instead of surfaced.
+            else -> {
+                // runCatching: android.util.Log throws on plain-JVM unit tests
+                // (not mocked); on device/Robolectric it logs normally.
+                runCatching { android.util.Log.e("safeCall", "Unrecognised exception → UnknownError", e) }
+                AppError.UnknownError()
+            }
         }
         Result.Error(error)
     }

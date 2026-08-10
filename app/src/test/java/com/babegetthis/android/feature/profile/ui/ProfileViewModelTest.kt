@@ -8,6 +8,7 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.auth.model.User
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -30,12 +31,14 @@ class ProfileViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var authRepository: AuthRepository
     private lateinit var authStateManager: AuthStateManager
+    private lateinit var syncEngine: com.babegetthis.android.core.sync.data.repository.SyncEngine
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         authStateManager = mockk(relaxed = true)
+        syncEngine = mockk(relaxed = true)
         every { authStateManager.userName } returns MutableStateFlow(null)
         every { authStateManager.userEmail } returns MutableStateFlow(null)
     }
@@ -45,7 +48,7 @@ class ProfileViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun buildViewModel() = ProfileViewModel(authRepository, authStateManager)
+    private fun buildViewModel() = ProfileViewModel(authRepository, authStateManager, syncEngine)
 
     // The shared fixture above seeds a null name/email (logged out), which the
     // existing tests depend on. Name-editing tests need somebody signed in, so
@@ -56,6 +59,7 @@ class ProfileViewModelTest {
             every { userName } returns MutableStateFlow(name)
             every { userEmail } returns MutableStateFlow("a@b.c")
         },
+        syncEngine,
     )
 
     @Test
@@ -260,5 +264,31 @@ class ProfileViewModelTest {
             assertEquals(AppError.UnknownError().message, awaitItem())
         }
         assertFalse(vm.uiState.value.isLoggingOut)
+    }
+
+    // --- shared-replica eviction (technical decision 004) ---
+
+    @Test
+    fun `logout evicts shared replicas BEFORE the session is destroyed`() = runTest {
+        val vm = buildViewModel()
+
+        vm.logout()
+
+        coVerifyOrder {
+            syncEngine.evictSharedReplicas() // final push still has a session
+            authRepository.logout()
+        }
+    }
+
+    @Test
+    fun `deleteAccount evicts shared replicas BEFORE the account is destroyed`() = runTest {
+        val vm = buildViewModel()
+
+        vm.deleteAccount()
+
+        coVerifyOrder {
+            syncEngine.evictSharedReplicas()
+            authRepository.deleteAccount()
+        }
     }
 }

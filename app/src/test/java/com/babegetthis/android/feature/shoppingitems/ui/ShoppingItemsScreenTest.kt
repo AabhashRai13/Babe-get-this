@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -73,13 +74,17 @@ class ShoppingItemsScreenTest {
         shop: String? = null,
     ) = TestData.item(id = id, listId = "L1", name = name, isPickedUp = isPickedUp, shop = shop)
 
-    private fun render(items: List<ShoppingItem> = emptyList()) {
+    private fun render(items: List<ShoppingItem> = emptyList(), loggedIn: Boolean = true) {
         itemsFlow.value = items
         every { itemRepository.getItemsByListId(any()) } returns itemsFlow
         every { categoryRepository.getAllCategories() } returns MutableStateFlow(emptyList())
-        every { authStateManager.authState } returns MutableStateFlow(AuthState.Authenticated("u1"))
+        every { authStateManager.authState } returns MutableStateFlow(
+            if (loggedIn) AuthState.Authenticated("u1") else AuthState.Unauthenticated
+        )
         every { listRepository.getListById(any()) } returns MutableStateFlow(TestData.list(id = "L1"))
         every { pinRepository.pinExists } returns MutableStateFlow(false)
+
+        every { listRepository.getShareCode(any()) } returns MutableStateFlow(null)
 
         viewModel = ShoppingItemsViewModel(
             savedStateHandle = SavedStateHandle(mapOf("listId" to "L1", "listName" to "Groceries")),
@@ -88,6 +93,9 @@ class ShoppingItemsScreenTest {
             authStateManager = authStateManager,
             listRepository = listRepository,
             pinRepository = pinRepository,
+            shareRepository = mockk(relaxed = true),
+            syncEngine = mockk(relaxed = true),
+            sharedListRemote = com.babegetthis.android.testing.FakeSharedListRemote(),
             applicationScope = CoroutineScope(UnconfinedTestDispatcher()),
         )
         compose.setContent {
@@ -267,5 +275,35 @@ class ShoppingItemsScreenTest {
         // The screen owns the Intent; asserting the event reached it without
         // crashing is as far as a JVM test can honestly go.
         assertTrue(!navigatedBack)
+    }
+
+    // -- Voice gate --
+
+    // The regression that shipped: this FAB had no auth check at all, while the
+    // home screen's create-by-voice flow (covered by AuthAndVoiceGateTest) did.
+    // The mic that lacked a test was exactly the one that lacked the gate.
+    @Test
+    fun `signed-out mic tap prompts sign-in instead of opening the voice sheet`() {
+        render(loggedIn = false)
+
+        compose.onNodeWithTag(TestTags.VOICE_FAB).performClick()
+
+        compose.onNodeWithText("Sign in to use voice").assertIsDisplayed()
+    }
+
+    // The signed-in path (mic opens the sheet) is NOT testable here: the voice
+    // sheet's ViewModel defaults to hiltViewModel(), which can't resolve under
+    // a plain Compose rule — same limitation as the PinPromptDialog note at the
+    // top of this file. AuthAndVoiceGateTest covers it on-device.
+
+    // Task 8.4's device finding: the share gate used to say "Sign in to use
+    // voice". Each gate must name its own feature.
+    @Test
+    fun `signed-out share tap prompts with SHARE copy, not voice copy`() {
+        render(loggedIn = false)
+
+        compose.onNodeWithContentDescription("Share live").performClick()
+
+        compose.onNodeWithText("Sign in to share").assertIsDisplayed()
     }
 }

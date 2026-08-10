@@ -326,6 +326,8 @@ dependencies {
     implementation(libs.supabase.auth)
     // postgrest-kt is only here for the delete_user RPC (account deletion).
     implementation(libs.supabase.postgrest)
+    // realtime-kt powers live updates for shared lists.
+    implementation(libs.supabase.realtime)
     implementation(libs.ktor.client.okhttp)
 
     // Play Core in-app update (flexible/immediate flow).

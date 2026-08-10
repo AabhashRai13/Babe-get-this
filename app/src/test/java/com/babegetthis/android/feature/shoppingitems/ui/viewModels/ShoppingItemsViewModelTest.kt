@@ -17,7 +17,10 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
+import com.babegetthis.android.core.sync.data.repository.ShareRepository
+import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
+import com.babegetthis.android.testing.FakeSharedListRemote
 import kotlinx.coroutines.CoroutineScope
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -51,7 +54,11 @@ class ShoppingItemsViewModelTest {
     private lateinit var authStateManager: AuthStateManager
     private lateinit var listRepository: ShoppingListRepository
     private lateinit var pinRepository: com.babegetthis.android.core.pin.data.PinRepository
+    private lateinit var shareRepository: ShareRepository
+    private lateinit var syncEngine: SyncEngine
+    private lateinit var sharedListRemote: FakeSharedListRemote
     private lateinit var itemsFlow: MutableStateFlow<List<ShoppingItem>>
+    private lateinit var shareCodeFlow: MutableStateFlow<String?>
 
     @Before
     fun setUp() {
@@ -61,13 +68,19 @@ class ShoppingItemsViewModelTest {
         authStateManager = mockk(relaxed = true)
         listRepository = mockk(relaxed = true)
         pinRepository = mockk(relaxed = true)
+        shareRepository = mockk(relaxed = true)
+        syncEngine = mockk(relaxed = true)
+        sharedListRemote = FakeSharedListRemote()
         itemsFlow = MutableStateFlow(emptyList())
+        shareCodeFlow = MutableStateFlow(null)
 
         every { itemRepository.getItemsByListId(any()) } returns itemsFlow
         every { categoryRepository.getAllCategories() } returns MutableStateFlow(emptyList())
         every { authStateManager.authState } returns MutableStateFlow(AuthState.Unauthenticated)
         every { listRepository.getListById(any()) } returns MutableStateFlow(null)
+        every { listRepository.getShareCode(any()) } returns shareCodeFlow
         every { pinRepository.pinExists } returns MutableStateFlow(false)
+        coEvery { syncEngine.catchUp(any()) } returns Result.Success(Unit)
     }
 
     @After
@@ -82,6 +95,9 @@ class ShoppingItemsViewModelTest {
         authStateManager = authStateManager,
         listRepository = listRepository,
         pinRepository = pinRepository,
+        shareRepository = shareRepository,
+        syncEngine = syncEngine,
+        sharedListRemote = sharedListRemote,
         applicationScope = CoroutineScope(testDispatcher),
     )
 
@@ -436,6 +452,9 @@ class ShoppingItemsViewModelTest {
             authStateManager = authStateManager,
             listRepository = listRepository,
             pinRepository = pinRepository,
+            shareRepository = shareRepository,
+            syncEngine = syncEngine,
+            sharedListRemote = sharedListRemote,
             applicationScope = CoroutineScope(testDispatcher),
         )
 
@@ -756,6 +775,98 @@ class ShoppingItemsViewModelTest {
         testScheduler.advanceUntilIdle()
 
         coVerify(exactly = 1) { listRepository.deleteListIfEmpty("L1") }
+    }
+
+    // --- live sharing ---
+
+    @Test
+    fun `opening a shared list catches up and re-checks on every realtime event`() = runTest {
+        shareCodeFlow.value = "ABC234"
+
+        buildViewModel()
+        coVerify(exactly = 1) { syncEngine.catchUp("L1") }
+
+        sharedListRemote.changeEvents.emit(Unit)
+        sharedListRemote.changeEvents.emit(Unit)
+        coVerify(exactly = 3) { syncEngine.catchUp("L1") }
+    }
+
+    @Test
+    fun `a local-only list never touches the sync engine`() = runTest {
+        buildViewModel()
+
+        coVerify(exactly = 0) { syncEngine.catchUp(any()) }
+    }
+
+    @Test
+    fun `a list shared while open starts syncing on the spot`() = runTest {
+        buildViewModel()
+        coVerify(exactly = 0) { syncEngine.catchUp(any()) }
+
+        shareCodeFlow.value = "ABC234"
+
+        coVerify(exactly = 1) { syncEngine.catchUp("L1") }
+    }
+
+    @Test
+    fun `share live on a locked list does nothing until unlocked`() = runTest {
+        every { listRepository.getListById("L1") } returns
+            MutableStateFlow(TestData.list(id = "L1", isLocked = true))
+        every { pinRepository.pinExists } returns MutableStateFlow(true)
+        every { authStateManager.authState } returns
+            MutableStateFlow<AuthState>(AuthState.Authenticated("user-1"))
+        val viewModel = buildViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.isLocked.collect { }
+        }
+
+        viewModel.onShareLiveClick()
+
+        coVerify(exactly = 0) { shareRepository.share(any()) }
+        assertFalse(viewModel.showShareAuthPrompt.value)
+    }
+
+    @Test
+    fun `share live prompts sign-in when signed out`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.onShareLiveClick()
+
+        assertTrue(viewModel.showShareAuthPrompt.value)
+        coVerify(exactly = 0) { shareRepository.share(any()) }
+
+        viewModel.onDismissShareAuthPrompt()
+        assertFalse(viewModel.showShareAuthPrompt.value)
+    }
+
+    @Test
+    fun `share live shows the code dialog on success`() = runTest {
+        every { authStateManager.authState } returns
+            MutableStateFlow<AuthState>(AuthState.Authenticated("user-1"))
+        coEvery { shareRepository.share("L1") } returns Result.Success("ABC234")
+        val viewModel = buildViewModel()
+
+        viewModel.onShareLiveClick()
+
+        assertEquals("ABC234", viewModel.shareCodeDialog.value)
+
+        viewModel.onDismissShareCodeDialog()
+        assertNull(viewModel.shareCodeDialog.value)
+    }
+
+    @Test
+    fun `share live surfaces failures as a snackbar`() = runTest {
+        every { authStateManager.authState } returns
+            MutableStateFlow<AuthState>(AuthState.Authenticated("user-1"))
+        coEvery { shareRepository.share("L1") } returns
+            Result.Error(AppError.NetworkError())
+        val viewModel = buildViewModel()
+
+        viewModel.errorMessage.test {
+            viewModel.onShareLiveClick()
+            assertEquals(AppError.NetworkError().message, awaitItem())
+        }
+        assertNull(viewModel.shareCodeDialog.value)
     }
 
     // onCleared is protected on ViewModel, so reach it the way the framework

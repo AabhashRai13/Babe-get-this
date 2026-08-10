@@ -26,7 +26,10 @@ class ShoppingItemDataTest {
 
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
-    private val repository by lazy { ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao) }
+    private var kicks = 0
+    private val repository by lazy {
+        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao) { kicks++ }
+    }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data
     private fun <T> Result<T>.error(): AppError = (this as Result.Error).error
@@ -145,7 +148,7 @@ class ShoppingItemDataTest {
         seedList()
         dbRule.itemDao.insertItem(TestData.itemEntity(id = "i1", isPickedUp = false, updatedAt = 1L))
 
-        dbRule.itemDao.updatePickedUpStatus("i1", isPickedUp = true, updatedAt = 999L)
+        dbRule.itemDao.updatePickedUpStatus("i1", isPickedUp = true, updatedAt = 999L, pendingSync = false)
 
         val stored = dbRule.itemDao.getItemsByListIdOnce("list-1").single()
         assertTrue(stored.isPickedUp)

@@ -30,4 +30,7 @@ data class ShoppingItemEntity(
     val note: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
+    // Sync columns, added in DB v3 (MIGRATION_2_3) — see ShoppingListEntity.
+    val deletedAt: Long? = null,
+    val pendingSync: Boolean = false,
 )

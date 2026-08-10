@@ -25,7 +25,10 @@ One class or one test:
 ## Android Studio
 
 - **Green ▶ in the gutter** next to a test function or class — runs just that.
-- **Right-click a folder** → Run 'All Tests'.
+- **Right-click a test folder** (e.g. `app/src/test/java` or `.../androidTest/java`,
+  or a package/class inside it) → the exact wording varies by Studio version
+  ("Run 'All Tests'", "Run Tests in '...'"), but it's always the top item in
+  the context menu when a test source folder or class is selected.
 - Results appear in the Run panel as a clickable tree.
 
 **Set Build Variants (bottom-left) to `devDebug`.** On a `release` variant every
