@@ -44,8 +44,8 @@ android {
         applicationId = "com.babegetthis.android"
         minSdk = 24
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.3.0-beta"
+        versionCode = 7
+        versionName = "0.4.0-beta"
 
         // Custom runner so instrumented tests boot HiltTestApplication instead of
         // BabeGetThisApp — that is what allows @TestInstallIn modules to replace
