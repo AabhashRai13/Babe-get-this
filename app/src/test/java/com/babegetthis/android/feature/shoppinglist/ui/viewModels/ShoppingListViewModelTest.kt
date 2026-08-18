@@ -30,6 +30,14 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.TelemetryMarkers
+import com.babegetthis.android.core.telemetry.Marker
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.CategorySource
+import com.babegetthis.android.core.telemetry.model.InputMethod
+import com.babegetthis.android.core.telemetry.model.JoinFailureReason
+import io.mockk.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShoppingListViewModelTest {
@@ -38,6 +46,10 @@ class ShoppingListViewModelTest {
 
     private val repository = mockk<ShoppingListRepository>(relaxed = true)
     private val shareRepository = mockk<ShareRepository>(relaxed = true)
+    private val analytics = mockk<AnalyticsRepository>(relaxed = true)
+    // relaxed firstTime() returns false, i.e. "already fired" — once-per-user
+    // events stay silent unless a test stubs it true.
+    private val markers = mockk<TelemetryMarkers>(relaxed = true)
     private val authStateManager = mockk<AuthStateManager>(relaxed = true)
     private val authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
     private val listsFlow = MutableStateFlow<List<ShoppingList>>(emptyList())
@@ -56,7 +68,7 @@ class ShoppingListViewModelTest {
     private fun TestScope.viewModel(): ShoppingListViewModel {
         every { repository.getAllLists() } returns listsFlow
         every { authStateManager.authState } returns authState
-        val vm = ShoppingListViewModel(repository, shareRepository, authStateManager, applicationScope)
+        val vm = ShoppingListViewModel(repository, shareRepository, authStateManager, analytics, markers, applicationScope)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect { } }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.shoppingLists.collect { }
@@ -525,5 +537,94 @@ class ShoppingListViewModelTest {
 
         assertNull(vm.joinError.value)
         assertTrue(vm.showJoinDialog.value)
+    }
+
+    // -- Telemetry --
+
+    @Test
+    fun `a voice-created list reports one add and one auto-category per draft`() = runTest {
+        coEvery { repository.createListWithItems(any(), any()) } returns Result.Success("L1")
+        val vm = viewModel()
+
+        vm.createListWithVoice(
+            listOf(
+                TestData.draft(name = "Milk", category = "cat-dairy-eggs"),
+                TestData.draft(name = "Something odd", category = null),
+            ),
+        )
+
+        verify {
+            analytics.track(AnalyticsEvent.ItemAdded(InputMethod.Voice, CategorySource.Auto))
+            analytics.track(AnalyticsEvent.ItemAdded(InputMethod.Voice, CategorySource.None))
+            analytics.track(AnalyticsEvent.CategoryAutoAssigned("cat-dairy-eggs"))
+            analytics.track(AnalyticsEvent.CategoryAutoAssigned(null))
+        }
+    }
+
+    @Test
+    fun `activation is reported once even though a voice list adds many items`() = runTest {
+        coEvery { repository.createListWithItems(any(), any()) } returns Result.Success("L1")
+        every { markers.firstTime(Marker.FirstItemAdded, any()) } returns true
+        val vm = viewModel()
+
+        vm.createListWithVoice(
+            listOf(TestData.draft(name = "Milk"), TestData.draft(name = "Eggs")),
+        )
+
+        // Outside the per-draft loop on purpose: three spoken items are one
+        // activation, not three.
+        verify(exactly = 1) { analytics.track(AnalyticsEvent.FirstItemAdded(InputMethod.Voice)) }
+    }
+
+    @Test
+    fun `a failed voice list reports nothing`() = runTest {
+        coEvery { repository.createListWithItems(any(), any()) } returns
+            Result.Error(AppError.DatabaseError())
+        val vm = viewModel()
+
+        vm.createListWithVoice(listOf(TestData.draft(name = "Milk")))
+
+        verify(exactly = 0) { analytics.track(ofType<AnalyticsEvent.ItemAdded>()) }
+    }
+
+    @Test
+    fun `a join attempt is reported before the outcome is known`() = runTest {
+        coEvery { shareRepository.join(any()) } returns Result.Success("L1")
+        val vm = viewModel()
+
+        vm.joinList("ABC234")
+
+        // Attempted must be counted even for joins that never return, or the
+        // conversion rate silently flatters itself.
+        verify {
+            analytics.track(AnalyticsEvent.ShareJoinAttempted)
+            analytics.track(AnalyticsEvent.ShareJoinSucceeded)
+        }
+    }
+
+    @Test
+    fun `a successful join records that this device is the joiner's`() = runTest {
+        coEvery { shareRepository.join(any()) } returns Result.Success("L1")
+        val vm = viewModel()
+
+        vm.joinList("ABC234")
+
+        // Read back later by ShoppingItemsViewModel — after sync there is
+        // nothing else that distinguishes joiner from owner.
+        verify { markers.mark(Marker.JoinedList, "L1") }
+    }
+
+    @Test
+    fun `a bad code reports the reason and never the code`() = runTest {
+        coEvery { shareRepository.join(any()) } returns
+            Result.Error(AppError.NotFoundError("nope"))
+        val vm = viewModel()
+
+        vm.joinList("XXXXXX")
+
+        verify {
+            analytics.track(AnalyticsEvent.ShareJoinFailed(JoinFailureReason.InvalidCode))
+        }
+        verify(exactly = 0) { markers.mark(Marker.JoinedList, any()) }
     }
 }

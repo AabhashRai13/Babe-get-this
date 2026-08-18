@@ -3,6 +3,8 @@ package com.babegetthis.android.testing
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.data.local.DEFAULT_CATEGORIES
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.babegetthis.android.core.pin.data.PinStore
 import dagger.hilt.android.testing.HiltAndroidRule
 import kotlinx.coroutines.runBlocking
@@ -39,5 +41,25 @@ class ResetAppStateRule(
         runBlocking { database().categoryDao().insertAll(DEFAULT_CATEGORIES) }
         authStateManager().logout()
         pinStore().clearAll()
+        clearTelemetryPrefs()
+    }
+
+    // TelemetryMarkers records once-per-user and once-per-list facts in plain
+    // SharedPreferences, which outlive the in-memory database and every other
+    // thing wiped above. Left alone, the FIRST test in the process to add an
+    // item claims the activation marker and every later test sees "already
+    // fired" — so a suite that passes alone fails in company, which is exactly
+    // the flakiness this rule exists to stop.
+    //
+    // Cleared through the file rather than a clear() on TelemetryMarkers: the
+    // app has no production reason to wipe them (activation markers are scoped
+    // by user id, so a new account already gets fresh ones), and adding API
+    // purely for tests is how production classes grow test-shaped holes.
+    private fun clearTelemetryPrefs() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        listOf("telemetry_markers", "telemetry_consent").forEach { name ->
+            context.getSharedPreferences(name, Context.MODE_PRIVATE)
+                .edit().clear().commit()
+        }
     }
 }

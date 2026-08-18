@@ -75,4 +75,14 @@ interface ShoppingItemDao {
     // Sync-internal read: NO tombstone filter — LWW must see deleted rows too.
     @Query("SELECT * FROM shopping_items WHERE id = :itemId")
     suspend fun getItemRaw(itemId: String): ShoppingItemEntity?
+
+    // Telemetry-only reads (see core/telemetry/TelemetryContext). COUNT rather
+    // than reusing getPendingSyncItems().size, which would materialise every
+    // row to throw them all away — this runs on screen changes, so it stays
+    // cheap by construction rather than by luck.
+    @Query("SELECT COUNT(*) FROM shopping_items WHERE deletedAt IS NULL")
+    suspend fun countActiveItems(): Int
+
+    @Query("SELECT COUNT(*) FROM shopping_items WHERE pendingSync = 1")
+    suspend fun countPendingSync(): Int
 }

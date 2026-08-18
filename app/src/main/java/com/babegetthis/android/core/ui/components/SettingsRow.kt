@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.RowScope
 
 // The app had no reusable settings-row primitive — ProfileBottomSheet hand-rolls
 // every entry. This is the shared one for the Settings screen.
@@ -27,6 +28,10 @@ fun SettingsRow(
     icon: ImageVector? = null,
     subtitle: String? = null,
     tint: Color = MaterialTheme.colorScheme.onSurface,
+    // Optional control pinned to the end of the row — a Switch, for rows that
+    // toggle rather than navigate. Null keeps every existing call site
+    // rendering exactly as before.
+    trailing: @Composable (RowScope.() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -39,7 +44,7 @@ fun SettingsRow(
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
             androidx.compose.foundation.layout.Spacer(Modifier.width(16.dp))
         }
-        Column {
+        Column(modifier = if (trailing != null) Modifier.weight(1f) else Modifier) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = tint)
             if (subtitle != null) {
                 Text(
@@ -49,5 +54,6 @@ fun SettingsRow(
                 )
             }
         }
+        trailing?.invoke(this)
     }
 }

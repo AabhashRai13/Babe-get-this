@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.data.RegisterResult
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +37,7 @@ data class RegisterUiState(
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val analytics: AnalyticsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RegisterUiState())
@@ -92,6 +95,11 @@ class RegisterViewModel @Inject constructor(
                 is Result.Success -> when (result.data) {
                     is RegisterResult.SignedIn -> {
                         _uiState.value = _uiState.value.copy(isLoading = false)
+                        // Only the SignedIn branch. ConfirmationRequired means
+                        // the account exists but the person is not through the
+                        // door yet, and counting it as activation would make
+                        // the funnel's first step optimistic.
+                        analytics.track(AnalyticsEvent.AccountRegistered)
                         _registerSuccess.emit(Unit)
                     }
                     RegisterResult.ConfirmationRequired -> {

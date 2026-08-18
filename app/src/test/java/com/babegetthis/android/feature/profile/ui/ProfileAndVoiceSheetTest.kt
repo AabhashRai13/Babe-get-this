@@ -111,7 +111,7 @@ class ProfileAndVoiceSheetTest {
     private var dismissed = false
 
     private fun voice(): VoiceCaptureViewModel {
-        val vm = VoiceCaptureViewModel(recorder, voiceRepository)
+        val vm = VoiceCaptureViewModel(recorder, voiceRepository, mockk(relaxed = true))
         compose.setContent {
             VoiceCaptureSheet(
                 onDismiss = { dismissed = true },

@@ -70,6 +70,7 @@ import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
 import com.babegetthis.android.feature.shoppingitems.ui.components.FirstItemPrompt
 import com.babegetthis.android.feature.shoppingitems.ui.components.ProgressCard
+import com.babegetthis.android.feature.shoppingitems.ui.components.CategorySubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.SectionHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShopSubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShoppingItemCard
@@ -126,7 +127,7 @@ fun ShoppingItemsScreen(
     // emission in the ViewModel, not on every recomposition.
     val activeItems = uiState.activeItems
     val completedItems = uiState.completedItems
-    val activeByShop = uiState.activeByShop
+    val activeSections = uiState.activeSections
 
     val snackBarHostState = remember { SnackbarHostState() }
     val haptic = rememberHaptic()
@@ -328,47 +329,62 @@ fun ShoppingItemsScreen(
                         )
                     }
 
-                    activeByShop.forEach { (shopName, shopItems) ->
-                        if (shopName.isNotBlank()) {
-                            item(key = "shop-$shopName") {
-                                ShopSubHeader(shopName = shopName)
-                            }
-                        } else if (activeByShop.size > 1) {
-                            item(key = "shop-general") {
-                                ShopSubHeader(shopName = "General")
+                    activeSections.forEach { shopSection ->
+                        // Show a shop header for every named shop; for the no-shop
+                        // group only when there are other shops to tell it apart from
+                        // (a list with no shops at all stays a bare list, as before).
+                        val showShopHeader =
+                            shopSection.shopName != null || activeSections.size > 1
+                        if (showShopHeader) {
+                            item(key = "shop-${shopSection.shopName ?: "general"}") {
+                                ShopSubHeader(shopName = shopSection.shopName ?: "General")
                             }
                         }
 
-                        items(shopItems, key = { it.id }) { shoppingItem ->
-                            // animateItem = native LazyColumn insert/move animation.
-                            // Voice-added rows slide in instead of popping; toggled
-                            // rows slide between sections. GPU-composited, cheap.
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .animateItem(placementSpec = rowPlacementSpec),
-                            ) {
-                                SwipeableCard(
-                                    onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
-                                    onSwipeRight = {
-                                        viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp)
-                                    },
-                                ) {
-                                    ShoppingItemCard(
-                                        item = shoppingItem,
-                                        onClick = { viewModel.onEditItemClick(shoppingItem) },
-                                        onTogglePickedUp = {
-                                            // The satisfying "check it off" moment — buzz to match
-                                            // the un-check path on completed items.
-                                            haptic(Haptic.Light)
-                                            viewModel.togglePickedUp(
-                                                shoppingItem.id,
-                                                !shoppingItem.isPickedUp
-                                            )
-                                        },
-                                    )
+                        // Hide the category header when a shop's only bucket is the
+                        // uncategorized one, so a list nobody has categorized looks
+                        // exactly like the old flat by-shop view.
+                        val hideCategoryHeaders = shopSection.categories.size == 1 &&
+                            shopSection.categories.first().label == null
+
+                        shopSection.categories.forEach { category ->
+                            if (!hideCategoryHeaders) {
+                                item(key = "cat-${shopSection.shopName}-${category.label ?: "uncategorized"}") {
+                                    CategorySubHeader(name = category.label ?: "Uncategorized")
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+
+                            items(category.items, key = { it.id }) { shoppingItem ->
+                                // animateItem = native LazyColumn insert/move animation.
+                                // Voice-added rows slide in instead of popping; toggled
+                                // rows slide between sections. GPU-composited, cheap.
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animateItem(placementSpec = rowPlacementSpec),
+                                ) {
+                                    SwipeableCard(
+                                        onSwipeLeft = { viewModel.deleteItem(shoppingItem.id) },
+                                        onSwipeRight = {
+                                            viewModel.togglePickedUp(shoppingItem.id, !shoppingItem.isPickedUp)
+                                        },
+                                    ) {
+                                        ShoppingItemCard(
+                                            item = shoppingItem,
+                                            onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                            onTogglePickedUp = {
+                                                // The satisfying "check it off" moment — buzz to match
+                                                // the un-check path on completed items.
+                                                haptic(Haptic.Light)
+                                                viewModel.togglePickedUp(
+                                                    shoppingItem.id,
+                                                    !shoppingItem.isPickedUp
+                                                )
+                                            },
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
                             }
                         }
                     }
@@ -463,6 +479,7 @@ fun ShoppingItemsScreen(
         ShareCodeDialog(
             code = code,
             onDismiss = { viewModel.onDismissShareCodeDialog() },
+            onCodeCopied = { viewModel.onShareCodeCopied() },
         )
     }
 

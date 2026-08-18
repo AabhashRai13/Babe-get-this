@@ -114,6 +114,11 @@ interface ShoppingListDao {
     @Query("SELECT id FROM shopping_lists WHERE shareCode IS NOT NULL AND deletedAt IS NULL")
     suspend fun getSharedListIds(): List<String>
 
+    // Telemetry-only read — see ShoppingItemDao.countPendingSync for why this
+    // is a COUNT rather than the size of getPendingSyncLists().
+    @Query("SELECT COUNT(*) FROM shopping_lists WHERE pendingSync = 1")
+    suspend fun countPendingSync(): Int
+
     // Shared-replica eviction on explicit sign-out (technical decision 004).
     // Hard delete on purpose — eviction, not a deletion to sync; CASCADE
     // clears the items. Local-only lists (shareCode NULL) are untouched.

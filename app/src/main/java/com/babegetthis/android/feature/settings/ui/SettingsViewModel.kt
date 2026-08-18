@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.pin.data.PinRepository
+import com.babegetthis.android.core.telemetry.TelemetryConsent
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -20,10 +21,33 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     pinRepository: PinRepository,
     private val listRepository: ShoppingListRepository,
+    private val consent: TelemetryConsent,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
     val pinExists: StateFlow<Boolean> = pinRepository.pinExists
+
+    // Seeded from TelemetryConsent, which reads its mirror of the SDK flags.
+    // Held as state here so the switches stay responsive — the vendor setters
+    // are fire-and-forget and report nothing back.
+    private val _analyticsEnabled = MutableStateFlow(consent.analyticsEnabled)
+    val analyticsEnabled: StateFlow<Boolean> = _analyticsEnabled.asStateFlow()
+
+    private val _crashReportingEnabled = MutableStateFlow(consent.crashReportingEnabled)
+    val crashReportingEnabled: StateFlow<Boolean> = _crashReportingEnabled.asStateFlow()
+
+    // Two switches rather than one. Crash reporting is defensible on legitimate
+    // interest in a way product analytics is not, so a user may reasonably want
+    // to keep the first and drop the second.
+    fun setAnalyticsEnabled(enabled: Boolean) {
+        consent.setAnalyticsEnabled(enabled)
+        _analyticsEnabled.value = enabled
+    }
+
+    fun setCrashReportingEnabled(enabled: Boolean) {
+        consent.setCrashReportingEnabled(enabled)
+        _crashReportingEnabled.value = enabled
+    }
 
     private val _lockedCount = MutableStateFlow(0)
     val lockedCount: StateFlow<Int> = _lockedCount.asStateFlow()

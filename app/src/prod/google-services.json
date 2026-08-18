@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "2325974780",
+    "project_id": "babe-get-this",
+    "storage_bucket": "babe-get-this.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:2325974780:android:4c04318589d7beb039d179",
+        "android_client_info": {
+          "package_name": "com.babegetthis.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAAJvSZb9QEUZAKUpJM6_xENWokZxGnED4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

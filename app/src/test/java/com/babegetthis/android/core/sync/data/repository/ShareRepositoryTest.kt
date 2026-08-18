@@ -18,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.random.Random
+import io.mockk.mockk
 
 @RunWith(RobolectricTestRunner::class)
 class ShareRepositoryTest {
@@ -28,7 +29,7 @@ class ShareRepositoryTest {
     private val syncPoints = FakeSyncPointStore()
     private var userId: String? = "user-1"
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints) { userId }
+        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, { userId }, mockk(relaxed = true))
     }
     private val repository by lazy {
         ShareRepository(dbRule.listDao, dbRule.itemDao, remote, engine, { userId }, Random(seed = 7))

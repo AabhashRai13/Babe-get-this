@@ -22,6 +22,10 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import java.io.IOException
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.VoiceFailureReason
+import io.mockk.verifyOrder
 
 // AudioRecorder is mocked directly rather than hidden behind a new interface.
 // Task 10.3 called for extracting one, but MockK handles the final class without
@@ -36,8 +40,9 @@ class VoiceCaptureViewModelTest {
     private val recorder = mockk<AudioRecorder>(relaxed = true)
     private val voiceRepository = mockk<VoiceRepository>(relaxed = true)
     private val audioFile = File("voice-test.m4a")
+    private val analytics = mockk<AnalyticsRepository>(relaxed = true)
 
-    private fun viewModel() = VoiceCaptureViewModel(recorder, voiceRepository)
+    private fun viewModel() = VoiceCaptureViewModel(recorder, voiceRepository, analytics)
 
     private val drafts = listOf(TestData.draft(name = "Milk"), TestData.draft(name = "Eggs"))
 
@@ -391,5 +396,110 @@ class VoiceCaptureViewModelTest {
         persistGate.complete(Unit)
         testScheduler.advanceUntilIdle()
         assertEquals(VoiceCaptureUiState.Done, vm.state.value)
+    }
+
+    // --- telemetry ---
+    //
+    // The voice funnel is the reason this feature gets measured at all, so
+    // these assert the sequence and the one trap in it: the sheet calls
+    // cancel() to reset itself after a SUCCESS, which must not read as an
+    // abandonment.
+
+    @Test
+    fun `a completed capture reports the funnel in order`() = runTest {
+        coEvery { recorder.stop() } returns audioFile
+        coEvery { voiceRepository.transcribeAndParse(audioFile) } returns Result.Success(drafts)
+        val vm = viewModel()
+        vm.setPersist { Result.Success("list-1") }
+
+        vm.onSheetOpened()
+        vm.startRecording()
+        vm.stopRecording()
+
+        verifyOrder {
+            analytics.track(AnalyticsEvent.VoiceSheetOpened)
+            analytics.track(AnalyticsEvent.VoiceRecordingStarted)
+            analytics.track(ofType<AnalyticsEvent.VoiceTranscriptionCompleted>())
+            analytics.track(AnalyticsEvent.VoiceItemsSaved(itemCount = 2))
+        }
+    }
+
+    @Test
+    fun `the reset after a successful capture is not reported as an abandonment`() = runTest {
+        coEvery { recorder.stop() } returns audioFile
+        coEvery { voiceRepository.transcribeAndParse(audioFile) } returns Result.Success(drafts)
+        val vm = viewModel()
+        vm.setPersist { Result.Success("list-1") }
+        vm.startRecording()
+        vm.stopRecording()
+
+        // What VoiceCaptureSheet does to clear the stale Done state.
+        vm.cancel()
+
+        // Without the guard this fires on every successful capture, and the
+        // funnel reads as near-total drop-off at the last step.
+        verify(exactly = 0) { analytics.track(ofType<AnalyticsEvent.VoiceRecordingCancelled>()) }
+    }
+
+    @Test
+    fun `walking away mid-recording is reported as an abandonment`() = runTest {
+        val vm = viewModel()
+        vm.startRecording()
+
+        vm.cancel()
+
+        verify { analytics.track(ofType<AnalyticsEvent.VoiceRecordingCancelled>()) }
+    }
+
+    @Test
+    fun `nothing understood is reported as a failure, not a zero-item success`() = runTest {
+        coEvery { recorder.stop() } returns audioFile
+        coEvery { voiceRepository.transcribeAndParse(any()) } returns Result.Success(emptyList())
+        val vm = viewModel()
+        vm.startRecording()
+
+        vm.stopRecording()
+
+        verify {
+            analytics.track(
+                match<AnalyticsEvent.VoiceTranscriptionFailed> {
+                    it.reason == VoiceFailureReason.NothingHeard
+                },
+            )
+        }
+        verify(exactly = 0) { analytics.track(ofType<AnalyticsEvent.VoiceTranscriptionCompleted>()) }
+    }
+
+    @Test
+    fun `a transcription failure reports the error type, never its message`() = runTest {
+        coEvery { recorder.stop() } returns audioFile
+        coEvery { voiceRepository.transcribeAndParse(any()) } returns
+            Result.Error(AppError.ServerError(500, "upstream whisper-v3 timeout at pod-4b"))
+        val vm = viewModel()
+        vm.startRecording()
+
+        vm.stopRecording()
+
+        // The message can carry server text. Only the bounded enum goes out.
+        verify {
+            analytics.track(
+                match<AnalyticsEvent.VoiceTranscriptionFailed> {
+                    it.reason == VoiceFailureReason.Server
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `a mic that will not open is reported`() = runTest {
+        coEvery { recorder.start() } throws IOException("mic busy")
+        val vm = viewModel()
+
+        vm.startRecording()
+
+        verify { analytics.track(AnalyticsEvent.VoiceRecordingFailed) }
+        // The mic never opened, so there is no recording to abandon.
+        vm.cancel()
+        verify(exactly = 0) { analytics.track(ofType<AnalyticsEvent.VoiceRecordingCancelled>()) }
     }
 }

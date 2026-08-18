@@ -95,6 +95,14 @@
     <string name="settings_pin_changed">PIN changed</string>
     <string name="settings_pin_device_only">Your PIN is stored on this device only. It is not tied to your account and won\'t sync.</string>
 
+    <!-- Privacy / telemetry consent -->
+    <string name="settings_privacy_section">Privacy</string>
+    <string name="settings_analytics_title">Usage analytics</string>
+    <string name="settings_analytics_subtitle">Which features get used, never what is on your lists.</string>
+    <string name="settings_crash_title">Crash reports</string>
+    <string name="settings_crash_subtitle">Sends diagnostics when the app fails, so it can be fixed.</string>
+    <string name="settings_privacy_note">Your lists, items and recordings never leave your device for either of these. We collect counts and outcomes only.</string>
+
     <!-- PIN entry -->
     <string name="pin_label">PIN</string>
     <string name="pin_enter_title">Enter your PIN</string>

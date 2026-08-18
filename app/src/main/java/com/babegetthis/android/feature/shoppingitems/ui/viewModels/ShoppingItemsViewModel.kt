@@ -12,10 +12,18 @@ import com.babegetthis.android.core.model.Category
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.Marker
+import com.babegetthis.android.core.telemetry.TelemetryMarkers
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.CategorySource
+import com.babegetthis.android.core.telemetry.model.InputMethod
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
+import com.babegetthis.android.feature.shoppingitems.model.CategorySection
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItemsUiState
+import com.babegetthis.android.feature.shoppingitems.model.ShopSection
 import com.babegetthis.android.feature.shoppingitems.share.ShoppingListShareText
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +54,8 @@ class ShoppingItemsViewModel @Inject constructor(
     private val shareRepository: ShareRepository,
     private val syncEngine: SyncEngine,
     private val sharedListRemote: SharedListRemote,
+    private val analytics: AnalyticsRepository,
+    private val markers: TelemetryMarkers,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
@@ -110,7 +120,7 @@ class ShoppingItemsViewModel @Inject constructor(
                 items = list,
                 activeItems = active,
                 completedItems = list.filter { it.isPickedUp },
-                activeByShop = active.groupBy { it.shop ?: "" },
+                activeSections = buildActiveSections(active),
             )
         }
         .stateIn(
@@ -118,6 +128,22 @@ class ShoppingItemsViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ShoppingItemsUiState(),
         )
+
+    // Group active items Shop -> Category -> items for the sectioned list.
+    // Shops keep first-seen order (unchanged from the old by-shop grouping).
+    // Categories are alphabetical (case-insensitive) so the order is the same on
+    // every shopping trip; the uncategorized bucket (null categoryName) sorts last.
+    private fun buildActiveSections(active: List<ShoppingItem>): List<ShopSection> =
+        active
+            .groupBy { it.shop?.ifBlank { null } }
+            .map { (shop, shopItems) ->
+                val categories = shopItems
+                    .groupBy { it.categoryName }
+                    .entries
+                    .sortedWith(compareBy(nullsLast(String.CASE_INSENSITIVE_ORDER)) { it.key })
+                    .map { CategorySection(label = it.key, items = it.value) }
+                ShopSection(shopName = shop, categories = categories)
+            }
 
     val categories: StateFlow<List<Category>> = categoryRepository.getAllCategories()
         .stateIn(
@@ -190,6 +216,13 @@ class ShoppingItemsViewModel @Inject constructor(
                 val isAllDone = itemList.isNotEmpty() && itemList.all { it.isPickedUp }
                 if (wasAllDone == false && isAllDone) {
                     _events.emit(UiEvent.ListJustCompleted)
+                    // Reuses the existing transition detection rather than
+                    // adding a second one: this fires on the transition only,
+                    // so re-opening a finished list does not re-report a trip.
+                    analytics.track(AnalyticsEvent.ListCompleted(itemList.size))
+                    if (markers.firstTime(Marker.FirstListCompleted, currentUserId())) {
+                        analytics.track(AnalyticsEvent.FirstListCompleted(itemList.size))
+                    }
                 }
                 wasAllDone = isAllDone
             }
@@ -224,6 +257,14 @@ class ShoppingItemsViewModel @Inject constructor(
             )) {
                 is Result.Success -> {
                     showAddItemDialog.value = false
+                    // Manual add: whatever category is on it, the user chose it
+                    // in the dialog. Nothing was auto-assigned here.
+                    trackItemAdded(
+                        inputMethod = InputMethod.Manual,
+                        categorySource = if (categoryId == null) CategorySource.None
+                        else CategorySource.User,
+                    )
+                    onListEdited()
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
@@ -232,13 +273,51 @@ class ShoppingItemsViewModel @Inject constructor(
         }
     }
 
+    // Every item-added path funnels through here so the activation marker is
+    // claimed in one place. Scoped to the user id, so a second account on the
+    // same device still records its own activation.
+    private fun trackItemAdded(inputMethod: InputMethod, categorySource: CategorySource) {
+        analytics.track(AnalyticsEvent.ItemAdded(inputMethod, categorySource))
+        if (markers.firstTime(Marker.FirstItemAdded, currentUserId())) {
+            analytics.track(AnalyticsEvent.FirstItemAdded(inputMethod))
+        }
+    }
+
+    private fun currentUserId(): String? =
+        (authStateManager.authState.value as? AuthState.Authenticated)?.userId
+
+    // Fires the joiner's-first-edit event, once per list, and only on the
+    // device that joined. Owner and joiner devices are indistinguishable once
+    // a shared list has synced, so this leans on the marker written at join
+    // time — see Marker.JoinedList.
+    private fun onListEdited() {
+        if (!markers.has(Marker.JoinedList, listId)) return
+        if (!markers.firstTime(Marker.SharedListFirstEdit, listId)) return
+        analytics.track(AnalyticsEvent.SharedListFirstEditByJoiner)
+    }
+
     // Voice persist lambda for "add items to this list". The voice sheet calls
     // this with the parsed drafts; we append them to the current list and return
     // its id so the voice VM transitions to Done. No navigation — the user is
     // already here, and the new rows appear via the items Flow (with an insert
     // animation in the screen). Mirrors ShoppingListViewModel.createListWithVoice.
     suspend fun addItemsWithVoice(drafts: List<ItemDraft>): Result<String> {
-        return listRepository.addItemsToList(listId, drafts)
+        val result = listRepository.addItemsToList(listId, drafts)
+        if (result is Result.Success) {
+            drafts.forEach { draft ->
+                trackItemAdded(
+                    inputMethod = InputMethod.Voice,
+                    categorySource = if (draft.category == null) CategorySource.None
+                    else CategorySource.Auto,
+                )
+                // One per item rather than one per utterance: the taxonomy
+                // question is per-category, and the correction rate this
+                // feeds is only meaningful against a per-category denominator.
+                analytics.track(AnalyticsEvent.CategoryAutoAssigned(draft.category))
+            }
+            onListEdited()
+        }
+        return result
     }
 
     fun editItem(
@@ -262,6 +341,19 @@ class ShoppingItemsViewModel @Inject constructor(
             when (val result = itemRepository.updateItem(updatedItem)) {
                 is Result.Success -> {
                     editingItem.value = null
+                    // The taxonomy signal that matters. An auto-assigned
+                    // category the user changes is direct evidence that our
+                    // fixed category set put that item in the wrong place —
+                    // there is no other way to learn this.
+                    if (currentItem.categoryId != categoryId) {
+                        analytics.track(
+                            AnalyticsEvent.CategoryCorrected(
+                                fromCategoryId = currentItem.categoryId,
+                                toCategoryId = categoryId,
+                            ),
+                        )
+                    }
+                    onListEdited()
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
@@ -286,7 +378,13 @@ class ShoppingItemsViewModel @Inject constructor(
     fun togglePickedUp(itemId: String, isPickedUp: Boolean) {
         viewModelScope.launch {
             when (val result = itemRepository.togglePickedUp(itemId, isPickedUp)) {
-                is Result.Success -> { /* UI auto-updates via Flow */ }
+                is Result.Success -> {
+                    // Only the check, not the un-check. Un-checking is a
+                    // correction, and counting it would inflate the shopping
+                    // activity this is meant to measure.
+                    if (isPickedUp) analytics.track(AnalyticsEvent.ItemCheckedOff)
+                    onListEdited()
+                }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
                 }
@@ -337,10 +435,25 @@ class ShoppingItemsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             when (val result = shareRepository.share(listId)) {
-                is Result.Success -> shareCodeDialog.value = result.data
+                is Result.Success -> {
+                    shareCodeDialog.value = result.data
+                    // share() returns the EXISTING code when there is one, so
+                    // re-opening the dialog would otherwise report a new share
+                    // every time. The marker also records that this device is
+                    // the owner's — see onListEdited.
+                    if (markers.firstTime(Marker.ShareCodeCreated, listId)) {
+                        analytics.track(AnalyticsEvent.ShareCodeCreated)
+                    }
+                }
                 is Result.Error -> _errorMessage.emit(result.error.message)
             }
         }
+    }
+
+    // Copying the code is the sharing act — there is no share sheet in this
+    // flow, the user pastes it into whatever app they already talk in.
+    fun onShareCodeCopied() {
+        analytics.track(AnalyticsEvent.ShareCodeShared)
     }
 
     fun onDismissShareCodeDialog() {

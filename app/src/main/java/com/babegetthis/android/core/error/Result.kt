@@ -93,6 +93,18 @@ suspend fun <T> safeCall(
                 AppError.UnknownError()
             }
         }
+        // Offer it to crash reporting. What actually gets transmitted is
+        // decided by ErrorReportingPolicy, behind CrashReporter.recordNonFatal
+        // — most of these are ordinary offline-first outcomes and are dropped.
+        //
+        // Positioned after the mapping and after the CancellationException
+        // rethrow above, so a cancelled coroutine never reaches it: dismissing
+        // the voice sheet is a user gesture, not a defect.
+        //
+        // runCatching for the same reason the Log call above has one — a
+        // failure inside reporting must never turn a handled error into an
+        // unhandled one.
+        runCatching { ErrorReportingHook.report?.invoke(e, error) }
         Result.Error(error)
     }
 }

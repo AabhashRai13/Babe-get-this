@@ -15,7 +15,7 @@ import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingLis
         ShoppingItemEntity::class,
         CategoryEntity::class,
     ],
-    version = 3,
+    version = 4,
     // exportSchema stays false: Room 2.8.4's schema-JSON exporter uses a
     // kotlinx-serialization build that AbstractMethodErrors against this
     // project's serialization plugin on the KSP classpath. Migrations are
