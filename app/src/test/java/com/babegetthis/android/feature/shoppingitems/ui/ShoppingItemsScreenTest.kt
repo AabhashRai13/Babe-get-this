@@ -96,6 +96,8 @@ class ShoppingItemsScreenTest {
             shareRepository = mockk(relaxed = true),
             syncEngine = mockk(relaxed = true),
             sharedListRemote = com.babegetthis.android.testing.FakeSharedListRemote(),
+            analytics = mockk(relaxed = true),
+            markers = mockk(relaxed = true),
             applicationScope = CoroutineScope(UnconfinedTestDispatcher()),
         )
         compose.setContent {

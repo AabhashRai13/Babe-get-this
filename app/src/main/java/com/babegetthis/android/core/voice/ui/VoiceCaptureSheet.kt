@@ -87,6 +87,7 @@ fun VoiceCaptureSheet(
     // granted) or ask for it. LaunchedEffect(Unit) runs exactly once for the
     // lifetime of this composable.
     LaunchedEffect(Unit) {
+        viewModel.onSheetOpened()
         viewModel.setPersist(onConfirm)
         val alreadyGranted = ContextCompat.checkSelfPermission(
             context, Manifest.permission.RECORD_AUDIO

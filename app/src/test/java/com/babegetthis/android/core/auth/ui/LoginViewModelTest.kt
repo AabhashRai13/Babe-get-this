@@ -40,7 +40,7 @@ class LoginViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun buildViewModel() = LoginViewModel(authRepository)
+    private fun buildViewModel() = LoginViewModel(authRepository, mockk(relaxed = true))
 
     // Helper: fill the form with valid values so the button would be enabled.
     private fun LoginViewModel.fillValid() {

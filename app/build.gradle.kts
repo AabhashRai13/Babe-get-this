@@ -8,6 +8,11 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android.plugin)
     alias(libs.plugins.kover)
+    // Reads the per-flavor google-services.json and generates the Firebase
+    // config resources. Must come before the crashlytics plugin, which depends
+    // on what it generates.
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics)
 }
 
 // Read Supabase credentials from local.properties (which is gitignored), so the
@@ -169,6 +174,16 @@ kover {
                     "com.babegetthis.android.core.auth.data.*",
                     "com.babegetthis.android.core.auth.ui.AuthValidationKt",
                     "com.babegetthis.android.**.share.*",
+                    // Telemetry: only the three pieces that can be logically
+                    // wrong. The mapper decides what reaches GA4 and the
+                    // policy decides what reaches Crashlytics — both fail
+                    // silently and are discovered weeks later, which is
+                    // exactly the shape this gate exists for. The Firebase
+                    // implementations around them are SDK calls with no
+                    // branches and are covered by the exclude list below.
+                    "com.babegetthis.android.core.telemetry.data.AnalyticsEventMapper",
+                    "com.babegetthis.android.core.telemetry.data.ErrorReportingPolicy",
+                    "com.babegetthis.android.core.telemetry.model.BucketsKt",
                 )
             }
             // Everything NOT in the include-list above is out of the gate. The
@@ -332,4 +347,19 @@ dependencies {
 
     // Play Core in-app update (flexible/immediate flow).
     implementation(libs.play.app.update.ktx)
+
+    // Firebase — analytics and crash reporting. The BOM pins every firebase
+    // module to one mutually-compatible version, same idea as the Compose and
+    // Supabase BOMs above.
+    //
+    // dev and staging report to the babe-get-this-stg project, prod reports to
+    // babe-get-this; each flavor resolves its own google-services.json from
+    // app/src/<flavor>/. Collection stays ON in staging on purpose — it is the
+    // only place we can prove the pipeline works before trusting prod numbers.
+    //
+    // No firebase-messaging here yet: push is a separate change, and this one
+    // only creates the projects it will build on.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
 }

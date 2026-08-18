@@ -5,6 +5,7 @@ import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.core.featureflags.data.FeatureFlagRepository
 import com.babegetthis.android.core.sync.SyncTrigger
+import com.babegetthis.android.core.telemetry.TelemetryContext
 import dagger.hilt.android.HiltAndroidApp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -26,6 +27,7 @@ class BabeGetThisApp : Application() {
     @Inject lateinit var featureFlagRepository: FeatureFlagRepository
     @Inject lateinit var featureFlagCache: FeatureFlagCache
     @Inject lateinit var syncTrigger: SyncTrigger
+    @Inject lateinit var telemetryContext: TelemetryContext
 
     // App-scoped so it lives for the whole process (survives Activity recreation),
     // unlike collecting in MainActivity.
@@ -33,6 +35,10 @@ class BabeGetThisApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Static crash context (which build) before anything else can crash.
+        // Firebase itself is already up by now — it initialises from a
+        // ContentProvider, ahead of this method.
+        telemetryContext.onAppStart()
         // Shared-list sync: push queued edits + catch up on foreground and on
         // connectivity return. No-ops for users who never shared a list.
         syncTrigger.register(this)
@@ -47,8 +53,14 @@ class BabeGetThisApp : Application() {
         appScope.launch {
             supabaseClient.auth.sessionStatus.collect { status ->
                 when (status) {
-                    is SessionStatus.Authenticated ->
+                    is SessionStatus.Authenticated -> {
                         authStateManager.refreshToken(status.session.accessToken)
+                        // Telemetry identity rides the same signal as auth
+                        // identity so the two cannot drift apart. The Supabase
+                        // UUID and nothing else — never the email, which this
+                        // session object also carries.
+                        telemetryContext.onUserChanged(status.session.user?.id)
+                    }
                     // Supabase has definitively lost the session (refresh token
                     // expired/revoked). Mirror it locally — otherwise TokenManager
                     // keeps serving a dead token and the user finds out mid-action
@@ -58,8 +70,10 @@ class BabeGetThisApp : Application() {
                     // never leaves the device over a technicality. Only the
                     // explicit sign-out in ProfileViewModel evicts (see
                     // docs/technical-decisions/004).
-                    is SessionStatus.NotAuthenticated ->
+                    is SessionStatus.NotAuthenticated -> {
                         authStateManager.logout()
+                        telemetryContext.onUserChanged(null)
+                    }
                     // RefreshFailure (offline/flaky network) is deliberately NOT a
                     // logout: we're offline-first and Supabase keeps retrying.
                     else -> Unit // Initializing / RefreshFailure

@@ -56,7 +56,7 @@ class AuthScreensTest {
             onNavigateToRegister = { navigatedToRegister = true },
             onNavigateToForgotPassword = { navigatedToForgot = true },
             onLoginSuccess = { succeeded = true },
-            viewModel = LoginViewModel(repository),
+            viewModel = LoginViewModel(repository, mockk(relaxed = true)),
         )
     }
 
@@ -170,7 +170,7 @@ class AuthScreensTest {
         RegisterScreen(
             onNavigateToLogin = { navigatedToLogin = true },
             onRegisterSuccess = { succeeded = true },
-            viewModel = RegisterViewModel(repository),
+            viewModel = RegisterViewModel(repository, mockk(relaxed = true)),
         )
     }
 

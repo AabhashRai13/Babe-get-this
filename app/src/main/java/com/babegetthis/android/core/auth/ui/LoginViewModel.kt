@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ data class LoginUiState(
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val analytics: AnalyticsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -58,6 +61,11 @@ class LoginViewModel @Inject constructor(
             when (val result = authRepository.login(state.email, state.password)) {
                 is Result.Success -> {
                     _uiState.value = _uiState.value.copy(isLoading = false)
+                    // The event carries nothing. The email in `state` is
+                    // exactly the kind of value that must never be attached,
+                    // and identity is set separately from the Supabase session
+                    // as a UUID.
+                    analytics.track(AnalyticsEvent.AccountLoggedIn)
                     _loginSuccess.emit(Unit)
                 }
                 is Result.Error -> {

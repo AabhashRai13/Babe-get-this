@@ -19,6 +19,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import io.mockk.mockk
 
 // Real in-memory Room (same rule the repository tests use) so LWW and the
 // guarded flag-clears are exercised against real SQL, with a fake remote.
@@ -31,7 +32,7 @@ class SyncEngineTest {
     private val syncPoints = FakeSyncPointStore()
     private var userId: String? = "user-1"
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints) { userId }
+        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, { userId }, mockk(relaxed = true))
     }
 
     private val t10 = "2026-08-01T10:00:00Z"

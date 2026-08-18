@@ -41,6 +41,9 @@ import com.babegetthis.android.core.pin.ui.RecoveryResetDialog
 import com.babegetthis.android.core.pin.ui.RegenerateRecoveryDialog
 import com.babegetthis.android.core.pin.ui.RemovePinDialog
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
+import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material3.Switch
 import com.babegetthis.android.core.ui.components.SettingsRow
 import kotlinx.coroutines.launch
 
@@ -53,6 +56,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val pinExists by viewModel.pinExists.collectAsState()
+    val analyticsEnabled by viewModel.analyticsEnabled.collectAsState()
+    val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
     val lockedCount by viewModel.lockedCount.collectAsState()
     var dialog by remember { mutableStateOf(SettingsDialog.None) }
     val snackbar = remember { SnackbarHostState() }
@@ -122,6 +127,76 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
             )
+
+            Text(
+                text = stringResource(R.string.settings_privacy_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+            )
+
+            // Two switches, not one: crash reporting stands on a different
+            // footing to product analytics, and a user may want to keep one.
+            SettingsRow(
+                icon = Icons.Outlined.Analytics,
+                title = stringResource(R.string.settings_analytics_title),
+                subtitle = stringResource(R.string.settings_analytics_subtitle),
+                onClick = { viewModel.setAnalyticsEnabled(!analyticsEnabled) },
+                trailing = {
+                    Switch(
+                        checked = analyticsEnabled,
+                        onCheckedChange = { viewModel.setAnalyticsEnabled(it) },
+                    )
+                },
+            )
+
+            SettingsRow(
+                icon = Icons.Outlined.BugReport,
+                title = stringResource(R.string.settings_crash_title),
+                subtitle = stringResource(R.string.settings_crash_subtitle),
+                onClick = { viewModel.setCrashReportingEnabled(!crashReportingEnabled) },
+                trailing = {
+                    Switch(
+                        checked = crashReportingEnabled,
+                        onCheckedChange = { viewModel.setCrashReportingEnabled(it) },
+                    )
+                },
+            )
+
+            Text(
+                text = stringResource(R.string.settings_privacy_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            )
+
+            // Debug-only: the one reliable way to confirm crash reporting still
+            // works end to end. `adb shell am crash` does NOT do it — its
+            // RemoteServiceException comes from the system and bypasses the
+            // handler Crashlytics installs, leaving no report on disk at all.
+            // This throws from app code on the main thread, which is exactly
+            // what gets caught.
+            //
+            // Strings are literals, not resources: this is never seen by a user
+            // and never translated, so putting it in strings.xml would ship
+            // developer copy to translators and to the release APK.
+            if (BuildConfig.DEBUG) {
+                Text(
+                    text = "Debug",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.BugReport,
+                    title = "Force a test crash",
+                    subtitle = "Relaunch afterwards — reports upload on next start, not on crash.",
+                    onClick = { throw RuntimeException("Test crash from Settings") },
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
 
             Text(
                 text = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",

@@ -28,6 +28,10 @@ import com.babegetthis.android.R
 fun ShareCodeDialog(
     code: String,
     onDismiss: () -> Unit,
+    // Copying IS the sharing act here — there is no share sheet, the user
+    // pastes the code into whatever app they already talk in. So this is the
+    // only observable point between "code exists" and "partner has it".
+    onCodeCopied: () -> Unit = {},
 ) {
     val clipboard = LocalClipboardManager.current
 
@@ -59,7 +63,10 @@ fun ShareCodeDialog(
         },
         confirmButton = {
             // Android 13+ shows its own "copied" overlay, so no snackbar here.
-            TextButton(onClick = { clipboard.setText(AnnotatedString(code)) }) {
+            TextButton(onClick = {
+                clipboard.setText(AnnotatedString(code))
+                onCodeCopied()
+            }) {
                 Icon(
                     imageVector = Icons.Filled.ContentCopy,
                     contentDescription = null,

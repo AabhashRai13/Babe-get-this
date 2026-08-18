@@ -3,6 +3,9 @@ package com.babegetthis.android.core.voice.ui.viewModels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.VoiceFailureReason
 import com.babegetthis.android.core.voice.data.AudioRecorder
 import com.babegetthis.android.core.voice.data.repository.VoiceRepository
 import com.babegetthis.android.core.voice.model.ItemDraft
@@ -30,6 +33,7 @@ import javax.inject.Inject
 class VoiceCaptureViewModel @Inject constructor(
     private val recorder: AudioRecorder,
     private val voiceRepository: VoiceRepository,
+    private val analytics: AnalyticsRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<VoiceCaptureUiState>(VoiceCaptureUiState.Idle)
@@ -51,8 +55,22 @@ class VoiceCaptureViewModel @Inject constructor(
     // ABORT it (dismissing the sheet mid-tone must never open the mic afterwards).
     private var recordJob: Job? = null
 
+    // When the mic actually opened, or null if we are not recording. Doubles as
+    // the "is a recording in flight?" flag that tells a genuine user abort apart
+    // from the cancel() the sheet fires to reset itself after a SUCCESSFUL
+    // capture — without it, every successful voice list would also report an
+    // abandonment and the funnel would read as ~100% drop-off at the last step.
+    private var recordingStartedAt: Long? = null
+
     fun setPersist(block: suspend (drafts: List<ItemDraft>) -> Result<String>) {
         persist = block
+    }
+
+    // Top of the funnel. Called from the sheet's open effect rather than from
+    // startRecording, because the gap between the two is exactly the permission
+    // prompt — and users lost there are the ones worth counting.
+    fun onSheetOpened() {
+        analytics.track(AnalyticsEvent.VoiceSheetOpened)
     }
 
     // Called by the screen after the system permission dialog resolves.
@@ -77,15 +95,22 @@ class VoiceCaptureViewModel @Inject constructor(
                 // and swallowed words spoken during the tone. Until then the sheet
                 // shows its Idle spinner, which reads as "getting ready".
                 recorder.start()
+                recordingStartedAt = System.currentTimeMillis()
                 _state.value = VoiceCaptureUiState.Recording()
+                analytics.track(AnalyticsEvent.VoiceRecordingStarted)
                 // Elapsed-time tick intentionally omitted for v1 — add later if the
                 // UI grows a timer/waveform. Recording state alone is enough today.
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 recorder.cancel()
+                recordingStartedAt = null
                 _state.value =
                     VoiceCaptureUiState.Failed("Couldn't start recording. Is the microphone in use?")
+                // A device condition rather than a bug, so not a crash report —
+                // but a high rate here means the feature is simply unusable for
+                // some slice of devices, which nothing else would tell us.
+                analytics.track(AnalyticsEvent.VoiceRecordingFailed)
             }
         }
     }
@@ -99,21 +124,50 @@ class VoiceCaptureViewModel @Inject constructor(
                 // doesn't exist yet and crashes. Stopping right after the mic opens
                 // just yields an ~empty file, which the flow below already handles.
                 recordJob?.join()
+                // The recording is over; a cancel() from here on is the sheet
+                // tidying up, not the user walking away mid-capture.
+                recordingStartedAt = null
                 val file = recorder.stop()
                 try {
+                    val startedAt = System.currentTimeMillis()
                     when (val result = voiceRepository.transcribeAndParse(file)) {
                         is Result.Success -> {
+                            val latency = System.currentTimeMillis() - startedAt
                             // Empty result = nothing was understood. Guard BEFORE persisting
                             // so we never create an empty list.
                             if (result.data.isEmpty()) {
                                 _state.value =
                                     VoiceCaptureUiState.Failed("Didn't catch any items. Try again?")
+                                // Reported as a FAILURE, not a zero-item success.
+                                // Technically the request worked; from the user's
+                                // side the feature did nothing, and this is the
+                                // failure they hit most.
+                                analytics.track(
+                                    AnalyticsEvent.VoiceTranscriptionFailed(
+                                        reason = VoiceFailureReason.NothingHeard,
+                                        latencyMillis = latency,
+                                    ),
+                                )
                             } else {
+                                analytics.track(
+                                    AnalyticsEvent.VoiceTranscriptionCompleted(
+                                        latencyMillis = latency,
+                                        itemCount = result.data.size,
+                                    ),
+                                )
                                 persistDrafts(result.data)
                             }
                         }
                         is Result.Error -> {
                             _state.value = VoiceCaptureUiState.Failed(result.error.message)
+                            analytics.track(
+                                AnalyticsEvent.VoiceTranscriptionFailed(
+                                    // The AppError type, never its message —
+                                    // that string can carry server text.
+                                    reason = VoiceFailureReason.from(result.error),
+                                    latencyMillis = System.currentTimeMillis() - startedAt,
+                                ),
+                            )
                         }
                     }
                 } finally {
@@ -151,6 +205,10 @@ class VoiceCaptureViewModel @Inject constructor(
                 // ShoppingListViewModel.navigateToList (emitted inside the persist
                 // lambda), so we only need to flip to Done here.
                 _state.value = VoiceCaptureUiState.Done
+                // The bottom of the funnel: items are in the database. Anything
+                // between here and VoiceTranscriptionCompleted is a persist
+                // failure, which is ours rather than the transcriber's.
+                analytics.track(AnalyticsEvent.VoiceItemsSaved(itemCount = drafts.size))
             }
             is Result.Error -> {
                 _state.value = VoiceCaptureUiState.Failed(result.error.message)
@@ -161,6 +219,17 @@ class VoiceCaptureViewModel @Inject constructor(
     // User aborts mid-flow — drop the audio file and reset.
     // Safe to call from any state; AudioRecorder.cancel() is idempotent.
     fun cancel() {
+        // Only a live recording counts as an abandonment. The sheet also calls
+        // cancel() to reset itself out of Done after a successful capture, and
+        // by then stopRecording has already cleared this.
+        recordingStartedAt?.let { startedAt ->
+            analytics.track(
+                AnalyticsEvent.VoiceRecordingCancelled(
+                    elapsedMillis = System.currentTimeMillis() - startedAt,
+                ),
+            )
+            recordingStartedAt = null
+        }
         // Abort a start() still playing the cue tone — cancellation releases the
         // MediaPlayer (invokeOnCancellation in AudioRecorder) and the coroutine
         // never reaches the mic-open step, so no orphaned recorder is left hot.

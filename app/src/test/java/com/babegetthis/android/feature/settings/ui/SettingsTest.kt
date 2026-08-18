@@ -25,6 +25,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import com.babegetthis.android.core.telemetry.TelemetryConsent
+import io.mockk.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -35,11 +37,16 @@ class SettingsViewModelTest {
     private val listRepository = mockk<ShoppingListRepository>(relaxed = true)
     private val pinExists = MutableStateFlow(false)
 
+    // relaxed returns false for both consent getters, so the switches start
+    // OFF in tests. Production defaults them on — tests that care stub it.
+    private val consent = mockk<TelemetryConsent>(relaxed = true)
+
     private fun viewModel(): SettingsViewModel {
         every { pinRepository.pinExists } returns pinExists
         return SettingsViewModel(
             pinRepository,
             listRepository,
+            consent,
             CoroutineScope(UnconfinedTestDispatcher()),
         )
     }
@@ -118,6 +125,62 @@ class SettingsViewModelTest {
 
         coVerify { listRepository.unlockAll() }
     }
+
+
+    // -- Telemetry consent --
+
+    @Test
+    fun `the switches start from the stored choice, not from a default`() = runTest {
+        every { consent.analyticsEnabled } returns false
+        every { consent.crashReportingEnabled } returns true
+
+        val vm = viewModel()
+
+        assertTrue(!vm.analyticsEnabled.value)
+        assertTrue(vm.crashReportingEnabled.value)
+    }
+
+    @Test
+    fun `opting out of analytics reaches the consent store`() = runTest {
+        val vm = viewModel()
+
+        vm.setAnalyticsEnabled(false)
+
+        verify { consent.setAnalyticsEnabled(false) }
+        assertTrue(!vm.analyticsEnabled.value)
+    }
+
+    @Test
+    fun `opting out of crash reporting reaches the consent store`() = runTest {
+        val vm = viewModel()
+
+        vm.setCrashReportingEnabled(false)
+
+        verify { consent.setCrashReportingEnabled(false) }
+        assertTrue(!vm.crashReportingEnabled.value)
+    }
+
+    @Test
+    fun `the two switches are independent`() = runTest {
+        // Crash reporting stands on different footing to product analytics, so
+        // dropping one must never drop the other.
+        val vm = viewModel()
+
+        vm.setAnalyticsEnabled(false)
+
+        verify(exactly = 0) { consent.setCrashReportingEnabled(any()) }
+    }
+
+    @Test
+    fun `opting back in reaches the consent store too`() = runTest {
+        val vm = viewModel()
+
+        vm.setAnalyticsEnabled(false)
+        vm.setAnalyticsEnabled(true)
+
+        verify { consent.setAnalyticsEnabled(true) }
+        assertTrue(vm.analyticsEnabled.value)
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -131,9 +194,18 @@ class SettingsScreenTest {
     // hiltViewModel(), which cannot resolve under a plain Compose rule — so the
     // row -> dialog wiring is left to the e2e suite, and the dialogs themselves
     // are tested directly in PinDialogsTest with a stubbed ViewModel.
-    private fun render(pinExists: Boolean, lockedCount: Int = 0) {
+    private fun render(
+        pinExists: Boolean,
+        lockedCount: Int = 0,
+        analyticsEnabled: Boolean = true,
+        crashReportingEnabled: Boolean = true,
+    ) {
         every { viewModel.pinExists } returns MutableStateFlow(pinExists)
         every { viewModel.lockedCount } returns MutableStateFlow(lockedCount)
+        // A relaxed mock hands back a StateFlow whose value is a bare Object,
+        // which blows up on the Boolean cast the moment the screen collects it.
+        every { viewModel.analyticsEnabled } returns MutableStateFlow(analyticsEnabled)
+        every { viewModel.crashReportingEnabled } returns MutableStateFlow(crashReportingEnabled)
         compose.setContent { SettingsScreen(viewModel = viewModel) }
     }
 

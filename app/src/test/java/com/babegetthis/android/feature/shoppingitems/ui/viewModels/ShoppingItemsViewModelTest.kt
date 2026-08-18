@@ -40,6 +40,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.TelemetryMarkers
+import com.babegetthis.android.core.telemetry.Marker
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.CategorySource
+import com.babegetthis.android.core.telemetry.model.InputMethod
+import io.mockk.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShoppingItemsViewModelTest {
@@ -57,6 +64,8 @@ class ShoppingItemsViewModelTest {
     private lateinit var shareRepository: ShareRepository
     private lateinit var syncEngine: SyncEngine
     private lateinit var sharedListRemote: FakeSharedListRemote
+    private lateinit var analytics: AnalyticsRepository
+    private lateinit var markers: TelemetryMarkers
     private lateinit var itemsFlow: MutableStateFlow<List<ShoppingItem>>
     private lateinit var shareCodeFlow: MutableStateFlow<String?>
 
@@ -71,6 +80,10 @@ class ShoppingItemsViewModelTest {
         shareRepository = mockk(relaxed = true)
         syncEngine = mockk(relaxed = true)
         sharedListRemote = FakeSharedListRemote()
+        analytics = mockk(relaxed = true)
+        // relaxed returns false for firstTime(), i.e. "already fired" — so
+        // once-per-user events stay silent unless a test asks for them.
+        markers = mockk(relaxed = true)
         itemsFlow = MutableStateFlow(emptyList())
         shareCodeFlow = MutableStateFlow(null)
 
@@ -98,6 +111,8 @@ class ShoppingItemsViewModelTest {
         shareRepository = shareRepository,
         syncEngine = syncEngine,
         sharedListRemote = sharedListRemote,
+        analytics = analytics,
+        markers = markers,
         applicationScope = CoroutineScope(testDispatcher),
     )
 
@@ -411,7 +426,7 @@ class ShoppingItemsViewModelTest {
     }
 
     @Test
-    fun `activeByShop groups by shop and buckets missing shops under empty string`() = runTest {
+    fun `activeSections groups by shop and buckets missing shops under null`() = runTest {
         val viewModel = collecting(buildViewModel())
         itemsFlow.value = listOf(
             item("a").copy(shop = "Aldi"),
@@ -419,20 +434,38 @@ class ShoppingItemsViewModelTest {
             item("c").copy(shop = null),
         )
 
-        val byShop = viewModel.uiState.value.activeByShop
-        assertEquals(listOf("a", "b"), byShop.getValue("Aldi").map { it.id })
-        assertEquals(listOf("c"), byShop.getValue("").map { it.id })
+        val sections = viewModel.uiState.value.activeSections
+        val aldi = sections.first { it.shopName == "Aldi" }
+        val noShop = sections.first { it.shopName == null }
+        assertEquals(listOf("a", "b"), aldi.categories.flatMap { it.items }.map { it.id })
+        assertEquals(listOf("c"), noShop.categories.flatMap { it.items }.map { it.id })
     }
 
     @Test
-    fun `activeByShop excludes picked-up items`() = runTest {
+    fun `activeSections excludes picked-up items`() = runTest {
         val viewModel = collecting(buildViewModel())
         itemsFlow.value = listOf(
             item("a").copy(shop = "Aldi"),
             item("b", isPickedUp = true).copy(shop = "Aldi"),
         )
 
-        assertEquals(listOf("a"), viewModel.uiState.value.activeByShop.getValue("Aldi").map { it.id })
+        val aldi = viewModel.uiState.value.activeSections.first { it.shopName == "Aldi" }
+        assertEquals(listOf("a"), aldi.categories.flatMap { it.items }.map { it.id })
+    }
+
+    @Test
+    fun `activeSections sorts categories alphabetically with uncategorized last`() = runTest {
+        val viewModel = collecting(buildViewModel())
+        itemsFlow.value = listOf(
+            item("a").copy(shop = "Aldi", categoryName = "Snacks"),
+            item("b").copy(shop = "Aldi", categoryName = "Bakery"),
+            item("c").copy(shop = "Aldi", categoryName = null),
+        )
+
+        val aldi = viewModel.uiState.value.activeSections.first { it.shopName == "Aldi" }
+        // Bakery before Snacks (alphabetical); the uncategorized bucket (null) last.
+        assertEquals(listOf("Bakery", "Snacks", null), aldi.categories.map { it.label })
+        assertEquals(listOf("c"), aldi.categories.last().items.map { it.id })
     }
 
     @Test
@@ -455,6 +488,8 @@ class ShoppingItemsViewModelTest {
             shareRepository = shareRepository,
             syncEngine = syncEngine,
             sharedListRemote = sharedListRemote,
+            analytics = analytics,
+            markers = markers,
             applicationScope = CoroutineScope(testDispatcher),
         )
 
@@ -867,6 +902,176 @@ class ShoppingItemsViewModelTest {
             assertEquals(AppError.NetworkError().message, awaitItem())
         }
         assertNull(viewModel.shareCodeDialog.value)
+    }
+
+    // -- Telemetry --
+    //
+    // These assert the two properties that make the analytics worth having:
+    // once-only events fire once, and no user content is ever a parameter.
+
+    @Test
+    fun `a manual add reports the input method and who chose the category`() = runTest {
+        coEvery {
+            itemRepository.addItem(any(), any(), any(), any(), any(), any())
+        } returns Result.Success("i1")
+        val viewModel = buildViewModel()
+
+        viewModel.addItem("Milk", "1", "cat-dairy-eggs", null, null)
+        viewModel.addItem("Eggs", "6", null, null, null)
+
+        verify {
+            analytics.track(AnalyticsEvent.ItemAdded(InputMethod.Manual, CategorySource.User))
+            analytics.track(AnalyticsEvent.ItemAdded(InputMethod.Manual, CategorySource.None))
+        }
+    }
+
+    @Test
+    fun `activation is reported on the first item only`() = runTest {
+        coEvery {
+            itemRepository.addItem(any(), any(), any(), any(), any(), any())
+        } returns Result.Success("i1")
+        // The marker claims the first call and refuses the rest.
+        every { markers.firstTime(Marker.FirstItemAdded, any()) } returnsMany listOf(true, false)
+        val viewModel = buildViewModel()
+
+        viewModel.addItem("Milk", "1", null, null, null)
+        viewModel.addItem("Eggs", "6", null, null, null)
+
+        verify(exactly = 1) {
+            analytics.track(AnalyticsEvent.FirstItemAdded(InputMethod.Manual))
+        }
+    }
+
+    @Test
+    fun `voice items report one add and one auto-category each`() = runTest {
+        coEvery { listRepository.addItemsToList(any(), any()) } returns Result.Success("L1")
+        val viewModel = buildViewModel()
+
+        viewModel.addItemsWithVoice(
+            listOf(
+                TestData.draft(name = "Milk", category = "cat-dairy-eggs"),
+                TestData.draft(name = "Something odd", category = null),
+            ),
+        )
+
+        verify {
+            analytics.track(AnalyticsEvent.ItemAdded(InputMethod.Voice, CategorySource.Auto))
+            analytics.track(AnalyticsEvent.ItemAdded(InputMethod.Voice, CategorySource.None))
+            analytics.track(AnalyticsEvent.CategoryAutoAssigned("cat-dairy-eggs"))
+            analytics.track(AnalyticsEvent.CategoryAutoAssigned(null))
+        }
+    }
+
+    @Test
+    fun `checking an item off is reported, un-checking is not`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("i1", isPickedUp = true)
+        viewModel.togglePickedUp("i1", isPickedUp = false)
+
+        // Un-checking is a correction. Counting it would inflate the shopping
+        // activity this event exists to measure.
+        verify(exactly = 1) { analytics.track(AnalyticsEvent.ItemCheckedOff) }
+    }
+
+    @Test
+    fun `changing a category reports the correction with both taxonomy ids`() = runTest {
+        itemsFlow.value = listOf(item("1").copy(categoryId = "cat-dairy-eggs"))
+        coEvery { itemRepository.updateItem(any()) } returns Result.Success(Unit)
+        val viewModel = buildViewModel()
+
+        viewModel.editItem("1", "Milk", "1", "cat-frozen-foods", null, null)
+
+        verify {
+            analytics.track(
+                AnalyticsEvent.CategoryCorrected("cat-dairy-eggs", "cat-frozen-foods"),
+            )
+        }
+    }
+
+    @Test
+    fun `an edit that leaves the category alone is not a correction`() = runTest {
+        itemsFlow.value = listOf(item("1").copy(categoryId = "cat-dairy-eggs"))
+        coEvery { itemRepository.updateItem(any()) } returns Result.Success(Unit)
+        val viewModel = buildViewModel()
+
+        // Renaming only. Reporting this would make the taxonomy look far worse
+        // than it is.
+        viewModel.editItem("1", "Whole milk", "1", "cat-dairy-eggs", null, null)
+
+        verify(exactly = 0) { analytics.track(ofType<AnalyticsEvent.CategoryCorrected>()) }
+    }
+
+    @Test
+    fun `re-opening the share dialog does not report a second share`() = runTest {
+        every { authStateManager.authState } returns MutableStateFlow(AuthState.Authenticated("u1"))
+        coEvery { shareRepository.share("L1") } returns Result.Success("ABC123")
+        // share() hands back the EXISTING code on every call after the first,
+        // so only the marker can tell a new share from a re-open.
+        every { markers.firstTime(Marker.ShareCodeCreated, "L1") } returnsMany listOf(true, false)
+        val viewModel = buildViewModel()
+
+        viewModel.onShareLiveClick()
+        viewModel.onShareLiveClick()
+
+        verify(exactly = 1) { analytics.track(AnalyticsEvent.ShareCodeCreated) }
+    }
+
+    @Test
+    fun `copying the code is what counts as sharing it`() {
+        buildViewModel().onShareCodeCopied()
+
+        verify { analytics.track(AnalyticsEvent.ShareCodeShared) }
+    }
+
+    @Test
+    fun `only the joining device reports a joiner's first edit, and only once`() = runTest {
+        every { markers.has(Marker.JoinedList, "L1") } returns true
+        every { markers.firstTime(Marker.SharedListFirstEdit, "L1") } returnsMany
+            listOf(true, false)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("i1", isPickedUp = true)
+        viewModel.togglePickedUp("i2", isPickedUp = true)
+
+        verify(exactly = 1) { analytics.track(AnalyticsEvent.SharedListFirstEditByJoiner) }
+    }
+
+    @Test
+    fun `the owner's device never reports a joiner's first edit`() = runTest {
+        // Owner and joiner devices are identical once the list syncs — this is
+        // the marker written at join time doing the only work that can tell
+        // them apart.
+        every { markers.has(Marker.JoinedList, "L1") } returns false
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("i1", isPickedUp = true)
+
+        verify(exactly = 0) { analytics.track(AnalyticsEvent.SharedListFirstEditByJoiner) }
+    }
+
+    @Test
+    fun `completing a list reports the trip, and the first one reports activation`() = runTest {
+        every { markers.firstTime(Marker.FirstListCompleted, any()) } returns true
+        val viewModel = buildViewModel()
+
+        viewModel.events.test {
+            itemsFlow.value = listOf(item("1"), item("2"))
+            expectNoEvents()
+            itemsFlow.value = listOf(
+                item("1", isPickedUp = true),
+                item("2", isPickedUp = true),
+            )
+            awaitItem()
+        }
+
+        verify {
+            analytics.track(AnalyticsEvent.ListCompleted(itemCount = 2))
+            analytics.track(AnalyticsEvent.FirstListCompleted(itemCount = 2))
+        }
     }
 
     // onCleared is protected on ViewModel, so reach it the way the framework

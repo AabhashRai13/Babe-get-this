@@ -101,3 +101,29 @@ fun ShopSubHeader(shopName: String) {
         )
     }
 }
+
+// Category sub-header nested under a shop. Indented and quieter than
+// ShopSubHeader so the Shop -> Category hierarchy reads at a glance.
+@Composable
+fun CategorySubHeader(name: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 24.dp, top = 4.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.Start,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+    }
+}

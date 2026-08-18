@@ -9,6 +9,7 @@ import com.babegetthis.android.core.sync.data.local.PrefsSyncPointStore
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.sync.data.remote.SupabaseSharedListRemote
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
+import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
@@ -42,7 +43,15 @@ object SyncModule {
         remote: SharedListRemote,
         syncPoints: SyncPointStore,
         tokenManager: TokenManager,
-    ): SyncEngine = SyncEngine(listDao, itemDao, remote, syncPoints) { tokenManager.getUserId() }
+        crashReporter: CrashReporter,
+    ): SyncEngine = SyncEngine(
+        listDao,
+        itemDao,
+        remote,
+        syncPoints,
+        { tokenManager.getUserId() },
+        crashReporter,
+    )
 
     @Provides
     @Singleton

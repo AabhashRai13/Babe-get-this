@@ -43,6 +43,19 @@ archCoreTesting = "2.2.0"
 supabase = "3.0.3"
 ktor = "3.0.3"
 playUpdate = "2.1.0"
+# Firebase: BOM pins every firebase-* module version, so they stay versionless
+# in [libraries] below (same pattern as compose-bom and supabase-bom).
+# FCM is the only way to deliver push on Play-services devices; Analytics and
+# Crashlytics ride along at no extra cost since the SDK is already present.
+# Pinned to the 33.x line, NOT the newest 34.x. From BOM 34.0.0 the analytics
+# module pulls play-services-measurement 23.x, whose .kotlin_module metadata is
+# Kotlin 2.2.0 — this project compiles with Kotlin 2.0.21 (itself pinned by
+# supabase 3.0.x above) and fails with "Module was compiled with an incompatible
+# version of Kotlin". Moving to 34.x means a toolchain-wide Kotlin upgrade,
+# which is the same deferred task the supabase pin is waiting on.
+firebaseBom = "33.16.0"
+googleServices = "4.5.0"
+crashlyticsPlugin = "3.0.7"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -94,6 +107,13 @@ supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 # Play Core: in-app update (flexible/immediate flow), no other Play Core modules needed.
 play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playUpdate" }
+# Firebase modules are versionless — firebase-bom supplies the versions.
+# The old -ktx artifacts are deprecated; the Kotlin APIs live in the main
+# modules from BOM 32.5 onward.
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -103,4 +123,6 @@ kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", versi
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt-android-plugin = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlyticsPlugin" }
 

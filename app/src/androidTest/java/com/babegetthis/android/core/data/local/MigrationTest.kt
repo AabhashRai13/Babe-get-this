@@ -152,4 +152,99 @@ class MigrationTest {
         }
         db.close()
     }
+
+    @Test
+    fun migrate3To4_addsNewCategoriesRenamesTwoAndKeepsCustomAndItemLinks() {
+        context.deleteDatabase(testDb)
+
+        // Build the exact v3 categories schema, seed a renamed default, an untouched
+        // default, a user-created custom category, and an item pointing at the renamed
+        // default's id.
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(testDb)
+                .callback(object : SupportSQLiteOpenHelper.Callback(3) {
+                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL(
+                            "CREATE TABLE categories (" +
+                                "id TEXT NOT NULL PRIMARY KEY, " +
+                                "name TEXT NOT NULL, " +
+                                "isDefault INTEGER NOT NULL)"
+                        )
+                        db.execSQL(
+                            "CREATE TABLE shopping_items (" +
+                                "id TEXT NOT NULL PRIMARY KEY, " +
+                                "listId TEXT NOT NULL, " +
+                                "name TEXT NOT NULL, " +
+                                "quantity TEXT NOT NULL, " +
+                                "isPickedUp INTEGER NOT NULL DEFAULT 0, " +
+                                "categoryId TEXT, " +
+                                "shop TEXT, " +
+                                "note TEXT, " +
+                                "createdAt INTEGER NOT NULL, " +
+                                "updatedAt INTEGER NOT NULL, " +
+                                "deletedAt INTEGER, " +
+                                "pendingSync INTEGER NOT NULL DEFAULT 0)"
+                        )
+                        db.execSQL(
+                            "INSERT INTO categories (id, name, isDefault) " +
+                                "VALUES ('cat-pantry-dry-goods', 'Pantry & Dry Goods', 1)"
+                        )
+                        db.execSQL(
+                            "INSERT INTO categories (id, name, isDefault) " +
+                                "VALUES ('cat-dairy-eggs', 'Dairy & Eggs', 1)"
+                        )
+                        db.execSQL(
+                            "INSERT INTO categories (id, name, isDefault) " +
+                                "VALUES ('cat-user-xyz', 'My Custom', 0)"
+                        )
+                        db.execSQL(
+                            "INSERT INTO shopping_items " +
+                                "(id, listId, name, quantity, categoryId, createdAt, updatedAt) " +
+                                "VALUES ('item-a', 'list-a', 'Rice', '1', 'cat-pantry-dry-goods', 100, 200)"
+                        )
+                    }
+
+                    override fun onUpgrade(
+                        db: androidx.sqlite.db.SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int,
+                    ) = Unit
+                })
+                .build()
+        )
+
+        val db = helper.writableDatabase
+        MIGRATION_3_4.migrate(db)
+
+        // All 48 defaults present.
+        db.query("SELECT COUNT(*) FROM categories WHERE isDefault = 1").use { c ->
+            c.moveToFirst()
+            assertEquals(DEFAULT_CATEGORIES.size, c.getInt(0))
+        }
+        // Renamed default patched by id.
+        db.query("SELECT name FROM categories WHERE id = 'cat-pantry-dry-goods'").use { c ->
+            c.moveToFirst()
+            assertEquals("Rice, Grains & Pasta", c.getString(0))
+        }
+        // A brand-new default landed.
+        db.query("SELECT name FROM categories WHERE id = 'cat-clothing'").use { c ->
+            assertEquals(1, c.count)
+            c.moveToFirst()
+            assertEquals("Clothing", c.getString(0))
+        }
+        // Custom category untouched.
+        db.query("SELECT name, isDefault FROM categories WHERE id = 'cat-user-xyz'").use { c ->
+            assertEquals(1, c.count)
+            c.moveToFirst()
+            assertEquals("My Custom", c.getString(0))
+            assertEquals(0, c.getInt(1))
+        }
+        // Item still points at the same (stable) id — no re-map needed.
+        db.query("SELECT categoryId FROM shopping_items WHERE id = 'item-a'").use { c ->
+            c.moveToFirst()
+            assertEquals("cat-pantry-dry-goods", c.getString(0))
+        }
+        db.close()
+    }
 }

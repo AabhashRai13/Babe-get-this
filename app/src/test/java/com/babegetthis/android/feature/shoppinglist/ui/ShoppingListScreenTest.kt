@@ -85,6 +85,8 @@ class ShoppingListScreenTest {
             repository,
             mockk(relaxed = true),
             authStateManager,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
             CoroutineScope(UnconfinedTestDispatcher()),
         )
         compose.setContent {

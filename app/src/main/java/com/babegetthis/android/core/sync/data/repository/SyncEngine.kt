@@ -8,6 +8,7 @@ import com.babegetthis.android.core.sync.data.mapper.toRow
 import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
+import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 
@@ -26,6 +27,7 @@ class SyncEngine(
     private val remote: SharedListRemote,
     private val syncPoints: SyncPointStore,
     private val currentUserId: () -> String?,
+    private val crashReporter: CrashReporter,
 ) {
 
     // Upsert everything pendingSync. Lists strictly before items: the server's
@@ -47,6 +49,10 @@ class SyncEngine(
                 remote.upsertItems(items.map { it.toRow() })
                 items.forEach { itemDao.markItemSynced(it.id, it.updatedAt) }
             }
+            // Counts only. A crash mid-sync reads very differently depending on
+            // whether the queue was empty or draining hundreds of rows, and
+            // that is not recoverable from the report afterwards.
+            crashReporter.breadcrumb("sync: pushed ${'$'}{lists.size} lists, ${'$'}{items.size} items")
         }
     }
 
@@ -64,6 +70,9 @@ class SyncEngine(
         val newest = (listRows.mapNotNull { it.updatedAt } + itemRows.mapNotNull { it.updatedAt })
             .maxOrNull()
         if (newest != null) syncPoints.set(listId, newest)
+        // No list id: it identifies one shared list, and a shared list is a
+        // thing two named people have between them.
+        crashReporter.breadcrumb("sync: applied ${'$'}{listRows.size} lists, ${'$'}{itemRows.size} items")
     }
 
     // Discovery-first: the server's RLS-scoped view IS the account's list set
@@ -104,6 +113,7 @@ class SyncEngine(
         // to sync. CASCADE clears the items.
         listDao.deleteSharedLists()
         syncPoints.clear()
+        crashReporter.breadcrumb("sync: evicted shared replicas")
     }
 
     private suspend fun apply(listRows: List<ListRow>, itemRows: List<ItemRow>) {

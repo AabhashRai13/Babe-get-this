@@ -7,6 +7,13 @@ import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.Marker
+import com.babegetthis.android.core.telemetry.TelemetryMarkers
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.CategorySource
+import com.babegetthis.android.core.telemetry.model.InputMethod
+import com.babegetthis.android.core.telemetry.model.JoinFailureReason
 import kotlinx.coroutines.CoroutineScope
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
@@ -31,6 +38,8 @@ class ShoppingListViewModel @Inject constructor(
     private val repository: ShoppingListRepository,
     private val shareRepository: ShareRepository,
     private val authStateManager: AuthStateManager,
+    private val analytics: AnalyticsRepository,
+    private val markers: TelemetryMarkers,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
@@ -143,11 +152,30 @@ class ShoppingListViewModel @Inject constructor(
         viewModelScope.launch {
             joinInProgress.value = true
             joinError.value = null
+            // Attempted before the call, so the attempt-to-success ratio is the
+            // real conversion rate — counting attempts only on completion would
+            // silently drop everyone whose join never returned.
+            analytics.track(AnalyticsEvent.ShareJoinAttempted)
             when (val result = shareRepository.join(code)) {
                 // The replica landed in Room — the list appears via the
                 // existing Flow, no navigation or refresh needed.
-                is Result.Success -> showJoinDialog.value = false
-                is Result.Error -> joinError.value = result.error.message
+                is Result.Success -> {
+                    showJoinDialog.value = false
+                    analytics.track(AnalyticsEvent.ShareJoinSucceeded)
+                    // Records that THIS device is the joiner's for this list.
+                    // Once the replica syncs, owner and joiner devices look
+                    // identical, so the distinction has to be captured now or
+                    // not at all — ShoppingItemsViewModel reads it back to
+                    // report the joiner's first edit.
+                    markers.mark(Marker.JoinedList, result.data)
+                }
+                is Result.Error -> {
+                    joinError.value = result.error.message
+                    // The code itself is never sent — only why it failed.
+                    analytics.track(
+                        AnalyticsEvent.ShareJoinFailed(JoinFailureReason.from(result.error)),
+                    )
+                }
             }
             joinInProgress.value = false
         }
@@ -231,9 +259,30 @@ class ShoppingListViewModel @Inject constructor(
         val result = repository.createListWithItems(name, drafts)
         if (result is Result.Success) {
             _navigateToList.emit(result.data to name)
+            // The other voice path (adding to an EXISTING list) is tracked in
+            // ShoppingItemsViewModel.addItemsWithVoice. Both exist because the
+            // two insert through different repositories; the events they emit
+            // are deliberately identical so the funnel does not care which
+            // route an item took.
+            drafts.forEach { draft ->
+                analytics.track(
+                    AnalyticsEvent.ItemAdded(
+                        inputMethod = InputMethod.Voice,
+                        categorySource = if (draft.category == null) CategorySource.None
+                        else CategorySource.Auto,
+                    ),
+                )
+                analytics.track(AnalyticsEvent.CategoryAutoAssigned(draft.category))
+            }
+            if (markers.firstTime(Marker.FirstItemAdded, currentUserId())) {
+                analytics.track(AnalyticsEvent.FirstItemAdded(InputMethod.Voice))
+            }
         }
         return result
     }
+
+    private fun currentUserId(): String? =
+        (authStateManager.authState.value as? AuthState.Authenticated)?.userId
 
     // applicationScope, NOT viewModelScope — the same reasoning
     // ShoppingItemsViewModel.undoDeleteItem already spells out for items, which

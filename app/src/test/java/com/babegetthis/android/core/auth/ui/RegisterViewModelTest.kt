@@ -41,7 +41,7 @@ class RegisterViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun buildViewModel() = RegisterViewModel(authRepository)
+    private fun buildViewModel() = RegisterViewModel(authRepository, mockk(relaxed = true))
 
     private val user = User(id = "u1", email = "a@b.com", name = "Ann")
 
