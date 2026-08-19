@@ -12,7 +12,7 @@ A modern, offline-first shopping list app for couples — built with Jetpack Com
 - Time-aware greeting and progress tracking on the home screen
 - Fully usable offline — Room is the single source of truth
 - Light and dark theme that follow the system setting
-- Authenticated accounts (real-time sync between partners is in active development)
+- Authenticated accounts, with real-time sync between partners over a shared list code
 
 ## Tech Stack
 
@@ -145,7 +145,7 @@ If you are not sure where to start, look for issues labeled `good first issue` o
 - [x] Voice-to-list — dictate a whole shopping list
 - [x] Share a list as plain text
 - [ ] Auto-categorization of common items
-- [ ] Real-time sync between partners
-- [ ] Shared list invitations
+- [x] Real-time sync between partners
+- [x] Shared list invitations
 - [ ] Camera and gallery capture with image-driven item autofill (v2)
 - [ ] "Store room" pantry — completed grocery items carry over to the next list (v2)
