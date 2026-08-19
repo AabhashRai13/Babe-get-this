@@ -1,0 +1,128 @@
+[versions]
+agp = "8.13.2"
+kotlin = "2.0.21"
+coreKtx = "1.10.1"
+junit = "4.13.2"
+junitVersion = "1.2.1"
+# Input injection reflects on internal framework APIs, so this has to track the
+# platform. 3.5.1 used android.hardware.input.InputManager.getInstance(), removed
+# in Android 14; 3.6.1 still failed on API 37. Keep this current rather than
+# pinning the emulator to an older image.
+espressoCore = "3.7.0"
+lifecycleRuntimeKtx = "2.6.1"
+activityCompose = "1.8.0"
+composeBom = "2024.09.00"
+room = "2.8.4"
+ksp = "2.0.21-1.0.28"
+hilt = "2.51.1"
+hiltNavigationCompose = "1.2.0"
+navigationCompose = "2.7.7"
+retrofit = "2.11.0"
+okhttp = "4.12.0"
+kotlinxSerialization = "1.7.3"
+retrofitKotlinxSerialization = "1.0.0"
+securityCrypto = "1.1.0-alpha06"
+kotlinxCoroutinesTest = "1.8.1"
+mockk = "1.13.13"
+turbine = "1.1.0"
+# Test-only. Kover over JaCoCo: JaCoCo mis-attributes coverage in inline
+# functions and coroutine-generated state machines, both of which this codebase
+# is full of. 0.8.x is the last line targeting Kotlin 2.0.x.
+kover = "0.8.3"
+# Robolectric runs Android-framework code on the JVM, so Compose screen tests and
+# Room DAO tests execute in CI with no emulator. 4.13 supports compileSdk 36.
+robolectric = "4.13"
+androidxTest = "1.7.0"
+androidxTestRunner = "1.7.0"
+archCoreTesting = "2.2.0"
+# Supabase Kotlin SDK (auth, realtime later) + the Ktor HTTP engine it runs on.
+# supabase-kt ships a BOM, so its modules are versionless in [libraries] below.
+# Pinned to the 3.0.x line on purpose: it targets Kotlin 2.0.x / Ktor 3.0, which
+# matches this project's Kotlin 2.0.21. The newest 3.6.x needs Kotlin 2.3 and
+# would force a toolchain-wide upgrade — deferred to a dedicated task.
+supabase = "3.0.3"
+ktor = "3.0.3"
+playUpdate = "2.1.0"
+# Firebase: BOM pins every firebase-* module version, so they stay versionless
+# in [libraries] below (same pattern as compose-bom and supabase-bom).
+# FCM is the only way to deliver push on Play-services devices; Analytics and
+# Crashlytics ride along at no extra cost since the SDK is already present.
+# Pinned to the 33.x line, NOT the newest 34.x. From BOM 34.0.0 the analytics
+# module pulls play-services-measurement 23.x, whose .kotlin_module metadata is
+# Kotlin 2.2.0 — this project compiles with Kotlin 2.0.21 (itself pinned by
+# supabase 3.0.x above) and fails with "Module was compiled with an incompatible
+# version of Kotlin". Moving to 34.x means a toolchain-wide Kotlin upgrade,
+# which is the same deferred task the supabase pin is waiting on.
+firebaseBom = "33.16.0"
+googleServices = "4.5.0"
+crashlyticsPlugin = "3.0.7"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleRuntimeKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
+androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
+retrofit-core = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+okhttp-core = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+retrofit-kotlinx-serialization = { group = "com.jakewharton.retrofit", name = "retrofit2-kotlinx-serialization-converter", version.ref = "retrofitKotlinxSerialization" }
+security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+# Test-only additions for the test suite (see openspec/changes/add-test-suite).
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTest" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "archCoreTesting" }
+androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
+# Supabase: the BOM pins module versions; auth-kt is the GoTrue/auth client.
+# ktor-client-okhttp is the HTTP engine (reuses OkHttp, which you already have).
+supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
+supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
+supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt" }
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
+# Play Core: in-app update (flexible/immediate flow), no other Play Core modules needed.
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playUpdate" }
+# Firebase modules are versionless — firebase-bom supplies the versions.
+# The old -ktx artifacts are deprecated; the Kotlin APIs live in the main
+# modules from BOM 32.5 onward.
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt-android-plugin = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlyticsPlugin" }
+

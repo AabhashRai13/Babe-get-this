@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "683692641560",
+    "project_id": "babe-get-this-stg",
+    "storage_bucket": "babe-get-this-stg.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:683692641560:android:f7d895e3f20ba847fea26d",
+        "android_client_info": {
+          "package_name": "com.babegetthis.android.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwZMxW_B88WdrXPF9_HmW0PYecxEXRJjs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:683692641560:android:18032f336453f69ffea26d",
+        "android_client_info": {
+          "package_name": "com.babegetthis.android.staging"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwZMxW_B88WdrXPF9_HmW0PYecxEXRJjs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

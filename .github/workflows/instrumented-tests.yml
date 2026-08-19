@@ -1,0 +1,80 @@
+# End-to-end suite on an emulator.
+#
+# Pull requests only, deliberately. Booting an emulator is minutes, and paying
+# that on every push to every branch is how people learn to ignore CI. The fast
+# feedback lives in build-aab.yml, which runs the JVM suite and the coverage gate.
+
+name: Instrumented tests
+
+on:
+  pull_request:
+    branches: [ main, development ]
+  workflow_dispatch:
+
+# A newer push to the same PR makes the in-flight run pointless.
+concurrency:
+  group: instrumented-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  androidTest:
+    # ubuntu, not macOS. The emulator needs hardware virtualisation to be usable
+    # at all, and GitHub's Ubuntu runners expose /dev/kvm (enabled by the step
+    # below). The first version of this file used macos-latest on the belief that
+    # Linux runners had no KVM — that is out of date, and macos-latest is now
+    # arm64, so pairing it with an x86_64 system image left the emulator with no
+    # acceleration path. It span for ~12 minutes and timed out. Ubuntu also bills
+    # at a tenth of macOS.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - run: chmod +x ./gradlew
+
+      # Without this the emulator falls back to software CPU emulation and never
+      # finishes booting inside the timeout.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          # API 34, not the newest available. Espresso injects input by
+          # reflecting on internal framework APIs, so it trails the platform —
+          # 3.5.1 broke on Android 14, and 3.6.1 still broke on API 37. Pinning
+          # a well-supported level here keeps CI off that treadmill; local runs
+          # on newer images are fine as long as espressoCore keeps up.
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          # Headless, and animations off — the suite synchronises on Compose
+          # idleness and explicit waitUntil conditions, never on timing.
+          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none
+          disable-animations: true
+          # Give the boot longer than the action's default; a cold AVD on a
+          # shared runner is slower than a warm local one.
+          emulator-boot-timeout: 900
+          script: ./gradlew connectedDevDebugAndroidTest
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-report
+          path: app/build/reports/androidTests/
+          retention-days: 7
