@@ -77,7 +77,7 @@ The app ships with three variants that can be installed side by side:
 | Variant   | Application ID                     | Notes                                |
 | --------- | ---------------------------------- | ------------------------------------ |
 | `dev`     | `com.babegetthis.android.dev`      | Local development; uses fake auth    |
-| `staging` | `com.babegetthis.android.staging`  | Hits the staging backend             |
+| `staging` | `com.babegetthis.android.staging`  | Hits the staging backend and the staging Supabase project |
 | `prod`    | `com.babegetthis.android`          | Release build                        |
 
 ### Google sign-in setup
