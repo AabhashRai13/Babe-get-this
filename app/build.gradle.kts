@@ -89,7 +89,10 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-production.up.railway.app/\"")
+            // Railway's `staging` environment: same backend code, but it validates
+            // tokens against the staging Supabase project below. Pointing staging at
+            // the production backend 401s every call and signs the user out.
+            buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-staging.up.railway.app/\"")
             // WS_URL is a placeholder — websockets aren't implemented yet. Repointed
             // off the dead babegetthis.com domains to the live Railway host so it
             // isn't misleading; revisit the exact /ws path when realtime sync lands.
