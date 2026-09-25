@@ -305,6 +305,7 @@ fun LoginScreen(
             // composition mid-sheet. Closing the sheet returns null: no-op.
             OutlinedButton(
                 onClick = {
+                    if (!viewModel.startGoogleSignIn()) return@OutlinedButton
                     scope.launch {
                         try {
                             requestGoogleSignInToken(context, webClientId)

@@ -5,8 +5,10 @@ import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.network.NetworkMonitor
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,11 +30,13 @@ class LoginViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var authRepository: AuthRepository
+    private lateinit var networkMonitor: NetworkMonitor
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
+        networkMonitor = mockk { every { isOnline() } returns true }
     }
 
     @After
@@ -40,7 +44,7 @@ class LoginViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun buildViewModel() = LoginViewModel(authRepository, mockk(relaxed = true))
+    private fun buildViewModel() = LoginViewModel(authRepository, mockk(relaxed = true), networkMonitor)
 
     // Helper: fill the form with valid values so the button would be enabled.
     private fun LoginViewModel.fillValid() {
@@ -188,5 +192,29 @@ class LoginViewModelTest {
             viewModel.uiState.value.errorMessage,
         )
         coVerify(exactly = 0) { authRepository.signInWithGoogle(any(), any()) }
+    }
+
+    // Offline, the sheet can't fetch a token for the chosen account, so the
+    // tap must fail fast with the app's standard offline message instead of
+    // opening a sheet that goes nowhere.
+    @Test
+    fun `google sign-in is blocked offline with the network message`() {
+        every { networkMonitor.isOnline() } returns false
+        val viewModel = buildViewModel()
+
+        val canStart = viewModel.startGoogleSignIn()
+
+        assertFalse(canStart)
+        assertEquals("No internet connection.", viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `google sign-in may start when online`() {
+        val viewModel = buildViewModel()
+
+        val canStart = viewModel.startGoogleSignIn()
+
+        assertTrue(canStart)
+        assertNull(viewModel.uiState.value.errorMessage)
     }
 }

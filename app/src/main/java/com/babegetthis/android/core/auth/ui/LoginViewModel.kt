@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.model.User
+import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.network.NetworkMonitor
 import com.babegetthis.android.core.telemetry.AnalyticsRepository
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,6 +33,7 @@ data class LoginUiState(
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val analytics: AnalyticsRepository,
+    private val networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -56,6 +59,15 @@ class LoginViewModel @Inject constructor(
         val state = _uiState.value
         if (!state.isFormValid) return
         signIn { authRepository.login(state.email, state.password) }
+    }
+
+    // Gate for opening the Google sheet. Offline, the sheet still lists the
+    // device's accounts but can't fetch a token, so picking one went nowhere;
+    // fail fast with the app's standard offline message instead.
+    fun startGoogleSignIn(): Boolean {
+        if (networkMonitor.isOnline()) return true
+        _uiState.value = _uiState.value.copy(errorMessage = AppError.NetworkError().message)
+        return false
     }
 
     // Called with what the Google account sheet returned. Supabase verifies
