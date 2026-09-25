@@ -47,7 +47,7 @@ How the environments map:
 - Consumes: the `local.properties` keys `STAGING_SUPABASE_URL` and `STAGING_SUPABASE_ANON_KEY` (gitignored; already present on the dev machine).
 - Produces: in `staging*` variants, `BuildConfig.SUPABASE_URL` / `BuildConfig.SUPABASE_ANON_KEY` resolve to the staging project. `dev` and `prod` are unchanged.
 
-- [ ] **Step 1: Read the staging keys**
+- [x] **Step 1: Read the staging keys**
 
 After the existing `supabaseAnonKey` line in `app/build.gradle.kts`:
 
@@ -60,7 +60,7 @@ val stagingSupabaseUrl: String = localProperties.getProperty("STAGING_SUPABASE_U
 val stagingSupabaseAnonKey: String = localProperties.getProperty("STAGING_SUPABASE_ANON_KEY") ?: ""
 ```
 
-- [ ] **Step 2: Override in the staging flavor**
+- [x] **Step 2: Override in the staging flavor**
 
 Replace the `defaultConfig` comment above the two `SUPABASE_*` buildConfigFields with:
 
@@ -77,11 +77,11 @@ and add to the end of `create("staging") { … }`:
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"$stagingSupabaseAnonKey\"")
 ```
 
-- [ ] **Step 3: README**
+- [x] **Step 3: README**
 
 In the flavors table, change the `staging` row's description from "Hits the staging backend" to "Hits the staging backend and the staging Supabase project".
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `./gradlew assembleStagingDebug assembleProdDebug`
 Expected: BUILD SUCCESSFUL.
@@ -94,7 +94,7 @@ Expected: `1`
 Run: `grep -c "vdiheceziirgvbudxdxg" app/build/generated/source/buildConfig/prod/debug/com/babegetthis/android/BuildConfig.java`
 Expected: `0`
 
-- [ ] **Step 5: Review gate, then commit**
+- [x] **Step 5: Review gate, then commit**
 
 ```bash
 git add app/build.gradle.kts README.md
@@ -161,7 +161,7 @@ Expected: three `values.xml` paths, one per task.
 
 Add a `### Google sign-in setup` subsection under the Build Variants table in `README.md`. It covers the flavor → Firebase → Supabase table, the SHA-1 rule (debug and release per Firebase app; the Play signing key is our upload key), and the Supabase settings (only that environment's web client ID, empty secret, nonce checks on). Done 2026-09-24; the README is the source of truth.
 
-- [ ] **Step 8: Review gate, then commit**
+- [x] **Step 8: Review gate, then commit**
 
 ```bash
 git add app/src/dev/google-services.json app/src/staging/google-services.json app/src/prod/google-services.json README.md
@@ -186,7 +186,7 @@ git commit -m "chore: add Google OAuth clients to each flavor's Firebase config"
 
 Why the mapper changes: Supabase's Google errors mention `id_token` (for example "Unacceptable audience in id_token", "Bad ID token") or `nonce`. Today these fall into the `"token"` branch and tell a Google user "Invalid code. Check the email and try again.", which is wrong.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `AuthErrorMapperTest.kt`, inside the class, under the `// --- friendlyAuthMessage ---` section:
 
@@ -218,12 +218,14 @@ Append to `AuthErrorMapperTest.kt`, inside the class, under the `// --- friendly
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
+
+(As built: the second test above was dropped because the existing `an otp or token problem is explained` and `an expired code is explained` tests already pin those two messages.)
 
 Run: `./gradlew testDevDebugUnitTest --tests "com.babegetthis.android.core.auth.data.AuthErrorMapperTest"`
 Expected: `google id token rejections get the google message` FAILS (it gets "Invalid code…" / "Authentication failed…"). The OTP test passes.
 
-- [ ] **Step 3: Add the branch**
+- [x] **Step 3: Add the branch**
 
 In `friendlyAuthMessage`, make this the **first** branch of the `when`, before `"Invalid login"`. It must come before `expired` and `token`, which would otherwise match first:
 
@@ -236,12 +238,12 @@ In `friendlyAuthMessage`, make this the **first** branch of the `when`, before `
             "Google sign-in failed. Please try again."
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `./gradlew testDevDebugUnitTest --tests "com.babegetthis.android.core.auth.data.AuthErrorMapperTest"`
 Expected: all PASS.
 
-- [ ] **Step 5: Add the interface method**
+- [x] **Step 5: Add the interface method**
 
 In `AuthRepository.kt`, after `login`:
 
@@ -252,7 +254,7 @@ In `AuthRepository.kt`, after `login`:
     suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User>
 ```
 
-- [ ] **Step 6: Implement in `SupabaseAuthRepository`**
+- [x] **Step 6: Implement in `SupabaseAuthRepository`**
 
 Add the imports:
 
@@ -282,7 +284,7 @@ Add after `login`:
         }
 ```
 
-- [ ] **Step 7: Implement in `FakeAuthRepository` (dev flavor)**
+- [x] **Step 7: Implement in `FakeAuthRepository` (dev flavor)**
 
 Add after `login`:
 
@@ -302,7 +304,7 @@ Add after `login`:
     }
 ```
 
-- [ ] **Step 8: Implement in `TestAuthRepository` (androidTest)**
+- [x] **Step 8: Implement in `TestAuthRepository` (androidTest)**
 
 In `TestModules.kt`, after the `login` override:
 
@@ -311,12 +313,12 @@ In `TestModules.kt`, after the `login` override:
         guarded { signIn("google@test.com", "google") }
 ```
 
-- [ ] **Step 9: Verify every implementer compiles and nothing regressed**
+- [x] **Step 9: Verify every implementer compiles and nothing regressed**
 
 Run: `./gradlew compileDevDebugKotlin compileStagingDebugKotlin compileProdDebugKotlin compileDevDebugAndroidTestKotlin testDevDebugUnitTest koverVerifyDevDebug`
 Expected: BUILD SUCCESSFUL. (`SupabaseAuthRepository` and `FakeAuthRepository` are already on the Kover exclude list; the new mapper branch is covered by Step 1.)
 
-- [ ] **Step 10: Review gate, then commit**
+- [x] **Step 10: Review gate, then commit**
 
 ```bash
 git add app/src/main/java/com/babegetthis/android/core/auth/data/ app/src/dev/java/com/babegetthis/android/core/auth/data/FakeAuthRepository.kt app/src/androidTest/java/com/babegetthis/android/testing/TestModules.kt app/src/test/java/com/babegetthis/android/core/auth/data/AuthErrorMapperTest.kt
@@ -335,7 +337,7 @@ git commit -m "feat(auth): add Google ID-token sign-in to the auth repository"
 - Consumes: `AuthRepository.signInWithGoogle(idToken: String, rawNonce: String): Result<User>` (Task 3).
 - Produces: `LoginViewModel.signInWithGoogle(idToken: String, rawNonce: String)` and `LoginViewModel.onGoogleSignInFailed()`. Task 5 calls both. Success still emits `loginSuccess`; errors land in `uiState.errorMessage`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append inside `LoginViewModelTest`:
 
@@ -394,12 +396,12 @@ Append inside `LoginViewModelTest`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `./gradlew testDevDebugUnitTest --tests "com.babegetthis.android.core.auth.ui.LoginViewModelTest"`
 Expected: compilation FAILS with `Unresolved reference: signInWithGoogle` / `onGoogleSignInFailed`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `LoginViewModel.kt`, add the import `com.babegetthis.android.core.auth.model.User`, then replace the whole `login()` function with the block below. The existing success/error handling moves unchanged into `signIn`, so both paths share it:
 
@@ -446,17 +448,17 @@ In `LoginViewModel.kt`, add the import `com.babegetthis.android.core.auth.model.
     }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `./gradlew testDevDebugUnitTest --tests "com.babegetthis.android.core.auth.ui.LoginViewModelTest"`
 Expected: all PASS, including the existing email/password tests.
 
-- [ ] **Step 5: Coverage gate**
+- [x] **Step 5: Coverage gate**
 
 Run: `./gradlew koverVerifyDevDebug`
 Expected: BUILD SUCCESSFUL.
 
-- [ ] **Step 6: Review gate, then commit**
+- [x] **Step 6: Review gate, then commit**
 
 ```bash
 git add app/src/main/java/com/babegetthis/android/core/auth/ui/LoginViewModel.kt app/src/test/java/com/babegetthis/android/core/auth/ui/LoginViewModelTest.kt
@@ -484,7 +486,7 @@ git commit -m "feat(auth): Google sign-in in LoginViewModel"
 - Consumes: `LoginViewModel.signInWithGoogle(idToken, rawNonce)` and `LoginViewModel.onGoogleSignInFailed()` (Task 4); `R.string.default_web_client_id` (Task 2).
 - Produces: `data class GoogleSignInToken(val idToken: String, val rawNonce: String)`, `suspend fun requestGoogleSignInToken(context: Context, webClientId: String): GoogleSignInToken?`, `internal fun sha256Hex(value: String): String`.
 
-- [ ] **Step 1: Dependencies**
+- [x] **Step 1: Dependencies**
 
 `gradle/libs.versions.toml`, after `ktor = "3.0.3"`:
 
@@ -522,7 +524,7 @@ googleid = { group = "com.google.android.libraries.identity.googleid", name = "g
 -keep class androidx.credentials.playservices.** { *; }
 ```
 
-- [ ] **Step 2: Write the failing nonce-hash test**
+- [x] **Step 2: Write the failing nonce-hash test**
 
 Create `app/src/test/java/com/babegetthis/android/core/auth/ui/GoogleSignInTest.kt`:
 
@@ -551,7 +553,7 @@ class GoogleSignInTest {
 Run: `./gradlew testDevDebugUnitTest --tests "com.babegetthis.android.core.auth.ui.GoogleSignInTest"`
 Expected: compilation FAILS with `Unresolved reference: sha256Hex`.
 
-- [ ] **Step 3: Create `GoogleSignIn.kt`**
+- [x] **Step 3: Create `GoogleSignIn.kt`**
 
 ```kotlin
 package com.babegetthis.android.core.auth.ui
@@ -594,12 +596,12 @@ internal fun sha256Hex(value: String): String =
         .joinToString("") { "%02x".format(it) }
 ```
 
-- [ ] **Step 4: Run the hash test to verify it passes**
+- [x] **Step 4: Run the hash test to verify it passes**
 
 Run: `./gradlew testDevDebugUnitTest --tests "com.babegetthis.android.core.auth.ui.GoogleSignInTest"`
 Expected: PASS.
 
-- [ ] **Step 5: Google logo and string**
+- [x] **Step 5: Google logo and string**
 
 Create `app/src/main/res/drawable/ic_google_logo.xml`. This is the standard four-colour "G"; Google's branding rules require it on sign-in buttons, and it's drawn untinted:
 
@@ -631,7 +633,7 @@ In `app/src/main/res/values/strings.xml`, after `auth_sign_in`:
     <string name="auth_continue_with_google">Continue with Google</string>
 ```
 
-- [ ] **Step 6: Write the failing screen test**
+- [x] **Step 6: Write the failing screen test**
 
 In `AuthScreensTest.kt`, after `login shows its fields and primary action`:
 
@@ -649,7 +651,7 @@ In `AuthScreensTest.kt`, after `login shows its fields and primary action`:
 Run: `./gradlew testDevDebugUnitTest --tests "com.babegetthis.android.core.auth.ui.AuthScreensTest"`
 Expected: `login offers Google sign-in` FAILS (node not found).
 
-- [ ] **Step 7: Add the button to `LoginScreen`**
+- [x] **Step 7: Add the button to `LoginScreen`**
 
 Add imports:
 
@@ -719,7 +721,7 @@ Between the login `Button { … }` and the `Spacer(modifier = Modifier.height(24
             }
 ```
 
-- [ ] **Step 8: Run the screen tests, then the full gate**
+- [x] **Step 8: Run the screen tests, then the full gate**
 
 Run: `./gradlew testDevDebugUnitTest --tests "com.babegetthis.android.core.auth.ui.AuthScreensTest"`
 Expected: all PASS.
@@ -727,7 +729,7 @@ Expected: all PASS.
 Run: `./gradlew testDevDebugUnitTest koverVerifyDevDebug assembleStagingDebug assembleProdRelease lintDevDebug`
 Expected: BUILD SUCCESSFUL. (`GoogleSignInKt` is outside the Kover include list, like every other `ui` file except `AuthValidationKt`.)
 
-- [ ] **Step 9: Review gate, then commit**
+- [x] **Step 9: Review gate, then commit**
 
 ```bash
 git add gradle/libs.versions.toml app/build.gradle.kts app/proguard-rules.pro app/src/main/java/com/babegetthis/android/core/auth/ui/GoogleSignIn.kt app/src/main/java/com/babegetthis/android/core/auth/ui/LoginScreen.kt app/src/main/res/drawable/ic_google_logo.xml app/src/main/res/values/strings.xml app/src/test/java/com/babegetthis/android/core/auth/ui/GoogleSignInTest.kt app/src/test/java/com/babegetthis/android/core/auth/ui/AuthScreensTest.kt
