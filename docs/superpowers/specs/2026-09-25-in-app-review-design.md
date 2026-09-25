@@ -94,8 +94,11 @@ No new automated tests. The code is thin wiring onto a Play API that no-ops
 off-Play, and no instrumented journey completes a whole list, so the review
 call never runs under test.
 
-- `./gradlew spotlessCheck lintProdDebug` passes.
-- `./gradlew assembleProdRelease` builds with R8.
+- `./gradlew lintProdDebug` passes.
+- `./gradlew assembleProdRelease` builds. (Spotless, the warnings-as-errors
+  lint gate and R8 are not on `development` yet; they arrive with the
+  uncommitted build-hardening change. The Play libraries ship their own
+  consumer ProGuard rules, so R8 needs nothing extra when it lands.)
 - Existing unit and instrumented suites still pass.
 - Emulator: the Settings row opens the Play listing (Play image) or the
   browser fallback (non-Play image).
