@@ -44,6 +44,12 @@ internal fun Throwable.isNetworkFailure(): Boolean {
 internal fun friendlyAuthMessage(e: Exception): String {
     val raw = e.message ?: return "Authentication failed. Please try again."
     return when {
+        // Google ID-token sign-in. Checked first: these messages also contain
+        // "token"/"expired" and would otherwise get the email-OTP wording.
+        raw.contains("id_token", ignoreCase = true) ||
+            raw.contains("ID token", ignoreCase = true) ||
+            raw.contains("nonce", ignoreCase = true) ->
+            "Google sign-in failed. Please try again."
         raw.contains("Invalid login", ignoreCase = true) ->
             "Invalid email or password."
         raw.contains("already registered", ignoreCase = true) ||

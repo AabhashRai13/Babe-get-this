@@ -108,6 +108,9 @@ class TestAuthRepository @Inject constructor(
     override suspend fun login(email: String, password: String) =
         guarded { signIn(email, email.substringBefore("@")) }
 
+    override suspend fun signInWithGoogle(idToken: String, rawNonce: String) =
+        guarded { signIn("google@test.com", "google") }
+
     override suspend fun logout(): Result<Unit> {
         authStateManager.logout()
         return Result.Success(Unit)

@@ -7,7 +7,9 @@ import com.babegetthis.android.core.network.NetworkMonitor
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.json.buildJsonObject
@@ -49,6 +51,23 @@ class SupabaseAuthRepository @Inject constructor(
                 this.email = email
                 this.password = password
             }
+            persistCurrentSession(
+                fallbackName = email.substringBefore("@"),
+                fallbackEmail = email,
+            )
+        }
+
+    override suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User> =
+        runCatchingAuth {
+            supabaseClient.auth.signInWith(IDToken) {
+                this.idToken = idToken
+                provider = Google
+                nonce = rawNonce
+            }
+            // Google always supplies the email and normally the name (both land
+            // in user_metadata), so the fallbacks only matter for an account
+            // with no display name.
+            val email = supabaseClient.auth.currentUserOrNull()?.email.orEmpty()
             persistCurrentSession(
                 fallbackName = email.substringBefore("@"),
                 fallbackEmail = email,
