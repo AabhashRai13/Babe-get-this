@@ -64,14 +64,9 @@ class SupabaseAuthRepository @Inject constructor(
                 provider = Google
                 nonce = rawNonce
             }
-            // Google always supplies the email and normally the name (both land
-            // in user_metadata), so the fallbacks only matter for an account
-            // with no display name.
-            val email = supabaseClient.auth.currentUserOrNull()?.email.orEmpty()
-            persistCurrentSession(
-                fallbackName = email.substringBefore("@"),
-                fallbackEmail = email,
-            )
+            // Google puts the email and name in user_metadata, so there is
+            // nothing to fall back on here.
+            persistCurrentSession()
         }
 
     override suspend fun logout(): Result<Unit> {
@@ -153,15 +148,17 @@ class SupabaseAuthRepository @Inject constructor(
     // Reads the current Supabase session, copies it into our own storage via
     // AuthStateManager (which flips AuthState to Authenticated), and returns the
     // domain User. Throws if there is somehow no active session.
-    private fun persistCurrentSession(fallbackName: String, fallbackEmail: String): User {
+    private fun persistCurrentSession(fallbackName: String = "", fallbackEmail: String = ""): User {
         val session = supabaseClient.auth.currentSessionOrNull()
             ?: error("Authentication succeeded but no session was found.")
         val userInfo = session.user
             ?: supabaseClient.auth.currentUserOrNull()
             ?: error("Authentication succeeded but no user was found.")
 
-        val resolvedName = userInfo.readName() ?: fallbackName
         val resolvedEmail = userInfo.email ?: fallbackEmail
+        // No name anywhere (e.g. a Google account without one): use the email's
+        // local part rather than showing a blank name.
+        val resolvedName = userInfo.readName() ?: fallbackName.ifBlank { resolvedEmail.substringBefore("@") }
 
         authStateManager.login(
             token = session.accessToken,

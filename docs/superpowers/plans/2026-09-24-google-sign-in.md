@@ -759,3 +759,13 @@ No code. Each check shows that a flavor reaches **its own** Supabase project. Us
 - Apple, Facebook or GitHub login. These need the browser OAuth flow and deep links; each is a separate plan.
 - Telling Google and email logins apart in analytics. `AccountLoggedIn` carries no payload today; add a `method` only when someone needs the split.
 - Recording sheet failures to Crashlytics. Add it if Task 6 Step 4 ever fails in the field without a clear cause.
+
+## Post-review changes (2026-09-25)
+
+A staff-level review of Tasks 1–5 led to these changes:
+- The Google flow moved out of `LoginScreen` into `LoginViewModel.signInWithGoogle(activityContext)`, behind a `GoogleTokenRequester` seam (`CredentialManagerTokenRequester` in production, bound in `core/auth/di/GoogleSignInModule`). The flow runs in `viewModelScope`, so a rotation mid-sheet no longer drops the chosen account.
+- `signIn` sets `isLoading` before launching and ignores re-entry, so a double tap can't open two sheets.
+- The offline check lives in the requester (`GoogleSignInOfflineException`), which keeps the journey test independent of the device's network.
+- Sheet failures are recorded as `AppError.UnknownError` (the reporting policy drops `AuthError`). `NoCredentialException` gets its own user message and isn't reported.
+- There is one `GOOGLE_SIGN_IN_FAILED` constant. `persistCurrentSession` derives a missing name from the email.
+- New journey test: `AuthAndVoiceGateTest.continueWithGoogleSignsIn`.

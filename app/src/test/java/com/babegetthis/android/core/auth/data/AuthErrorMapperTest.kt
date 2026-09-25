@@ -127,7 +127,7 @@ class AuthErrorMapperTest {
     // tell a Google user to check an email code that was never sent.
     @Test
     fun `google id token rejections get the google message`() {
-        val google = "Google sign-in failed. Please try again."
+        val google = GOOGLE_SIGN_IN_FAILED
 
         assertEquals(google, friendlyAuthMessage(Exception("Unacceptable audience in id_token: [abc]")))
         assertEquals(google, friendlyAuthMessage(Exception("Bad ID token")))

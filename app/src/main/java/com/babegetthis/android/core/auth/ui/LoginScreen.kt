@@ -44,7 +44,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,11 +57,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.credentials.exceptions.GetCredentialException
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
-import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
-import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
@@ -76,13 +72,8 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // The Google sheet is UI, so it runs in this composable's scope with the
-    // Activity context; only the resulting token reaches the ViewModel. The
-    // client ID comes from this flavor's google-services.json, which is what
-    // ties each build to its own Firebase + Supabase environment.
+    // The Google sheet is UI and needs the Activity; the ViewModel owns the flow.
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val webClientId = stringResource(R.string.default_web_client_id)
 
     // Navigate back after successful login
     LaunchedEffect(Unit) {
@@ -300,23 +291,8 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Only the two credential failures are caught — a blanket catch
-            // would also swallow CancellationException when the screen leaves
-            // composition mid-sheet. Closing the sheet returns null: no-op.
             OutlinedButton(
-                onClick = {
-                    if (!viewModel.startGoogleSignIn()) return@OutlinedButton
-                    scope.launch {
-                        try {
-                            requestGoogleSignInToken(context, webClientId)
-                                ?.let { viewModel.signInWithGoogle(it.idToken, it.rawNonce) }
-                        } catch (e: GetCredentialException) {
-                            viewModel.onGoogleSignInFailed()
-                        } catch (e: GoogleIdTokenParsingException) {
-                            viewModel.onGoogleSignInFailed()
-                        }
-                    }
-                },
+                onClick = { viewModel.signInWithGoogle(context) },
                 enabled = !uiState.isLoading,
                 modifier = Modifier
                     .fillMaxWidth()

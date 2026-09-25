@@ -41,6 +41,10 @@ internal fun Throwable.isNetworkFailure(): Boolean {
 //
 // The else branch NEVER returns the raw provider text: an unrecognised failure
 // gets a generic message so internal/Supabase wording cannot leak to the user.
+// One wording for every Google failure — a Supabase rejection here and an
+// account-sheet failure in LoginViewModel read the same to the user.
+internal const val GOOGLE_SIGN_IN_FAILED = "Google sign-in failed. Please try again."
+
 internal fun friendlyAuthMessage(e: Exception): String {
     val raw = e.message ?: return "Authentication failed. Please try again."
     return when {
@@ -49,7 +53,7 @@ internal fun friendlyAuthMessage(e: Exception): String {
         raw.contains("id_token", ignoreCase = true) ||
             raw.contains("ID token", ignoreCase = true) ||
             raw.contains("nonce", ignoreCase = true) ->
-            "Google sign-in failed. Please try again."
+            GOOGLE_SIGN_IN_FAILED
         raw.contains("Invalid login", ignoreCase = true) ->
             "Invalid email or password."
         raw.contains("already registered", ignoreCase = true) ||
