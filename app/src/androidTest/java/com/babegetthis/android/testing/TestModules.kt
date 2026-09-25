@@ -5,6 +5,9 @@ import androidx.room.Room
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.data.RegisterResult
+import com.babegetthis.android.core.auth.di.GoogleSignInModule
+import com.babegetthis.android.core.auth.ui.GoogleSignInToken
+import com.babegetthis.android.core.auth.ui.GoogleTokenRequester
 import com.babegetthis.android.core.data.di.DatabaseModule
 import com.babegetthis.android.core.data.di.SupabaseModule
 import com.babegetthis.android.core.data.di.VoiceModule
@@ -108,6 +111,9 @@ class TestAuthRepository @Inject constructor(
     override suspend fun login(email: String, password: String) =
         guarded { signIn(email, email.substringBefore("@")) }
 
+    override suspend fun signInWithGoogle(idToken: String, rawNonce: String) =
+        guarded { signIn("google@test.com", "google") }
+
     override suspend fun logout(): Result<Unit> {
         authStateManager.logout()
         return Result.Success(Unit)
@@ -124,6 +130,20 @@ class TestAuthRepository @Inject constructor(
         guarded { signIn(email, email.substringBefore("@")) }
 
     override suspend fun deleteAccount() = guarded { authStateManager.logout() }
+}
+
+// --- google sign-in ---
+
+// Stands in for the Credential Manager sheet, which needs Play services and a
+// real account. Hands back a fixed token; TestAuthRepository accepts any token,
+// so what the journey checks is the button → ViewModel → auth-state wiring.
+@Module
+@TestInstallIn(components = [SingletonComponent::class], replaces = [GoogleSignInModule::class])
+object TestGoogleSignInModule {
+
+    @Provides
+    fun provideGoogleTokenRequester(): GoogleTokenRequester =
+        GoogleTokenRequester { GoogleSignInToken(idToken = "test-id-token", rawNonce = "test-nonce") }
 }
 
 // --- voice ---

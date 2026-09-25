@@ -4,6 +4,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
@@ -137,5 +138,20 @@ class AuthAndVoiceGateTest {
         compose.onNodeWithText("Voice").performClick()
 
         compose.waitUntil(timeoutMillis = 10_000) { !present("Sign in to use voice") }
+    }
+
+    // Google sign-in end to end, minus the account sheet itself:
+    // TestGoogleSignInModule hands back a token and TestAuthRepository accepts
+    // it. Same synchronisation as above — wait for the account action to lose
+    // its "Sign in" label rather than for the home screen to reappear.
+    @Test
+    fun continueWithGoogleSignsIn() {
+        awaitText("No lists yet")
+        compose.onNodeWithText("Sign in").performClick()
+        awaitText("Continue with Google")
+
+        compose.onNodeWithText("Continue with Google").performScrollTo().performClick()
+
+        compose.waitUntil(timeoutMillis = 10_000) { !present("Sign in") }
     }
 }
