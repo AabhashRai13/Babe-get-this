@@ -351,6 +351,11 @@ dependencies {
     // realtime-kt powers live updates for shared lists.
     implementation(libs.supabase.realtime)
     implementation(libs.ktor.client.okhttp)
+    // Google sign-in. play-services-auth is the Credential Manager backend on
+    // devices without a built-in provider (everything below Android 14).
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     // Play Core in-app update (flexible/immediate flow).
     implementation(libs.play.app.update.ktx)

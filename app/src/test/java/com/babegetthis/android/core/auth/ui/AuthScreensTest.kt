@@ -69,6 +69,15 @@ class AuthScreensTest {
         compose.onNodeWithText("Sign in").assertExists()
     }
 
+    // Rendering only: tapping it opens the real Credential Manager sheet, which
+    // needs Play services — that path is checked on a device (plan Task 6).
+    @Test
+    fun `login offers Google sign-in`() {
+        login()
+
+        compose.onNodeWithText("Continue with Google").assertExists()
+    }
+
     @Test
     fun `sign in is disabled until both fields are filled`() {
         login()

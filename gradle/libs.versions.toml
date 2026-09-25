@@ -42,6 +42,11 @@ archCoreTesting = "2.2.0"
 # would force a toolchain-wide upgrade — deferred to a dedicated task.
 supabase = "3.0.3"
 ktor = "3.0.3"
+# Google sign-in: Credential Manager shows the account sheet, googleid parses
+# the returned ID token. Pinned to the exact versions supabase-kt 3.0.3's own
+# compose-auth module uses — proven against this Kotlin 2.0.21 toolchain.
+credentials = "1.3.0"
+googleid = "1.1.1"
 playUpdate = "2.1.0"
 # Firebase: BOM pins every firebase-* module version, so they stay versionless
 # in [libraries] below (same pattern as compose-bom and supabase-bom).
@@ -104,6 +109,9 @@ supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
 supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt" }
+androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
+androidx-credentials-play-services-auth = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
+googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 # Play Core: in-app update (flexible/immediate flow), no other Play Core modules needed.
 play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playUpdate" }

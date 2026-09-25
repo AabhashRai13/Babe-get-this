@@ -69,6 +69,7 @@
     <string name="auth_has_account">Already have an account?</string>
     <string name="auth_sign_up">Sign up</string>
     <string name="auth_sign_in">Sign in</string>
+    <string name="auth_continue_with_google">Continue with Google</string>
 
     <!-- Share / Auth Prompt -->
     <string name="share_auth_title">Sign in to share</string>
