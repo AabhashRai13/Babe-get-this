@@ -128,6 +128,36 @@ class ListLifecycleTest {
         awaitText("All done!")
     }
 
+    private fun back() =
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+
+    // Leaving an empty list deletes it, so the real system back asks first.
+    // "Delete list" then leaves, and the list is gone from the home screen.
+    @Test
+    fun leavingAnEmptyListAsksThenDeletesIt() {
+        createList("Hardware")
+        awaitText("Add your first item to get started")
+
+        back()
+        awaitText("Delete this empty list?")
+        compose.onNodeWithText("Delete list").performClick()
+
+        awaitText("No lists yet")
+    }
+
+    // "Keep editing" stays on the list instead of leaving.
+    @Test
+    fun keepEditingStaysOnTheEmptyList() {
+        createList("Hardware")
+        awaitText("Add your first item to get started")
+
+        back()
+        awaitText("Delete this empty list?")
+        compose.onNodeWithText("Keep editing").performClick()
+
+        compose.onNodeWithText("Add your first item to get started").assertIsDisplayed()
+    }
+
     @Test
     fun aNewListStartsEmpty() {
         createList("Hardware")

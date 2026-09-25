@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -103,7 +104,12 @@ class ShoppingItemsViewModel @Inject constructor(
         return authStateManager.authState.value is AuthState.Authenticated
     }
 
-    val items: StateFlow<List<ShoppingItem>> = itemRepository.getItemsByListId(listId)
+    // One database subscription, shared by `items` and `leavingDeletesList`.
+    // replay = 1 hands a late collector the current rows without a new query.
+    private val itemRows = itemRepository.getItemsByListId(listId)
+        .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5000), replay = 1)
+
+    val items: StateFlow<List<ShoppingItem>> = itemRows
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -144,6 +150,17 @@ class ShoppingItemsViewModel @Inject constructor(
                     .map { CategorySection(label = it.key, items = it.value) }
                 ShopSection(shopName = shop, categories = categories)
             }
+
+    // True when leaving now would delete this list: onCleared removes lists
+    // with no items, which came as a surprise, so the screen asks first. Shared
+    // lists are never auto-removed, so they never ask. Built on the database
+    // rows rather than `items`, whose initial value is an empty list: starting
+    // at false means a back press before the first load never asks wrongly.
+    val leavingDeletesList: StateFlow<Boolean> = combine(
+        itemRows,
+        listRepository.getShareCode(listId),
+    ) { items, shareCode -> items.isEmpty() && shareCode == null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val categories: StateFlow<List<Category>> = categoryRepository.getAllCategories()
         .stateIn(

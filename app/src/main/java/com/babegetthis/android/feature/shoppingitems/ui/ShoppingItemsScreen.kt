@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.shoppingitems.ui
 
 import android.content.Intent
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -37,6 +39,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -89,6 +92,8 @@ fun ShoppingItemsScreen(
     val showDialog by viewModel.showAddItemDialog.collectAsState()
     val editingItem by viewModel.editingItem.collectAsState()
     val shareCodeDialog by viewModel.shareCodeDialog.collectAsState()
+    val leavingDeletesList by viewModel.leavingDeletesList.collectAsState()
+    var confirmLeave by remember { mutableStateOf(false) }
     val showShareAuthPrompt by viewModel.showShareAuthPrompt.collectAsState()
 
     val isLocked by viewModel.isLocked.collectAsState()
@@ -190,13 +195,17 @@ fun ShoppingItemsScreen(
         }
     }
 
+    // Leaving an empty list deletes it, so back asks first. Only intercepted
+    // while that is true; otherwise back goes straight to navigation as before.
+    BackHandler(enabled = leavingDeletesList) { confirmLeave = true }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackBarHostState) },
         topBar = {
             BgtTopAppBar(
                 title = viewModel.listName,
                 navigationIcon = Icons.AutoMirrored.Outlined.ArrowBack,
-                onNavigationClick = onNavigateBack,
+                onNavigationClick = { if (leavingDeletesList) confirmLeave = true else onNavigateBack() },
                 actionSlot = {
                     // Lock toggle sits beside Share. Locking with no PIN yet
                     // walks the user through creating one; unlocking a list
@@ -472,6 +481,31 @@ fun ShoppingItemsScreen(
             // transitions to Done. The new rows appear via the items Flow and
             // animate in. No navigation — the user is already in the list.
             onConfirm = { drafts -> viewModel.addItemsWithVoice(drafts) },
+        )
+    }
+
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            shape = RoundedCornerShape(20.dp),
+            title = { Text(stringResource(R.string.leave_empty_list_title)) },
+            text = { Text(stringResource(R.string.leave_empty_list_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmLeave = false
+                    onNavigateBack()
+                }) {
+                    Text(
+                        text = stringResource(R.string.leave_empty_list_confirm),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmLeave = false }) {
+                    Text(stringResource(R.string.leave_empty_list_stay))
+                }
+            },
         )
     }
 
