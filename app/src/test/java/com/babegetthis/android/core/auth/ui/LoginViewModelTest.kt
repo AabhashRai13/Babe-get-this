@@ -136,4 +136,57 @@ class LoginViewModelTest {
 
         assertEquals(null, viewModel.uiState.value.errorMessage)
     }
+
+    // --- Google ---
+
+    // Deliberately on a pristine form: Google sign-in must not depend on the
+    // email/password fields being valid.
+    @Test
+    fun `google sign-in forwards token and nonce and emits loginSuccess`() = runTest {
+        coEvery { authRepository.signInWithGoogle("id-token", "raw-nonce") } returns
+            Result.Success(User(id = "u1", email = "a@gmail.com", name = "Ann"))
+
+        val viewModel = buildViewModel()
+
+        viewModel.loginSuccess.test {
+            viewModel.signInWithGoogle("id-token", "raw-nonce")
+            awaitItem()
+        }
+        coVerify(exactly = 1) { authRepository.signInWithGoogle("id-token", "raw-nonce") }
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertNull(viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `failed google sign-in surfaces the error and does not signal success`() = runTest {
+        coEvery { authRepository.signInWithGoogle(any(), any()) } returns
+            Result.Error(AppError.AuthError("Google sign-in failed. Please try again."))
+
+        val viewModel = buildViewModel()
+
+        viewModel.loginSuccess.test {
+            viewModel.signInWithGoogle("id-token", "raw-nonce")
+            expectNoEvents()
+        }
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertEquals(
+            "Google sign-in failed. Please try again.",
+            viewModel.uiState.value.errorMessage,
+        )
+    }
+
+    // The account sheet itself failed (no Play services, misconfigured client):
+    // there is no token, so the repository must not be called.
+    @Test
+    fun `picker failure shows the google message without calling the repository`() {
+        val viewModel = buildViewModel()
+
+        viewModel.onGoogleSignInFailed()
+
+        assertEquals(
+            "Google sign-in failed. Please try again.",
+            viewModel.uiState.value.errorMessage,
+        )
+        coVerify(exactly = 0) { authRepository.signInWithGoogle(any(), any()) }
+    }
 }

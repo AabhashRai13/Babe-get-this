@@ -3,6 +3,7 @@ package com.babegetthis.android.core.auth.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
+import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.telemetry.AnalyticsRepository
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
@@ -54,17 +55,31 @@ class LoginViewModel @Inject constructor(
     fun login() {
         val state = _uiState.value
         if (!state.isFormValid) return
+        signIn { authRepository.login(state.email, state.password) }
+    }
 
+    // Called with what the Google account sheet returned. Supabase verifies
+    // the token and creates the account on first use — no separate sign-up.
+    fun signInWithGoogle(idToken: String, rawNonce: String) {
+        signIn { authRepository.signInWithGoogle(idToken, rawNonce) }
+    }
+
+    // The sheet failed for a reason other than the user closing it: no Play
+    // services, no network, or an OAuth client missing this build's SHA-1.
+    fun onGoogleSignInFailed() {
+        _uiState.value = _uiState.value.copy(errorMessage = "Google sign-in failed. Please try again.")
+    }
+
+    private fun signIn(call: suspend () -> Result<User>) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            when (val result = authRepository.login(state.email, state.password)) {
+            when (val result = call()) {
                 is Result.Success -> {
                     _uiState.value = _uiState.value.copy(isLoading = false)
-                    // The event carries nothing. The email in `state` is
-                    // exactly the kind of value that must never be attached,
-                    // and identity is set separately from the Supabase session
-                    // as a UUID.
+                    // The event carries nothing. The email is exactly the kind
+                    // of value that must never be attached, and identity is set
+                    // separately from the Supabase session as a UUID.
                     analytics.track(AnalyticsEvent.AccountLoggedIn)
                     _loginSuccess.emit(Unit)
                 }
