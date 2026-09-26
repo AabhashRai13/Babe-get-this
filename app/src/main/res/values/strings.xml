@@ -16,6 +16,10 @@
     <string name="shopping_list_name_hint">List name</string>
     <string name="shopping_list_create_title">New List</string>
     <string name="snackbar_deleted">%1$s deleted</string>
+    <string name="leave_empty_list_title">Delete this empty list?</string>
+    <string name="leave_empty_list_body">This list has no items, so it will be deleted when you leave.</string>
+    <string name="leave_empty_list_confirm">Delete list</string>
+    <string name="leave_empty_list_stay">Keep editing</string>
     <string name="cancel">Cancel</string>
     <string name="create">Create</string>
     <string name="undo">Undo</string>
