@@ -120,12 +120,13 @@ class ListLifecycleTest {
 
         // Tick the first ACTIVE item three times: a ticked row moves down into the
         // completed section, so the first match is always the next one still to do.
-        repeat(3) {
+        // That only holds once the tick has landed, and it lands through Room's
+        // background executor, which waitForIdle() does not track. So each click
+        // waits for the progress text to catch up before the next one.
+        for (ticked in 1..3) {
             compose.onAllNodes(anItemCheckbox()).onFirst().performClick()
-            compose.waitForIdle()
+            awaitText(if (ticked < 3) "$ticked of 3 picked up" else "All done!")
         }
-
-        awaitText("All done!")
     }
 
     private fun back() =
