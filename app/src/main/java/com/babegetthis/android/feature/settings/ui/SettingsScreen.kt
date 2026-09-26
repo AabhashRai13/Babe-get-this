@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.LockReset
 import androidx.compose.material.icons.outlined.Password
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.StarRate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -40,6 +41,7 @@ import com.babegetthis.android.core.pin.ui.PinSetupDialog
 import com.babegetthis.android.core.pin.ui.RecoveryResetDialog
 import com.babegetthis.android.core.pin.ui.RegenerateRecoveryDialog
 import com.babegetthis.android.core.pin.ui.RemovePinDialog
+import com.babegetthis.android.core.review.openPlayListing
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.BugReport
@@ -162,6 +164,21 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setCrashReportingEnabled(it) },
                     )
                 },
+            )
+
+            Text(
+                text = stringResource(R.string.settings_about_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+            )
+
+            SettingsRow(
+                icon = Icons.Outlined.StarRate,
+                title = stringResource(R.string.settings_rate_title),
+                subtitle = stringResource(R.string.settings_rate_subtitle),
+                onClick = { openPlayListing(context) },
             )
 
             // Debug-only: the one reliable way to confirm crash reporting still

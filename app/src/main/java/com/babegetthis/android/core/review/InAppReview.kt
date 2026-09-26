@@ -1,10 +1,18 @@
 package com.babegetthis.android.core.review
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import androidx.core.net.toUri
 import com.google.android.play.core.ktx.launchReview
 import com.google.android.play.core.ktx.requestReview
 import com.google.android.play.core.review.ReviewManagerFactory
 import kotlinx.coroutines.CancellationException
+
+// The prod package, not BuildConfig.APPLICATION_ID: dev and staging add
+// .dev / .staging suffixes, which have no store listing.
+private const val PLAY_PACKAGE = "com.babegetthis.android"
 
 // Asks Play to show its rating sheet. Play decides whether it actually appears
 // (a per-user quota it does not disclose) and reports nothing back, so this is
@@ -19,5 +27,18 @@ suspend fun requestInAppReview(activity: Activity) {
         throw e
     } catch (e: Exception) {
         // A failed request has no user-visible effect and nothing to retry.
+    }
+}
+
+// Opens the store listing directly. Backs the Settings row, because the review
+// API cannot be driven from a button: Play may silently show nothing.
+fun openPlayListing(context: Context) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, "market://details?id=$PLAY_PACKAGE".toUri()))
+    } catch (e: ActivityNotFoundException) {
+        // No Play Store on this device; the browser can still show the listing.
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, "https://play.google.com/store/apps/details?id=$PLAY_PACKAGE".toUri()),
+        )
     }
 }
