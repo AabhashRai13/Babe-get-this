@@ -164,13 +164,6 @@ fun SettingsScreen(
                 },
             )
 
-            Text(
-                text = stringResource(R.string.settings_privacy_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-            )
-
             // Debug-only: the one reliable way to confirm crash reporting still
             // works end to end. `adb shell am crash` does NOT do it — its
             // RemoteServiceException comes from the system and bypasses the

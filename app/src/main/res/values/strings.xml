@@ -106,7 +106,6 @@
     <string name="settings_analytics_subtitle">Which features get used, never what is on your lists.</string>
     <string name="settings_crash_title">Crash reports</string>
     <string name="settings_crash_subtitle">Sends diagnostics when the app fails, so it can be fixed.</string>
-    <string name="settings_privacy_note">Your lists, items and recordings never leave your device for either of these. We collect counts and outcomes only.</string>
 
     <!-- PIN entry -->
     <string name="pin_label">PIN</string>
