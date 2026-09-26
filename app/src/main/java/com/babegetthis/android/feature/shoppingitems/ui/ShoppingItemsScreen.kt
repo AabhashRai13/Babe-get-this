@@ -47,6 +47,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +66,7 @@ import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptPurpose
 import com.babegetthis.android.core.pin.ui.PinSetupDialog
+import com.babegetthis.android.core.review.requestInAppReview
 import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
@@ -78,6 +80,7 @@ import com.babegetthis.android.feature.shoppingitems.ui.components.SectionHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShopSubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShoppingItemCard
 import com.babegetthis.android.feature.shoppingitems.ui.viewModels.ShoppingItemsViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,6 +139,7 @@ fun ShoppingItemsScreen(
 
     val snackBarHostState = remember { SnackbarHostState() }
     val haptic = rememberHaptic()
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     // Drives the voice-capture sheet for adding items to THIS list.
@@ -163,13 +167,18 @@ fun ShoppingItemsScreen(
     }
 
     // Fire a Success haptic the moment the list goes from
-    // "some unchecked" → "all checked off". The ViewModel filters out the
-    // initial load of an already-complete list, so this only buzzes on
-    // the actual transition.
+    // "some unchecked" → "all checked off", then ask Play for a review. The
+    // ViewModel filters out the initial load of an already-complete list, so
+    // this only fires on the actual transition.
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                is ShoppingItemsViewModel.UiEvent.ListJustCompleted -> haptic(Haptic.Success)
+                is ShoppingItemsViewModel.UiEvent.ListJustCompleted -> {
+                    haptic(Haptic.Success)
+                    // Launched, not awaited: the Play round trip must not hold
+                    // up this collector, which also delivers ShareList.
+                    activity?.let { scope.launch { requestInAppReview(it) } }
+                }
                 is ShoppingItemsViewModel.UiEvent.ShareList -> {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
