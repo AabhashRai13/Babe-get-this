@@ -362,6 +362,8 @@ dependencies {
 
     // Play Core in-app update (flexible/immediate flow).
     implementation(libs.play.app.update.ktx)
+    // Play Core in-app review, requested when a list is completed.
+    implementation(libs.play.review.ktx)
 
     // Firebase — analytics and crash reporting. The BOM pins every firebase
     // module to one mutually-compatible version, same idea as the Compose and
