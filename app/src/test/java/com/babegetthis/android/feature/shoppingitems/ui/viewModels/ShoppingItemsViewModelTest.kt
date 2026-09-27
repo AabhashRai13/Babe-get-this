@@ -196,6 +196,19 @@ class ShoppingItemsViewModelTest {
         }
     }
 
+    // Product rule: nine of ten ticked and the tenth no longer needed, so it is
+    // deleted. The trip is done, and that counts as completing the list.
+    @Test
+    fun `deleting the last unticked item completes the list`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.events.test {
+            itemsFlow.value = listOf(item("1", isPickedUp = true), item("2"))
+            itemsFlow.value = listOf(item("1", isPickedUp = true))
+            assertEquals(ShoppingItemsViewModel.UiEvent.ListJustCompleted, awaitItem())
+        }
+    }
+
     @Test
     fun `empty list never triggers ListJustCompleted`() = runTest {
         val viewModel = buildViewModel()

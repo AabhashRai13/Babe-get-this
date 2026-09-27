@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -250,7 +251,7 @@ fun ShoppingItemsScreen(
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Share,
-                            contentDescription = stringResource(R.string.pin_share_title),
+                            contentDescription = stringResource(R.string.share_as_text),
                         )
                     }
                 },
@@ -280,7 +281,7 @@ fun ShoppingItemsScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Mic,
-                        contentDescription = stringResource(R.string.add),
+                        contentDescription = stringResource(R.string.voice_add),
                     )
                 }
 
@@ -343,7 +344,7 @@ fun ShoppingItemsScreen(
                     item {
                         SectionHeader(
                             title = stringResource(R.string.shopping_items_active),
-                            count = stringResource(R.string.shopping_items_count, activeItems.size),
+                            count = pluralStringResource(R.plurals.shopping_items_count, activeItems.size, activeItems.size),
                         )
                     }
 

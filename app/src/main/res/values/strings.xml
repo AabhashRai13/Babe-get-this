@@ -6,8 +6,25 @@
     <string name="shopping_list_empty_subtitle">Create a list and share it so you can shop together.</string>
     <string name="shopping_list_empty_cta">Create your first list</string>
     <string name="shopping_list_create">Create list</string>
-    <string name="shopping_list_items_count">%d items</string>
-    <string name="shopping_list_items_progress">%1$d/%2$d items</string>
+    <plurals name="shopping_list_items_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+    <!-- Pluralised on the total, the second argument. -->
+    <plurals name="shopping_list_items_progress">
+        <item quantity="one">%1$d/%2$d item</item>
+        <item quantity="other">%1$d/%2$d items</item>
+    </plurals>
+    <plurals name="greeting_lists">
+        <item quantity="one">%d list</item>
+        <item quantity="other">%d lists</item>
+    </plurals>
+    <plurals name="greeting_items_to_get">
+        <item quantity="one">%d item to get</item>
+        <item quantity="other">%d items to get</item>
+    </plurals>
+    <string name="greeting_nothing_to_get">nothing to pick up yet</string>
+    <string name="greeting_summary">%1$s · %2$s</string>
     <string name="shopping_list_all_completed">All done! All your lists are completed.</string>
     <string name="shopping_list_no_completed">No completed lists yet</string>
     <string name="tab_active">Active</string>
@@ -30,13 +47,17 @@
     <!-- Shopping Items Screen -->
     <string name="shopping_items_active">ACTIVE ITEMS</string>
     <string name="shopping_items_completed">COMPLETED</string>
-    <string name="shopping_items_count">%d Items</string>
+    <plurals name="shopping_items_count">
+        <item quantity="one">%d Item</item>
+        <item quantity="other">%d Items</item>
+    </plurals>
     <string name="shopping_items_list_created">List created!</string>
     <string name="shopping_items_add_first">Add your first item to get started</string>
     <string name="shopping_items_add_first_button">Add first item</string>
     <string name="shopping_items_add_title">Add Item</string>
     <string name="shopping_items_name_hint">Item name</string>
-    <string name="shopping_items_quantity_hint">Quantity or notes (e.g. 2 large, slightly firm)</string>
+    <string name="shopping_items_quantity_hint">Quantity (required)</string>
+    <string name="shopping_items_quantity_placeholder">e.g. 2 large, slightly firm</string>
     <string name="shopping_items_category">Category (optional)</string>
     <string name="shopping_items_category_placeholder">Search or select category</string>
     <string name="shopping_items_category_no_match">No categories match \"%1$s\"</string>
@@ -107,6 +128,8 @@
     <string name="settings_crash_title">Crash reports</string>
     <string name="settings_crash_subtitle">Sends diagnostics when the app fails, so it can be fixed.</string>
     <string name="settings_about_section">About</string>
+    <string name="settings_privacy_policy_title">Privacy policy</string>
+    <string name="settings_privacy_policy_subtitle">What is collected and how it is used</string>
     <string name="settings_rate_title">Rate the app</string>
     <string name="settings_rate_subtitle">Leave a review on Google Play</string>
 
@@ -136,13 +159,13 @@
 
     <!-- Recovery code -->
     <string name="recovery_title">Save your recovery code</string>
-    <string name="recovery_body">This is the only way to reset your PIN if you forget it. It\'s shown once and stored only on this device — write it down now.</string>
+    <string name="recovery_body">This is the only way to reset your PIN if you forget it. It\'s shown once and stored only on this device, so write it down now.</string>
     <string name="recovery_acknowledge">I\'ve saved my recovery code</string>
     <string name="recovery_enter_title">Enter recovery code</string>
     <string name="recovery_enter_body">Enter the recovery code you saved when you set up your PIN</string>
     <string name="recovery_label">Recovery code</string>
     <string name="recovery_wrong">That recovery code isn\'t right</string>
-    <string name="recovery_copied">Recovery code copied</string>
+    <string name="recovery_copy">Copy recovery code</string>
 
     <!-- Lock -->
     <string name="lock_list">Lock list</string>
@@ -158,9 +181,11 @@
     <!-- Realtime list sharing -->
     <string name="done">Done</string>
     <string name="share_live_title">Share list live</string>
-    <string name="share_live_hint">Anyone with this code can see and edit this list. Text it to them — they enter it under "Join a shared list".</string>
+    <string name="share_live_hint">Anyone with this code can see and edit this list. Text it to them, and they enter it under "Join a shared list".</string>
     <string name="share_live_copy">Copy</string>
     <string name="share_live_action">Share live</string>
+    <string name="share_as_text">Share as text</string>
+    <string name="voice_add">Add by voice</string>
     <string name="join_list_title">Join a shared list</string>
     <string name="join_list_hint">6-character code</string>
     <string name="join_list_button">Join</string>

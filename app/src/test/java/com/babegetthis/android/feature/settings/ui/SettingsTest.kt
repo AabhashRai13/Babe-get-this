@@ -247,6 +247,20 @@ class SettingsScreenTest {
         ).assertExists()
     }
 
+    // Play's User Data policy wants the privacy policy reachable inside the app,
+    // not only from the store listing.
+    @Test
+    fun `the privacy policy row opens the published policy`() {
+        render(pinExists = false)
+
+        compose.onNodeWithText("Privacy policy").performSemanticsAction(SemanticsActions.OnClick)
+
+        val started = org.robolectric.Shadows.shadowOf(
+            androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>(),
+        ).nextStartedActivity
+        assertEquals("https://babegetthis.com/privacy-policy.html", started.dataString)
+    }
+
     @Test
     fun `opening settings refreshes the locked count`() {
         render(pinExists = true, lockedCount = 2)

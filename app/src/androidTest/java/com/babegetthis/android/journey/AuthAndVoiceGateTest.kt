@@ -75,7 +75,9 @@ class AuthAndVoiceGateTest {
         awaitText("Email")
         compose.onNodeWithText("Email").performTextInput(email)
         compose.onNodeWithText("Password").performTextInput("secret123")
-        compose.onNodeWithText("Sign in").performClick()
+        // The form scrolls under a pinned footer, so with the keyboard up the
+        // submit can sit below the fold.
+        compose.onNodeWithText("Sign in").performScrollTo().performClick()
     }
 
     // The app starts signed out, and the home screen says so via its account

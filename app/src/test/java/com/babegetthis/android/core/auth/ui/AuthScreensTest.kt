@@ -1,7 +1,10 @@
 package com.babegetthis.android.core.auth.ui
 
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -174,6 +177,16 @@ class AuthScreensTest {
     }
 
     // --- RegisterScreen ---
+
+    // On a 360x800dp phone the form alone fills the screen, so a "Sign up" at
+    // the end of the scroll started out of view. New users have to find it.
+    @Test
+    fun `the sign-up route stays outside the scrolling form`() {
+        login()
+
+        compose.onNodeWithText("Email").assert(hasAnyAncestor(hasScrollAction()))
+        compose.onNodeWithText("Sign up").assert(!hasAnyAncestor(hasScrollAction()))
+    }
 
     private fun register() = compose.setContent {
         RegisterScreen(
