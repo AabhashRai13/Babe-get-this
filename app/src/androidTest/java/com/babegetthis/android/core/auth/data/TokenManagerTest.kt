@@ -1,5 +1,6 @@
 package com.babegetthis.android.core.auth.data
 
+import android.content.Context
 import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -103,6 +104,12 @@ class TokenManagerTest {
     @Test
     fun aStoreWhoseKeystoreKeyIsGoneStartsEmptyInsteadOfCrashing() {
         tokenManager.saveToken("token")
+        // apply() writes land about 100ms later on a background thread. Left
+        // pending, one lands after the reopen below has deleted the file and
+        // brings the undecryptable keyset back. commit() on the same file waits
+        // for them. A real restore has no such writes in flight.
+        ApplicationProvider.getApplicationContext<Context>()
+            .getSharedPreferences("bgt_secure_prefs", Context.MODE_PRIVATE).edit().commit()
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             .deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
 

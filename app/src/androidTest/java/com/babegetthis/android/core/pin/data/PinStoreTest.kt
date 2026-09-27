@@ -1,5 +1,6 @@
 package com.babegetthis.android.core.pin.data
 
+import android.content.Context
 import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
@@ -118,6 +119,12 @@ class PinStoreTest {
     @Test
     fun aStoreWhoseKeystoreKeyIsGoneStartsEmptyInsteadOfCrashing() {
         store.pinHash = "hash"
+        // apply() writes land about 100ms later on a background thread. Left
+        // pending, one lands after the reopen below has deleted the file and
+        // brings the undecryptable keyset back. commit() on the same file waits
+        // for them. A real restore has no such writes in flight.
+        ApplicationProvider.getApplicationContext<Context>()
+            .getSharedPreferences("bgt_pin_prefs", Context.MODE_PRIVATE).edit().commit()
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             .deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
 
