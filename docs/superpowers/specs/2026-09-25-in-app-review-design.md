@@ -1,7 +1,7 @@
 # In-app review — design
 
 **Date:** 2026-09-25
-**Status:** Draft, awaiting review
+**Status:** Approved; implemented on `feat/in-app-review`
 
 ## Why this exists
 
@@ -39,7 +39,11 @@ go looking.
   Play Core modules are needed.
 - `app/build.gradle.kts`: `implementation(libs.play.review.ktx)` next to
   `libs.play.app.update.ktx`.
-- No ProGuard changes: the Play libraries ship their own consumer rules.
+- No ProGuard changes expected, but unproven: the review libraries ship no
+  keep rules of their own (`review-ktx` has only `-dontwarn module-info`),
+  and minification is off on `development` today. When R8 lands with the
+  build-hardening change, re-check the review sheet on a minified,
+  Play-installed build.
 
 ## 2. `core/review/InAppReview.kt` (new)
 
@@ -51,20 +55,21 @@ Two top-level functions, no class:
   swallowed (a failed request has no user-visible consequence and nothing to
   retry), except `CancellationException`, which is rethrown.
 - `fun openPlayListing(context: Context)`: starts `ACTION_VIEW` on
-  `market://details?id=com.babegetthis.android`; on
-  `ActivityNotFoundException` (no Play Store installed) falls back to
+  `market://details?id=com.babegetthis.android`, pinned to the Play Store
+  app (`com.android.vending`) because other stores also answer `market://`;
+  on `ActivityNotFoundException` (no Play Store installed) falls back to
   `https://play.google.com/store/apps/details?id=com.babegetthis.android`.
+  If no browser can open that either, it does nothing.
   The package id is the prod one, hardcoded: dev and staging add
   `.dev` / `.staging` suffixes that have no store listing.
 
 ## 3. Automatic request — `ShoppingItemsScreen`
 
-The `ListJustCompleted` branch of the events collector
-(`ShoppingItemsScreen.kt:167`) keeps its `haptic(Haptic.Success)` and then
+The `ListJustCompleted` branch of the events collector keeps its `haptic(Haptic.Success)` and then
 launches `requestInAppReview(activity)` on a `rememberCoroutineScope()`. It is
 launched rather than awaited so the network round trip does not block the
-collector, which also handles `ShareList`. `activity` is the existing
-`LocalContext.current as? Activity` at line 105; if it is null, nothing
+collector, which also handles `ShareList`. `activity` is the screen's existing
+`LocalContext.current as? Activity`; if it is null, nothing
 happens.
 
 Accepted behaviour:
@@ -74,6 +79,9 @@ Accepted behaviour:
   trip on screen, and Play's quota prevents repeat sheets.
 - Leaving the screen cancels a request still in flight. The next completed
   list tries again.
+- Deleting the last unchecked item also completes the list, so the sheet can
+  appear while the item's Undo snackbar is showing and cover it. The haptic
+  and analytics already fire on this path; Play's quota makes the sheet rare.
 
 ## 4. Manual row — `SettingsScreen`
 
@@ -97,8 +105,8 @@ call never runs under test.
 - `./gradlew lintProdDebug` passes.
 - `./gradlew assembleProdRelease` builds. (Spotless, the warnings-as-errors
   lint gate and R8 are not on `development` yet; they arrive with the
-  uncommitted build-hardening change. The Play libraries ship their own
-  consumer ProGuard rules, so R8 needs nothing extra when it lands.)
+  uncommitted build-hardening change. See section 1 for what to re-check
+  when R8 lands.)
 - Existing unit and instrumented suites still pass.
 - Emulator: the Settings row opens the Play listing (Play image) or the
   browser fallback (non-Play image).
