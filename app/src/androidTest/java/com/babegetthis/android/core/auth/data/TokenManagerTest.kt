@@ -1,5 +1,6 @@
 package com.babegetthis.android.core.auth.data
 
+import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
@@ -7,6 +8,7 @@ import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.security.KeyStore
 
 // Instrumented for the same reason as PinStoreTest: TokenManager is backed by
 // EncryptedSharedPreferences, whose MasterKey needs the AndroidKeyStore provider,
@@ -92,5 +94,20 @@ class TokenManagerTest {
 
         assertEquals("pin-hash", pinStore.pinHash)
         pinStore.clearAll()
+    }
+
+    // Same failure as PinStoreTest's: a prefs file whose Keystore key is gone.
+    // bgt_secure_prefs is excluded from backup, but the Keystore can still lose
+    // the key (an OEM wipe, a lock-screen reset), and the session is cheap to
+    // lose compared with an app that crashes on every launch.
+    @Test
+    fun aStoreWhoseKeystoreKeyIsGoneStartsEmptyInsteadOfCrashing() {
+        tokenManager.saveToken("token")
+        KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            .deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+
+        val restored = TokenManager(ApplicationProvider.getApplicationContext())
+
+        assertNull(restored.getToken())
     }
 }
