@@ -33,12 +33,20 @@ suspend fun requestInAppReview(activity: Activity) {
 // Opens the store listing directly. Backs the Settings row, because the review
 // API cannot be driven from a button: Play may silently show nothing.
 fun openPlayListing(context: Context) {
+    // Pinned to the Play Store app: other stores also answer market:// links,
+    // and this row promises Google Play.
+    val playStore = Intent(Intent.ACTION_VIEW, "market://details?id=$PLAY_PACKAGE".toUri())
+        .setPackage("com.android.vending")
     try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, "market://details?id=$PLAY_PACKAGE".toUri()))
+        context.startActivity(playStore)
     } catch (e: ActivityNotFoundException) {
         // No Play Store on this device; the browser can still show the listing.
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW, "https://play.google.com/store/apps/details?id=$PLAY_PACKAGE".toUri()),
-        )
+        try {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, "https://play.google.com/store/apps/details?id=$PLAY_PACKAGE".toUri()),
+            )
+        } catch (e: ActivityNotFoundException) {
+            // No browser either (kiosk or restricted profile): nothing to open.
+        }
     }
 }
