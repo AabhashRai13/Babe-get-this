@@ -2,7 +2,6 @@ package com.babegetthis.android.core.pin.ui
 
 import com.babegetthis.android.core.pin.data.PinRepository
 import com.babegetthis.android.core.pin.data.PinResult
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify

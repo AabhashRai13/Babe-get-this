@@ -16,12 +16,15 @@ class SyncMappersTest {
     private val iso = "2026-08-01T10:00:00Z"
     private val ms = 1785578400000L // == iso
 
-    private fun listEntity(
-        shareCode: String? = "ABC123",
-        deletedAt: Long? = null,
-    ) = ShoppingListEntity(
-        id = "list-1", name = "Groceries", createdAt = 1L, updatedAt = 2L,
-        isLocked = true, shareCode = shareCode, deletedAt = deletedAt, pendingSync = true,
+    private fun listEntity(shareCode: String? = "ABC123", deletedAt: Long? = null) = ShoppingListEntity(
+        id = "list-1",
+        name = "Groceries",
+        createdAt = 1L,
+        updatedAt = 2L,
+        isLocked = true,
+        shareCode = shareCode,
+        deletedAt = deletedAt,
+        pendingSync = true,
     )
 
     private fun itemEntity(deletedAt: Long? = null) = ShoppingItemEntity(
@@ -88,7 +91,10 @@ class SyncMappersTest {
     @Test
     fun `new list row lands clean with the server clock`() {
         val entity = ListRow(
-            id = "list-1", name = "Groceries", shareCode = "ABC123", updatedAt = iso,
+            id = "list-1",
+            name = "Groceries",
+            shareCode = "ABC123",
+            updatedAt = iso,
         ).toEntity(local = null)
 
         assertEquals(ms, entity.updatedAt)
@@ -101,7 +107,10 @@ class SyncMappersTest {
     @Test
     fun `existing local list keeps device-local concerns`() {
         val entity = ListRow(
-            id = "list-1", name = "Renamed", shareCode = "ABC123", updatedAt = iso,
+            id = "list-1",
+            name = "Renamed",
+            shareCode = "ABC123",
+            updatedAt = iso,
         ).toEntity(local = listEntity())
 
         assertEquals("Renamed", entity.name)
@@ -113,8 +122,12 @@ class SyncMappersTest {
     @Test
     fun `incoming tombstone becomes a local tombstone`() {
         val entity = ItemRow(
-            id = "item-1", listId = "list-1", name = "Milk", quantity = "1",
-            updatedAt = iso, deletedAt = iso,
+            id = "item-1",
+            listId = "list-1",
+            name = "Milk",
+            quantity = "1",
+            updatedAt = iso,
+            deletedAt = iso,
         ).toEntity(local = itemEntity())
 
         assertEquals(ms, entity.deletedAt)

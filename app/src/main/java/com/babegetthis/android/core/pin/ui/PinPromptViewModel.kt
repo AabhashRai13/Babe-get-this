@@ -12,15 +12,11 @@ import javax.inject.Inject
 // host screen's ViewModel. Hashing (PBKDF2, 120k iterations) runs off the main
 // thread to avoid jank/ANR on the verify button.
 @HiltViewModel
-class PinPromptViewModel @Inject constructor(
-    private val pinRepository: PinRepository,
-) : ViewModel() {
+class PinPromptViewModel @Inject constructor(private val pinRepository: PinRepository) : ViewModel() {
 
-    suspend fun verify(pin: String): PinResult =
-        withContext(Dispatchers.Default) { pinRepository.verifyPin(pin) }
+    suspend fun verify(pin: String): PinResult = withContext(Dispatchers.Default) { pinRepository.verifyPin(pin) }
 
-    suspend fun setupPin(pin: String): String =
-        withContext(Dispatchers.Default) { pinRepository.setupPin(pin) }
+    suspend fun setupPin(pin: String): String = withContext(Dispatchers.Default) { pinRepository.setupPin(pin) }
 
     suspend fun changePin(current: String, newPin: String): PinResult =
         withContext(Dispatchers.Default) { pinRepository.changePin(current, newPin) }

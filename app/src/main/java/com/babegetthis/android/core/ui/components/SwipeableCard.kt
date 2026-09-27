@@ -59,7 +59,7 @@ fun SwipeableCard(
         // button that silently did nothing.
         confirmValueChange = { dismissValue ->
             dismissValue != SwipeToDismissBoxValue.StartToEnd || onSwipeRight != null
-        }
+        },
     )
 
     // The action fires HERE instead, keyed on the settled value, so it runs

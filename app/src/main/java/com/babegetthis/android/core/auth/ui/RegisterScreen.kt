@@ -244,10 +244,11 @@ fun RegisterScreen(
                         isError = uiState.passwordError != null,
                         supportingText = uiState.passwordError?.let { { Text(it) } },
                         singleLine = true,
-                        visualTransformation = if (passwordVisible)
+                        visualTransformation = if (passwordVisible) {
                             VisualTransformation.None
-                        else
-                            PasswordVisualTransformation(),
+                        } else {
+                            PasswordVisualTransformation()
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
@@ -280,10 +281,11 @@ fun RegisterScreen(
                         isError = uiState.confirmPasswordError != null,
                         supportingText = uiState.confirmPasswordError?.let { { Text(it) } },
                         singleLine = true,
-                        visualTransformation = if (confirmPasswordVisible)
+                        visualTransformation = if (confirmPasswordVisible) {
                             VisualTransformation.None
-                        else
-                            PasswordVisualTransformation(),
+                        } else {
+                            PasswordVisualTransformation()
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),

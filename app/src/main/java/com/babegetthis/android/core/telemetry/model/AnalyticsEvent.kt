@@ -51,15 +51,9 @@ sealed interface AnalyticsEvent {
 
     // itemCount is also emitted raw, not only bucketed: items-per-utterance
     // is small, non-identifying, and the number we most want to average.
-    data class VoiceTranscriptionCompleted(
-        val latencyMillis: Long,
-        val itemCount: Int,
-    ) : AnalyticsEvent
+    data class VoiceTranscriptionCompleted(val latencyMillis: Long, val itemCount: Int) : AnalyticsEvent
 
-    data class VoiceTranscriptionFailed(
-        val reason: VoiceFailureReason,
-        val latencyMillis: Long,
-    ) : AnalyticsEvent
+    data class VoiceTranscriptionFailed(val reason: VoiceFailureReason, val latencyMillis: Long) : AnalyticsEvent
 
     data class VoiceItemsSaved(val itemCount: Int) : AnalyticsEvent
 
@@ -104,10 +98,7 @@ sealed interface AnalyticsEvent {
     // Question: is this a weekly habit, and does the category taxonomy fit
     // how people actually shop?
 
-    data class ItemAdded(
-        val inputMethod: InputMethod,
-        val categorySource: CategorySource,
-    ) : AnalyticsEvent
+    data class ItemAdded(val inputMethod: InputMethod, val categorySource: CategorySource) : AnalyticsEvent
 
     // No input method: ShoppingItem records no provenance, so how an item was
     // originally added is not knowable at check-off time. Inventing one would
@@ -126,10 +117,7 @@ sealed interface AnalyticsEvent {
     // evidence we will ever have about whether that set is right.
     data class CategoryAutoAssigned(val categoryId: String?) : AnalyticsEvent
 
-    data class CategoryCorrected(
-        val fromCategoryId: String?,
-        val toCategoryId: String?,
-    ) : AnalyticsEvent
+    data class CategoryCorrected(val fromCategoryId: String?, val toCategoryId: String?) : AnalyticsEvent
 }
 
 // How an item got into the list. The whole voice bet is measured by the

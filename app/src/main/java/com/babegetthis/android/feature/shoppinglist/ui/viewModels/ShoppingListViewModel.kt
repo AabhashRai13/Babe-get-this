@@ -14,24 +14,24 @@ import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.CategorySource
 import com.babegetthis.android.core.telemetry.model.InputMethod
 import com.babegetthis.android.core.telemetry.model.JoinFailureReason
-import kotlinx.coroutines.CoroutineScope
+import com.babegetthis.android.core.util.TimePeriod
+import com.babegetthis.android.core.util.getTimePeriod
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingListUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import com.babegetthis.android.core.util.TimePeriod
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlinx.coroutines.flow.combine
-import com.babegetthis.android.core.util.getTimePeriod
 
 @HiltViewModel
 class ShoppingListViewModel @Inject constructor(
@@ -45,24 +45,23 @@ class ShoppingListViewModel @Inject constructor(
 
     // Which tab is selected: 0 = Active, 1 = Completed.
     // Lives in the VM (not the screen) so derived state can react to it.
-    private val _selectedTab = MutableStateFlow(0)
+    private val selectedTabIndex = MutableStateFlow(0)
 
     fun setSelectedTab(index: Int) {
-        _selectedTab.value = index
+        selectedTabIndex.value = index
     }
 
     val shoppingLists: StateFlow<List<ShoppingList>> = repository.getAllLists()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Companion.WhileSubscribed(5000),
-            initialValue = emptyList()
+            initialValue = emptyList(),
         )
 
     val uiState: StateFlow<ShoppingListUiState> = combine(
         shoppingLists,
-        _selectedTab,
-    ) {
-        lists, tab ->
+        selectedTabIndex,
+    ) { lists, tab ->
         val active = lists.filter { !it.isCompleted }
         val completed = lists.filter { it.isCompleted }
 
@@ -90,8 +89,8 @@ class ShoppingListViewModel @Inject constructor(
         )
     }.stateIn(
         scope = viewModelScope,
-        started =  SharingStarted.WhileSubscribed(5000),
-        initialValue = ShoppingListUiState()
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ShoppingListUiState(),
     )
 
     val showCreateDialog = MutableStateFlow(false)
@@ -268,8 +267,11 @@ class ShoppingListViewModel @Inject constructor(
                 analytics.track(
                     AnalyticsEvent.ItemAdded(
                         inputMethod = InputMethod.Voice,
-                        categorySource = if (draft.category == null) CategorySource.None
-                        else CategorySource.Auto,
+                        categorySource = if (draft.category == null) {
+                            CategorySource.None
+                        } else {
+                            CategorySource.Auto
+                        },
                     ),
                 )
                 analytics.track(AnalyticsEvent.CategoryAutoAssigned(draft.category))
@@ -281,8 +283,7 @@ class ShoppingListViewModel @Inject constructor(
         return result
     }
 
-    private fun currentUserId(): String? =
-        (authStateManager.authState.value as? AuthState.Authenticated)?.userId
+    private fun currentUserId(): String? = (authStateManager.authState.value as? AuthState.Authenticated)?.userId
 
     // applicationScope, NOT viewModelScope — the same reasoning
     // ShoppingItemsViewModel.undoDeleteItem already spells out for items, which

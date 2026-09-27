@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Splash colours, light. The background matches Background in
+   ui/theme/Color.kt so the splash and the first Compose frame are the same
+   colour and the handoff is invisible. If that palette changes, change these
+   with it — a theme attribute cannot reference a Compose Color.
+-->
+<resources>
+    <color name="splash_background">#EDF1F4</color>
+    <color name="splash_icon">#607D8B</color>
+</resources>

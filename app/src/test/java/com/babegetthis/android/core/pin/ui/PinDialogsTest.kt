@@ -33,11 +33,9 @@ class PinDialogsTest {
     private var dismissed = false
     private var completed = false
 
-    private fun click(label: String) =
-        compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.OnClick)
+    private fun click(label: String) = compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.OnClick)
 
-    private fun typePin(pin: String) =
-        compose.onNodeWithText("PIN").performTextInput(pin)
+    private fun typePin(pin: String) = compose.onNodeWithText("PIN").performTextInput(pin)
 
     // --- PinPromptDialog ---
 

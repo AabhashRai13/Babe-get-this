@@ -1,6 +1,5 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
@@ -13,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.lifecycle.SavedStateHandle
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.data.repository.CategoryRepository
@@ -70,19 +70,15 @@ class ShoppingItemsScreenTest {
 
     private lateinit var viewModel: ShoppingItemsViewModel
 
-    private fun item(
-        id: String,
-        name: String,
-        isPickedUp: Boolean = false,
-        shop: String? = null,
-    ) = TestData.item(id = id, listId = "L1", name = name, isPickedUp = isPickedUp, shop = shop)
+    private fun item(id: String, name: String, isPickedUp: Boolean = false, shop: String? = null) =
+        TestData.item(id = id, listId = "L1", name = name, isPickedUp = isPickedUp, shop = shop)
 
     private fun render(items: List<ShoppingItem> = emptyList(), loggedIn: Boolean = true) {
         itemsFlow.value = items
         every { itemRepository.getItemsByListId(any()) } returns itemsFlow
         every { categoryRepository.getAllCategories() } returns MutableStateFlow(emptyList())
         every { authStateManager.authState } returns MutableStateFlow(
-            if (loggedIn) AuthState.Authenticated("u1") else AuthState.Unauthenticated
+            if (loggedIn) AuthState.Authenticated("u1") else AuthState.Unauthenticated,
         )
         every { listRepository.getListById(any()) } returns MutableStateFlow(TestData.list(id = "L1"))
         every { pinRepository.pinExists } returns MutableStateFlow(false)
@@ -142,7 +138,7 @@ class ShoppingItemsScreenTest {
                 item("i1", "Milk", isPickedUp = true),
                 item("i2", "Eggs"),
                 item("i3", "Bread"),
-            )
+            ),
         )
 
         compose.onNodeWithText("1 of 3 picked up").assertExists()
@@ -170,7 +166,7 @@ class ShoppingItemsScreenTest {
             items = listOf(
                 item("i1", "Milk", isPickedUp = true),
                 item("i2", "Eggs", isPickedUp = true),
-            )
+            ),
         )
 
         compose.onNodeWithText("All done!").assertExists()

@@ -32,11 +32,7 @@ private fun getGreeting(): String {
 // Shows a time-aware greeting and a quick summary of active lists/items.
 // When signed in, the greeting is personalised with the user's first name.
 @Composable
-internal fun GreetingSection(
-    listCount: Int,
-    itemsToGet: Int,
-    userName: String? = null,
-) {
+internal fun GreetingSection(listCount: Int, itemsToGet: Int, userName: String? = null) {
     // Personalise with the first name only ("Aabhash Rai" → "Aabhash").
     // Blank/null name (logged out) falls back to the plain greeting.
     val firstName = userName?.trim()?.takeIf { it.isNotEmpty() }?.substringBefore(' ')

@@ -42,8 +42,10 @@ class PinThrottleTest {
         val n = failNTimes(5, nowWall = 1_000, nowElapsed = 1_000) // locks 30s on both clocks
         // Jump wall clock a year ahead; elapsed barely moves.
         val remaining = PinThrottle.remainingMs(
-            n.untilWall, n.untilElapsed,
-            nowWall = 1_000 + 31_536_000_000L, nowElapsed = 2_000,
+            n.untilWall,
+            n.untilElapsed,
+            nowWall = 1_000 + 31_536_000_000L,
+            nowElapsed = 2_000,
         )
         assertTrue("still locked via elapsed clock", remaining > 0)
     }
@@ -53,8 +55,10 @@ class PinThrottleTest {
         val n = failNTimes(5, nowWall = 1_000, nowElapsed = 1_000_000) // locks 30s
         // Reboot: elapsedRealtime resets toward 0; wall barely moved.
         val remaining = PinThrottle.remainingMs(
-            n.untilWall, n.untilElapsed,
-            nowWall = 2_000, nowElapsed = 0,
+            n.untilWall,
+            n.untilElapsed,
+            nowWall = 2_000,
+            nowElapsed = 0,
         )
         assertTrue("still locked via wall clock", remaining > 0)
     }
@@ -63,8 +67,10 @@ class PinThrottleTest {
     fun bothClocksPastExpiryUnlocks() {
         val n = failNTimes(5, nowWall = 1_000, nowElapsed = 1_000)
         val remaining = PinThrottle.remainingMs(
-            n.untilWall, n.untilElapsed,
-            nowWall = 1_000 + 30_001, nowElapsed = 1_000 + 30_001,
+            n.untilWall,
+            n.untilElapsed,
+            nowWall = 1_000 + 30_001,
+            nowElapsed = 1_000 + 30_001,
         )
         assertEquals(0L, remaining)
     }
@@ -117,8 +123,10 @@ class PinThrottleTest {
         assertEquals(
             40_000L,
             PinThrottle.remainingMs(
-                untilWall = 11_000, untilElapsed = 41_000,
-                nowWall = 1_000, nowElapsed = 1_000,
+                untilWall = 11_000,
+                untilElapsed = 41_000,
+                nowWall = 1_000,
+                nowElapsed = 1_000,
             ),
         )
     }

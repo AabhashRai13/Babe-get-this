@@ -3,7 +3,6 @@ package com.babegetthis.android.core.auth.data
 import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.error.Result
 
-
 interface AuthRepository {
     suspend fun register(email: String, password: String, name: String): Result<RegisterResult>
     suspend fun login(email: String, password: String): Result<User>

@@ -22,11 +22,10 @@ class DateGroupingTest {
 
     // Built by cloning `now` and calling add(), the same way production does, so
     // the test isn't asserting against hand-rolled millisecond arithmetic.
-    private fun daysBefore(days: Int, hoursOffset: Int = 0): Long =
-        now().apply {
-            add(Calendar.DAY_OF_YEAR, -days)
-            add(Calendar.HOUR_OF_DAY, hoursOffset)
-        }.timeInMillis
+    private fun daysBefore(days: Int, hoursOffset: Int = 0): Long = now().apply {
+        add(Calendar.DAY_OF_YEAR, -days)
+        add(Calendar.HOUR_OF_DAY, hoursOffset)
+    }.timeInMillis
 
     private fun period(timestamp: Long) = getTimePeriod(timestamp, nowMillis)
 

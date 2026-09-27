@@ -4,13 +4,13 @@ import android.content.Context
 import com.babegetthis.android.core.auth.data.TokenManager
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.SyncTrigger
-import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.local.PrefsSyncPointStore
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.sync.data.remote.SupabaseSharedListRemote
+import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
-import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
+import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import dagger.Module
@@ -27,13 +27,11 @@ object SyncModule {
 
     @Provides
     @Singleton
-    fun provideSharedListRemote(client: SupabaseClient): SharedListRemote =
-        SupabaseSharedListRemote(client)
+    fun provideSharedListRemote(client: SupabaseClient): SharedListRemote = SupabaseSharedListRemote(client)
 
     @Provides
     @Singleton
-    fun provideSyncPointStore(@ApplicationContext context: Context): SyncPointStore =
-        PrefsSyncPointStore(context)
+    fun provideSyncPointStore(@ApplicationContext context: Context): SyncPointStore = PrefsSyncPointStore(context)
 
     @Provides
     @Singleton

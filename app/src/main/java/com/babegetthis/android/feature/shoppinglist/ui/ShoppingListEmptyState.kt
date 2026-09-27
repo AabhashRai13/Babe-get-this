@@ -30,14 +30,11 @@ import androidx.compose.ui.unit.dp
 import com.babegetthis.android.R
 
 @Composable
-fun ShoppingListEmptyState(
-    modifier: Modifier = Modifier,
-    onCreateList: () -> Unit
-) {
+fun ShoppingListEmptyState(modifier: Modifier = Modifier, onCreateList: () -> Unit) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.Center,
     ) {
         // Layered circle — gives depth and visual interest.
         // Outer ring is a subtle surface tint, inner is the primary container.

@@ -86,7 +86,7 @@ class TokenManagerTest {
     @Test
     fun clearingTheSessionLeavesThePinStoreAlone() {
         val pinStore = com.babegetthis.android.core.pin.data.PinStore(
-            ApplicationProvider.getApplicationContext()
+            ApplicationProvider.getApplicationContext(),
         )
         pinStore.pinHash = "pin-hash"
         tokenManager.saveToken("token")

@@ -31,7 +31,11 @@ class ShoppingListRepositorySharedTest {
     }
 
     private fun sharedList(id: String = "list-1") = ShoppingListEntity(
-        id = id, name = "Groceries", createdAt = 1L, updatedAt = 2L, shareCode = "ABC234",
+        id = id,
+        name = "Groceries",
+        createdAt = 1L,
+        updatedAt = 2L,
+        shareCode = "ABC234",
     )
 
     private suspend fun seedShared(id: String = "list-1") = dbRule.listDao.insertList(sharedList(id))

@@ -69,7 +69,7 @@ class AuthNetworkTest {
         server.enqueue(MockResponse().setResponseCode(200))
 
         client.newCall(
-            Request.Builder().url(url()).header("X-Custom", "kept").build()
+            Request.Builder().url(url()).header("X-Custom", "kept").build(),
         ).execute().close()
 
         val recorded = server.takeRequest()
@@ -88,7 +88,7 @@ class AuthNetworkTest {
         server.enqueue(MockResponse().setResponseCode(200))
 
         client.newCall(
-            Request.Builder().url(url()).header("Authorization", "Basic other").build()
+            Request.Builder().url(url()).header("Authorization", "Basic other").build(),
         ).execute().close()
 
         assertEquals("Bearer abc123", server.takeRequest().getHeader("Authorization"))

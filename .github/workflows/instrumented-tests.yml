@@ -69,7 +69,25 @@ jobs:
           # Give the boot longer than the action's default; a cold AVD on a
           # shared runner is slower than a warm local one.
           emulator-boot-timeout: 900
-          script: ./gradlew connectedDevDebugAndroidTest
+          # Two runs, and the split is deliberate.
+          #
+          # The androidTest suite stays on a DEBUG variant. It contains
+          # white-box tests that call app internals (TokenManager, PinStore, the
+          # Room migrations), and R8's optimizer removes members that no
+          # shipping code path reaches — so running this suite against a
+          # minified build fails for reasons that are not defects. Keeping every
+          # member a test touches would suppress the optimization the run would
+          # be there to verify.
+          #
+          # MinifiedSmokeTest covers what that leaves uncovered: it launches the
+          # shrunk, obfuscated app and drives it through UiAutomator, with no
+          # compile-time reference to anything inside it. If a keep-rule is
+          # missing badly enough to stop the app starting, this is what catches
+          # it before a release does.
+          script: |
+            ./gradlew connectedDevDebugAndroidTest
+            ./gradlew :baselineprofile:connectedProdBenchmarkReleaseAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.class=com.babegetthis.android.baselineprofile.MinifiedSmokeTest
 
       - name: Upload report on failure
         if: failure()

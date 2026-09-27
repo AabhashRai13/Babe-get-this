@@ -9,6 +9,7 @@ import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingLis
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -18,7 +19,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.random.Random
-import io.mockk.mockk
 
 @RunWith(RobolectricTestRunner::class)
 class ShareRepositoryTest {
@@ -39,12 +39,19 @@ class ShareRepositoryTest {
     private fun <T> Result<T>.error(): AppError = (this as Result.Error).error
 
     private fun localList(id: String = "list-1") = ShoppingListEntity(
-        id = id, name = "Groceries", createdAt = 1L, updatedAt = 2L,
+        id = id,
+        name = "Groceries",
+        createdAt = 1L,
+        updatedAt = 2L,
     )
 
     private fun localItem(id: String = "item-1") = ShoppingItemEntity(
-        id = id, listId = "list-1", name = "Milk", quantity = "1",
-        createdAt = 1L, updatedAt = 2L,
+        id = id,
+        listId = "list-1",
+        name = "Milk",
+        quantity = "1",
+        createdAt = 1L,
+        updatedAt = 2L,
     )
 
     // --- share --------------------------------------------------------------
@@ -144,7 +151,13 @@ class ShareRepositoryTest {
             ListRow(id = "list-9", name = "Their list", shareCode = "ABC234", updatedAt = "2026-08-01T10:00:00Z"),
         )
         remote.itemRows = listOf(
-            ItemRow(id = "item-9", listId = "list-9", name = "Milk", quantity = "1", updatedAt = "2026-08-01T10:00:00Z"),
+            ItemRow(
+                id = "item-9",
+                listId = "list-9",
+                name = "Milk",
+                quantity = "1",
+                updatedAt = "2026-08-01T10:00:00Z",
+            ),
         )
 
         val listId = repository.join("  abc234  ").data()

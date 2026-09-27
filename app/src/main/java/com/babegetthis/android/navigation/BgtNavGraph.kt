@@ -29,9 +29,7 @@ object Routes {
     const val SHOPPING_ITEMS = "shopping_items/{listId}/{listName}"
     const val SETTINGS = "settings"
 
-    fun shoppingItems(listId: String, listName: String): String {
-        return "shopping_items/$listId/$listName"
-    }
+    fun shoppingItems(listId: String, listName: String): String = "shopping_items/$listId/$listName"
 }
 
 // No login wall — the app always starts at the shopping list screen.
@@ -41,10 +39,7 @@ object Routes {
 // This is like GoRouter in Flutter, but without a redirect guard.
 
 @Composable
-fun BgtNavGraph(
-    authStateManager: AuthStateManager,
-    navController: NavHostController = rememberNavController(),
-) {
+fun BgtNavGraph(authStateManager: AuthStateManager, navController: NavHostController = rememberNavController()) {
     NavHost(
         navController = navController,
         startDestination = Routes.SHOPPING_LIST,
@@ -64,7 +59,7 @@ fun BgtNavGraph(
                 },
                 onNavigateToSettings = {
                     navController.navigate(Routes.SETTINGS)
-                }
+                },
             )
         }
 

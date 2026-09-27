@@ -40,22 +40,21 @@ class SupabaseAuthRepository @Inject constructor(
                 RegisterResult.ConfirmationRequired
             } else {
                 RegisterResult.SignedIn(
-                    persistCurrentSession(fallbackName = name, fallbackEmail = email)
+                    persistCurrentSession(fallbackName = name, fallbackEmail = email),
                 )
             }
         }
 
-    override suspend fun login(email: String, password: String): Result<User> =
-        runCatchingAuth {
-            supabaseClient.auth.signInWith(Email) {
-                this.email = email
-                this.password = password
-            }
-            persistCurrentSession(
-                fallbackName = email.substringBefore("@"),
-                fallbackEmail = email,
-            )
+    override suspend fun login(email: String, password: String): Result<User> = runCatchingAuth {
+        supabaseClient.auth.signInWith(Email) {
+            this.email = email
+            this.password = password
         }
+        persistCurrentSession(
+            fallbackName = email.substringBefore("@"),
+            fallbackEmail = email,
+        )
+    }
 
     override suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User> =
         runCatchingAuth {
@@ -88,12 +87,11 @@ class SupabaseAuthRepository @Inject constructor(
         updated.toUser(fallbackName = name, fallbackEmail = authStateManager.currentEmail() ?: "")
     }
 
-    override suspend fun requestPasswordReset(email: String): Result<Unit> =
-        runCatchingAuth {
-            // Supabase emails a 6-digit OTP ({{ .Token }} in the email template).
-            // Succeeds even for unknown emails, so we can't leak who's registered.
-            supabaseClient.auth.resetPasswordForEmail(email)
-        }
+    override suspend fun requestPasswordReset(email: String): Result<Unit> = runCatchingAuth {
+        // Supabase emails a 6-digit OTP ({{ .Token }} in the email template).
+        // Succeeds even for unknown emails, so we can't leak who's registered.
+        supabaseClient.auth.resetPasswordForEmail(email)
+    }
 
     override suspend fun resetPassword(email: String, code: String, newPassword: String): Result<User> =
         runCatchingAuth {
@@ -170,15 +168,13 @@ class SupabaseAuthRepository @Inject constructor(
     }
 
     // The display name is stored in Supabase user_metadata as a JSON field.
-    private fun UserInfo.readName(): String? =
-        userMetadata?.get("name")?.jsonPrimitive?.contentOrNull
+    private fun UserInfo.readName(): String? = userMetadata?.get("name")?.jsonPrimitive?.contentOrNull
 
-    private fun UserInfo.toUser(fallbackName: String, fallbackEmail: String): User =
-        User(
-            id = id,
-            email = email ?: fallbackEmail,
-            name = readName() ?: fallbackName,
-        )
+    private fun UserInfo.toUser(fallbackName: String, fallbackEmail: String): User = User(
+        id = id,
+        email = email ?: fallbackEmail,
+        name = readName() ?: fallbackName,
+    )
 
     // One place to turn auth failures into our AppError types. Supabase throws
     // its own exceptions (not Retrofit's), so we map by message here rather than

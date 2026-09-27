@@ -8,10 +8,7 @@ import kotlinx.serialization.Serializable
 // raw API shapes). Json is configured with ignoreUnknownKeys, so extra fields
 // the backend adds later won't break parsing.
 @Serializable
-data class TranscribeResponseDto(
-    val transcript: String? = null,
-    val items: List<TranscribeItemDto> = emptyList(),
-)
+data class TranscribeResponseDto(val transcript: String? = null, val items: List<TranscribeItemDto> = emptyList())
 
 // One parsed item. quantity is a number and unit is separate (e.g. 2 + "bottles");
 // the repository flattens them into ItemDraft's single quantity string. category
@@ -24,6 +21,6 @@ data class TranscribeItemDto(
     val quantity: Int? = null,
     val unit: String? = null,
     val category: String? = null,
-    val location: String? = null,   // backend now sends the store, e.g. "Dan Murphy's"
+    val location: String? = null, // backend now sends the store, e.g. "Dan Murphy's"
     val note: String? = null,
 )

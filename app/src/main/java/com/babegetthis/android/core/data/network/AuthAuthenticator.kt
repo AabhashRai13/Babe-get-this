@@ -15,9 +15,7 @@ import javax.inject.Inject
 // Later when the backend supports refresh tokens, this is where we'd attempt a token refresh
 // before giving up.
 
-class AuthAuthenticator @Inject constructor(
-    private val authStateManager: AuthStateManager,
-) : Authenticator {
+class AuthAuthenticator @Inject constructor(private val authStateManager: AuthStateManager) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
         // If we already tried re-authenticating and still got 401, give up

@@ -50,49 +50,58 @@ fun PebbleListeningIndicator(modifier: Modifier = Modifier) {
     // (animateFloat is @Composable, so this local helper must be too.)
     @Composable
     fun ringProgress(delayMillis: Int): State<Float> = infiniteTransition.animateFloat(
-        0f, 1f,
+        0f,
+        1f,
         infiniteRepeatable(
             tween(2400, easing = LinearOutSlowInEasing),
             RepeatMode.Restart,
-            initialStartOffset = StartOffset(delayMillis)
+            initialStartOffset = StartOffset(delayMillis),
         ),
-        label = "ring$delayMillis"
+        label = "ring$delayMillis",
     )
     val firstRing = ringProgress(0)
     val secondRing = ringProgress(800)
     val thirdRing = ringProgress(1600)
 
     val breatheScale = infiniteTransition.animateFloat(
-        1f, 1.06f,
+        1f,
+        1.06f,
         infiniteRepeatable(tween(1200, easing = LinearOutSlowInEasing), RepeatMode.Reverse),
-        label = "breathe"
+        label = "breathe",
     )
     val bobOffsetY = infiniteTransition.animateFloat(
-        2f, -3f,
+        2f,
+        -3f,
         infiniteRepeatable(tween(1100, easing = LinearOutSlowInEasing), RepeatMode.Reverse),
-        label = "bob"
+        label = "bob",
     )
     // Blink: eyes open for most of a 3.4s cycle, quick squash near the end.
     val blinkScaleY = infiniteTransition.animateFloat(
-        1f, 1f,
+        1f,
+        1f,
         infiniteRepeatable(
             keyframes {
                 durationMillis = 3400
-                1f at 0; 1f at 3094; 0.12f at 3196; 1f at 3400
+                1f at 0
+                1f at 3094
+                0.12f at 3196
+                1f at 3400
             },
-            RepeatMode.Restart
+            RepeatMode.Restart,
         ),
-        label = "blink"
+        label = "blink",
     )
+
     @Composable
     fun heartProgress(delayMillis: Int): State<Float> = infiniteTransition.animateFloat(
-        0f, 1f,
+        0f,
+        1f,
         infiniteRepeatable(
             tween(3200, easing = LinearEasing),
             RepeatMode.Restart,
-            initialStartOffset = StartOffset(delayMillis)
+            initialStartOffset = StartOffset(delayMillis),
         ),
-        label = "heart$delayMillis"
+        label = "heart$delayMillis",
     )
     val firstHeart = heartProgress(0)
     val secondHeart = heartProgress(1600)
@@ -113,12 +122,14 @@ fun PebbleListeningIndicator(modifier: Modifier = Modifier) {
 
             // pulsing rings, fading out as they expand
             for (ring in listOf(firstRing.value, secondRing.value, thirdRing.value)) {
-                if (ring > 0f && ring < 1f) drawCircle(
-                    Slate.copy(alpha = 0.4f * (1f - ring)),
-                    radius = circleRadius * (1f + 1.05f * ring),
-                    center = circleCenter,
-                    style = Stroke(2f)
-                )
+                if (ring > 0f && ring < 1f) {
+                    drawCircle(
+                        Slate.copy(alpha = 0.4f * (1f - ring)),
+                        radius = circleRadius * (1f + 1.05f * ring),
+                        center = circleCenter,
+                        style = Stroke(2f),
+                    )
+                }
             }
 
             // floating hearts
@@ -141,15 +152,29 @@ fun PebbleListeningIndicator(modifier: Modifier = Modifier) {
                 val browScale = 22f / 40f
                 val browStroke = Stroke(5f * browScale, cap = StrokeCap.Round)
                 fun drawBrow(left: Float, flip: Boolean) {
-                    drawPath(Path().apply {
-                        if (!flip) {
-                            moveTo(left + 4f * browScale, faceTop + 14f * browScale)
-                            quadraticBezierTo(left + 20f * browScale, faceTop + 2f * browScale, left + 36f * browScale, faceTop + 12f * browScale)
-                        } else {
-                            moveTo(left + 36f * browScale, faceTop + 14f * browScale)
-                            quadraticBezierTo(left + 20f * browScale, faceTop + 2f * browScale, left + 4f * browScale, faceTop + 12f * browScale)
-                        }
-                    }, Cream, style = browStroke)
+                    drawPath(
+                        Path().apply {
+                            if (!flip) {
+                                moveTo(left + 4f * browScale, faceTop + 14f * browScale)
+                                quadraticBezierTo(
+                                    left + 20f * browScale,
+                                    faceTop + 2f * browScale,
+                                    left + 36f * browScale,
+                                    faceTop + 12f * browScale,
+                                )
+                            } else {
+                                moveTo(left + 36f * browScale, faceTop + 14f * browScale)
+                                quadraticBezierTo(
+                                    left + 20f * browScale,
+                                    faceTop + 2f * browScale,
+                                    left + 4f * browScale,
+                                    faceTop + 12f * browScale,
+                                )
+                            }
+                        },
+                        Cream,
+                        style = browStroke,
+                    )
                 }
                 drawBrow(circleCenter.x - 8f - 22f, flip = false)
                 drawBrow(circleCenter.x + 8f, flip = true)
@@ -183,10 +208,13 @@ fun PebbleListeningIndicator(modifier: Modifier = Modifier) {
                     withTransform({ scale(1f, 7f / 11f, blushCenter) }) {
                         drawCircle(
                             Brush.radialGradient(
-                                0.55f to BlushPink.copy(alpha = 0.9f), 1f to BlushPink.copy(alpha = 0f),
-                                center = blushCenter, radius = 5.5f,
+                                0.55f to BlushPink.copy(alpha = 0.9f),
+                                1f to BlushPink.copy(alpha = 0f),
+                                center = blushCenter,
+                                radius = 5.5f,
                             ),
-                            radius = 5.5f, center = blushCenter,
+                            radius = 5.5f,
+                            center = blushCenter,
                         )
                     }
                 }
@@ -195,10 +223,19 @@ fun PebbleListeningIndicator(modifier: Modifier = Modifier) {
                 val smileScale = 20f / 40f
                 val smileLeft = circleCenter.x - 10f
                 val smileTop = blushCenterY + 5f
-                drawPath(Path().apply {
-                    moveTo(smileLeft + 5f * smileScale, smileTop + 5f * smileScale)
-                    quadraticBezierTo(smileLeft + 20f * smileScale, smileTop + 18f * smileScale, smileLeft + 35f * smileScale, smileTop + 5f * smileScale)
-                }, Cream, style = Stroke(5f * smileScale, cap = StrokeCap.Round))
+                drawPath(
+                    Path().apply {
+                        moveTo(smileLeft + 5f * smileScale, smileTop + 5f * smileScale)
+                        quadraticBezierTo(
+                            smileLeft + 20f * smileScale,
+                            smileTop + 18f * smileScale,
+                            smileLeft + 35f * smileScale,
+                            smileTop + 5f * smileScale,
+                        )
+                    },
+                    Cream,
+                    style = Stroke(5f * smileScale, cap = StrokeCap.Round),
+                )
             }
         }
     }
@@ -206,31 +243,32 @@ fun PebbleListeningIndicator(modifier: Modifier = Modifier) {
 
 // One floating heart: rises 78px while fading in then out; scale grows 0.5 → 1.05.
 // The shape is a 40x40 design-space heart scaled by heartWidth/40.
-private fun DrawScope.drawFloatingHeart(
-    progress: Float,
-    x: Float,
-    baseY: Float,
-    heartWidth: Float,
-    color: Color,
-) {
+private fun DrawScope.drawFloatingHeart(progress: Float, x: Float, baseY: Float, heartWidth: Float, color: Color) {
     if (progress <= 0f || progress >= 1f) return
     val alpha =
-        if (progress < 0.18f) (progress / 0.18f) * 0.95f
-        else 0.95f * (1f - (progress - 0.18f) / 0.82f)
+        if (progress < 0.18f) {
+            (progress / 0.18f) * 0.95f
+        } else {
+            0.95f * (1f - (progress - 0.18f) / 0.82f)
+        }
     val heartScale = 0.5f + 0.55f * progress
     val y = baseY - 78f * progress
     val unit = heartWidth / 40f
     val heartCenter = Offset(x + heartWidth / 2f, y + heartWidth * 0.45f)
+    // Hoisted out of the drawPath() call: as a trailing-position lambda argument
+    // the path builder sits two indent levels deeper, which pushes these cubicTo
+    // lines past the line-length limit for no readability gain.
+    val heartPath = Path().apply {
+        moveTo(x + 20f * unit, y + 34f * unit)
+        cubicTo(x + 7f * unit, y + 24f * unit, x + 2f * unit, y + 17f * unit, x + 2f * unit, y + 10.5f * unit)
+        cubicTo(x + 2f * unit, y + 5f * unit, x + 6f * unit, y + 2f * unit, x + 10.5f * unit, y + 2f * unit)
+        cubicTo(x + 14.5f * unit, y + 2f * unit, x + 18f * unit, y + 4.5f * unit, x + 20f * unit, y + 8f * unit)
+        cubicTo(x + 22f * unit, y + 4.5f * unit, x + 25.5f * unit, y + 2f * unit, x + 29.5f * unit, y + 2f * unit)
+        cubicTo(x + 34f * unit, y + 2f * unit, x + 38f * unit, y + 5f * unit, x + 38f * unit, y + 10.5f * unit)
+        cubicTo(x + 38f * unit, y + 17f * unit, x + 33f * unit, y + 24f * unit, x + 20f * unit, y + 34f * unit)
+        close()
+    }
     withTransform({ scale(heartScale, heartScale, heartCenter) }) {
-        drawPath(Path().apply {
-            moveTo(x + 20f * unit, y + 34f * unit)
-            cubicTo(x + 7f * unit, y + 24f * unit, x + 2f * unit, y + 17f * unit, x + 2f * unit, y + 10.5f * unit)
-            cubicTo(x + 2f * unit, y + 5f * unit, x + 6f * unit, y + 2f * unit, x + 10.5f * unit, y + 2f * unit)
-            cubicTo(x + 14.5f * unit, y + 2f * unit, x + 18f * unit, y + 4.5f * unit, x + 20f * unit, y + 8f * unit)
-            cubicTo(x + 22f * unit, y + 4.5f * unit, x + 25.5f * unit, y + 2f * unit, x + 29.5f * unit, y + 2f * unit)
-            cubicTo(x + 34f * unit, y + 2f * unit, x + 38f * unit, y + 5f * unit, x + 38f * unit, y + 10.5f * unit)
-            cubicTo(x + 38f * unit, y + 17f * unit, x + 33f * unit, y + 24f * unit, x + 20f * unit, y + 34f * unit)
-            close()
-        }, color.copy(alpha = alpha))
+        drawPath(heartPath, color.copy(alpha = alpha))
     }
 }

@@ -16,6 +16,7 @@ val Tertiary = Color(0xFF5F8B85)
 val OnTertiary = Color(0xFFFFFFFF)
 val TertiaryContainer = Color(0xFFC8DDDA)
 val OnTertiaryContainer = Color(0xFF1F3D38)
+
 // Background sits a step below the lowest container so cards visibly
 // "lift" off the screen instead of blending into a near-white field.
 val Background = Color(0xFFEDF1F4)
@@ -28,6 +29,7 @@ val Divider = Color(0xFFC7CFD5)
 // Tonal range is widened from the default tight palette so the eye can
 // actually see the difference between background, cards, and chips.
 val SurfaceContainerLowest = Color(0xFFFFFFFF)
+
 // Card fill in light theme. Pushed near-white so cards lift visibly off
 // the slightly grey-blue background. Cards use this in both modes —
 // dark theme's DarkSurfaceContainerLow is correspondingly *lighter* than
@@ -62,31 +64,28 @@ val DarkSurfaceContainerHighest = Color(0xFF3A3F42)
 // List accent palette — dusty, muted tones that complement the blue-grey/brown theme.
 // Not neon or childish — these feel warm and premium.
 // Each pair is (background, onBackground) so text/icons are always readable.
-data class ListAccentColor(
-    val container: Color,
-    val onContainer: Color,
-)
+data class ListAccentColor(val container: Color, val onContainer: Color)
 
 val ListAccentPalette = listOf(
-    ListAccentColor(Color(0xFFE8D5D1), Color(0xFF5D3A32)),  // Dusty rose
-    ListAccentColor(Color(0xFFD5DED6), Color(0xFF2E4433)),  // Sage green
-    ListAccentColor(Color(0xFFD6DDE8), Color(0xFF2E3D52)),  // Soft slate blue
-    ListAccentColor(Color(0xFFE6D9C3), Color(0xFF4D3E28)),  // Warm sand
-    ListAccentColor(Color(0xFFDAD3E6), Color(0xFF3D3452)),  // Dusty lavender
-    ListAccentColor(Color(0xFFCFDDDB), Color(0xFF2A4240)),  // Muted teal
-    ListAccentColor(Color(0xFFE8D2C0), Color(0xFF523A24)),  // Terracotta
-    ListAccentColor(Color(0xFFD4DAE0), Color(0xFF333D47)),  // Cool grey-blue
+    ListAccentColor(Color(0xFFE8D5D1), Color(0xFF5D3A32)), // Dusty rose
+    ListAccentColor(Color(0xFFD5DED6), Color(0xFF2E4433)), // Sage green
+    ListAccentColor(Color(0xFFD6DDE8), Color(0xFF2E3D52)), // Soft slate blue
+    ListAccentColor(Color(0xFFE6D9C3), Color(0xFF4D3E28)), // Warm sand
+    ListAccentColor(Color(0xFFDAD3E6), Color(0xFF3D3452)), // Dusty lavender
+    ListAccentColor(Color(0xFFCFDDDB), Color(0xFF2A4240)), // Muted teal
+    ListAccentColor(Color(0xFFE8D2C0), Color(0xFF523A24)), // Terracotta
+    ListAccentColor(Color(0xFFD4DAE0), Color(0xFF333D47)), // Cool grey-blue
 )
 
 // Dark theme versions — same hues but tuned for dark backgrounds.
 // Containers are dark and muted, text/icons are lighter pastels.
 val DarkListAccentPalette = listOf(
-    ListAccentColor(Color(0xFF3D2C28), Color(0xFFD4ACA3)),  // Dusty rose
-    ListAccentColor(Color(0xFF263330), Color(0xFFA3C4A8)),  // Sage green
-    ListAccentColor(Color(0xFF252D38), Color(0xFFA3B5CC)),  // Soft slate blue
-    ListAccentColor(Color(0xFF352E1F), Color(0xFFCCBA97)),  // Warm sand
-    ListAccentColor(Color(0xFF2D2838), Color(0xFFB3A5CC)),  // Dusty lavender
-    ListAccentColor(Color(0xFF223230), Color(0xFF97BAB6)),  // Muted teal
-    ListAccentColor(Color(0xFF382A1E), Color(0xFFCCAA8D)),  // Terracotta
-    ListAccentColor(Color(0xFF282D33), Color(0xFFA3B0BD)),  // Cool grey-blue
+    ListAccentColor(Color(0xFF3D2C28), Color(0xFFD4ACA3)), // Dusty rose
+    ListAccentColor(Color(0xFF263330), Color(0xFFA3C4A8)), // Sage green
+    ListAccentColor(Color(0xFF252D38), Color(0xFFA3B5CC)), // Soft slate blue
+    ListAccentColor(Color(0xFF352E1F), Color(0xFFCCBA97)), // Warm sand
+    ListAccentColor(Color(0xFF2D2838), Color(0xFFB3A5CC)), // Dusty lavender
+    ListAccentColor(Color(0xFF223230), Color(0xFF97BAB6)), // Muted teal
+    ListAccentColor(Color(0xFF382A1E), Color(0xFFCCAA8D)), // Terracotta
+    ListAccentColor(Color(0xFF282D33), Color(0xFFA3B0BD)), // Cool grey-blue
 )

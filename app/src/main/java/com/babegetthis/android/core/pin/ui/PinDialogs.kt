@@ -61,12 +61,7 @@ private fun pinErrorText(result: PinResult?): String? = when (result) {
 }
 
 @Composable
-private fun PinField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    isError: Boolean = false,
-) {
+private fun PinField(value: String, onValueChange: (String) -> Unit, label: String, isError: Boolean = false) {
     OutlinedTextField(
         value = value,
         onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) onValueChange(it) },
@@ -98,7 +93,10 @@ fun PinPromptDialog(
         title = { Text(stringResource(purpose.titleRes)) },
         text = {
             Column {
-                PinField(pin, { pin = it; result = null }, stringResource(R.string.pin_label), isError = result is PinResult.Wrong)
+                PinField(pin, {
+                    pin = it
+                    result = null
+                }, stringResource(R.string.pin_label), isError = result is PinResult.Wrong)
                 pinErrorText(result)?.let {
                     Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
                 }
@@ -112,7 +110,12 @@ fun PinPromptDialog(
                         busy = true
                         val r = vm.verify(pin)
                         busy = false
-                        if (r is PinResult.Success) onVerified() else { result = r; pin = "" }
+                        if (r is PinResult.Success) {
+                            onVerified()
+                        } else {
+                            result = r
+                            pin = ""
+                        }
                     }
                 },
             ) { Text(stringResource(purpose.confirmRes)) }
@@ -123,11 +126,7 @@ fun PinPromptDialog(
 
 // First-time PIN creation: enter -> confirm -> save recovery code.
 @Composable
-fun PinSetupDialog(
-    onComplete: () -> Unit,
-    onDismiss: () -> Unit,
-    vm: PinPromptViewModel = hiltViewModel(),
-) {
+fun PinSetupDialog(onComplete: () -> Unit, onDismiss: () -> Unit, vm: PinPromptViewModel = hiltViewModel()) {
     var first by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
     var confirming by remember { mutableStateOf(false) }
@@ -150,12 +149,19 @@ fun PinSetupDialog(
             Column {
                 Text(stringResource(if (confirming) R.string.pin_confirm_body else R.string.pin_create_body))
                 if (confirming) {
-                    PinField(confirm, { confirm = it; mismatch = false }, stringResource(R.string.pin_label), isError = mismatch)
+                    PinField(confirm, {
+                        confirm = it
+                        mismatch = false
+                    }, stringResource(R.string.pin_label), isError = mismatch)
                 } else {
                     PinField(first, { first = it }, stringResource(R.string.pin_label))
                 }
                 if (mismatch) {
-                    Text(stringResource(R.string.pin_mismatch), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                    Text(
+                        stringResource(R.string.pin_mismatch),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                 }
             }
         },
@@ -169,9 +175,14 @@ fun PinSetupDialog(
                     enabled = isValidPin(confirm) && !busy,
                     onClick = {
                         if (confirm != first) {
-                            mismatch = true; confirm = ""
+                            mismatch = true
+                            confirm = ""
                         } else {
-                            scope.launch { busy = true; recoveryCode = vm.setupPin(first); busy = false }
+                            scope.launch {
+                                busy = true
+                                recoveryCode = vm.setupPin(first)
+                                busy = false
+                            }
                         }
                     },
                 ) { Text(stringResource(R.string.pin_confirm)) }
@@ -183,11 +194,7 @@ fun PinSetupDialog(
 
 // Reset a forgotten PIN with the recovery code: code -> new PIN -> new code.
 @Composable
-fun RecoveryResetDialog(
-    onComplete: () -> Unit,
-    onDismiss: () -> Unit,
-    vm: PinPromptViewModel = hiltViewModel(),
-) {
+fun RecoveryResetDialog(onComplete: () -> Unit, onDismiss: () -> Unit, vm: PinPromptViewModel = hiltViewModel()) {
     var code by remember { mutableStateOf("") }
     var codeVerified by remember { mutableStateOf(false) }
     var newPin by remember { mutableStateOf("") }
@@ -213,7 +220,10 @@ fun RecoveryResetDialog(
                     Text(stringResource(R.string.recovery_enter_body))
                     OutlinedTextField(
                         value = code,
-                        onValueChange = { code = it; error = null },
+                        onValueChange = {
+                            code = it
+                            error = null
+                        },
                         label = { Text(stringResource(R.string.recovery_label)) },
                         singleLine = true,
                         isError = error != null,
@@ -237,7 +247,10 @@ fun RecoveryResetDialog(
                             val r = vm.verifyRecovery(code)
                             busy = false
                             when (r) {
-                                is PinResult.Success -> { codeVerified = true; error = null }
+                                is PinResult.Success -> {
+                                    codeVerified = true
+                                    error = null
+                                }
                                 is PinResult.LockedOut -> error = formatLocked(r)
                                 else -> error = wrongCodeMsg
                             }
@@ -272,11 +285,7 @@ private fun formatLocked(r: PinResult.LockedOut): String =
 // Change the PIN: verify current -> enter new twice. Recovery code is left
 // untouched (changePin does not regenerate it).
 @Composable
-fun ChangePinDialog(
-    onComplete: () -> Unit,
-    onDismiss: () -> Unit,
-    vm: PinPromptViewModel = hiltViewModel(),
-) {
+fun ChangePinDialog(onComplete: () -> Unit, onDismiss: () -> Unit, vm: PinPromptViewModel = hiltViewModel()) {
     var current by remember { mutableStateOf("") }
     var verified by remember { mutableStateOf(false) }
     var newPin by remember { mutableStateOf("") }
@@ -293,21 +302,42 @@ fun ChangePinDialog(
         text = {
             Column {
                 when {
-                    !verified -> PinField(current, { current = it; error = null }, stringResource(R.string.pin_label), isError = error != null)
+                    !verified -> PinField(
+                        current,
+                        {
+                            current = it
+                            error = null
+                        },
+                        stringResource(R.string.pin_label),
+                        isError =
+                        error != null,
+                    )
                     !confirming -> PinField(newPin, { newPin = it }, stringResource(R.string.pin_label))
-                    else -> PinField(confirm, { confirm = it; mismatch = false }, stringResource(R.string.pin_label), isError = mismatch)
+                    else -> PinField(confirm, {
+                        confirm = it
+                        mismatch = false
+                    }, stringResource(R.string.pin_label), isError = mismatch)
                 }
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
-                if (mismatch) Text(stringResource(R.string.pin_mismatch), color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                }
+                if (mismatch) {
+                    Text(
+                        stringResource(R.string.pin_mismatch),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(
-                enabled = !busy && when {
-                    !verified -> isValidPin(current)
-                    !confirming -> isValidPin(newPin)
-                    else -> isValidPin(confirm)
-                },
+                enabled = !busy &&
+                    when {
+                        !verified -> isValidPin(current)
+                        !confirming -> isValidPin(newPin)
+                        else -> isValidPin(confirm)
+                    },
                 onClick = {
                     when {
                         !verified -> scope.launch {
@@ -322,12 +352,16 @@ fun ChangePinDialog(
                         }
                         !confirming -> confirming = true
                         else -> {
-                            if (confirm != newPin) { mismatch = true; confirm = "" }
-                            else scope.launch {
-                                busy = true
-                                val r = vm.changePin(current, newPin)
-                                busy = false
-                                if (r is PinResult.Success) onComplete() else error = "Couldn't change PIN"
+                            if (confirm != newPin) {
+                                mismatch = true
+                                confirm = ""
+                            } else {
+                                scope.launch {
+                                    busy = true
+                                    val r = vm.changePin(current, newPin)
+                                    busy = false
+                                    if (r is PinResult.Success) onComplete() else error = "Couldn't change PIN"
+                                }
                             }
                         }
                     }
@@ -357,10 +391,24 @@ fun RemovePinDialog(
         text = {
             Column {
                 if (lockedCount > 0) {
-                    Text(stringResource(R.string.lock_remove_pin_warning, lockedCount), modifier = Modifier.padding(bottom = 12.dp))
+                    Text(
+                        stringResource(R.string.lock_remove_pin_warning, lockedCount),
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
                 }
-                PinField(current, { current = it; error = null }, stringResource(R.string.pin_label), isError = error != null)
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
+                PinField(
+                    current,
+                    {
+                        current = it
+                        error = null
+                    },
+                    stringResource(R.string.pin_label),
+                    isError =
+                    error != null,
+                )
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                }
             }
         },
         confirmButton = {
@@ -386,11 +434,7 @@ fun RemovePinDialog(
 
 // Regenerate the recovery code: verify current PIN, then show the new code once.
 @Composable
-fun RegenerateRecoveryDialog(
-    onComplete: () -> Unit,
-    onDismiss: () -> Unit,
-    vm: PinPromptViewModel = hiltViewModel(),
-) {
+fun RegenerateRecoveryDialog(onComplete: () -> Unit, onDismiss: () -> Unit, vm: PinPromptViewModel = hiltViewModel()) {
     var current by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -408,8 +452,19 @@ fun RegenerateRecoveryDialog(
         title = { Text(stringResource(R.string.pin_verify_current_title)) },
         text = {
             Column {
-                PinField(current, { current = it; error = null }, stringResource(R.string.pin_label), isError = error != null)
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
+                PinField(
+                    current,
+                    {
+                        current = it
+                        error = null
+                    },
+                    stringResource(R.string.pin_label),
+                    isError =
+                    error != null,
+                )
+                error?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                }
             }
         },
         confirmButton = {

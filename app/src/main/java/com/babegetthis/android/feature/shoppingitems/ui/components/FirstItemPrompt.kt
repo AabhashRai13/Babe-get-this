@@ -31,10 +31,7 @@ import com.babegetthis.android.R
 
 // Empty-state shown when a freshly-created list has no items yet.
 @Composable
-fun FirstItemPrompt(
-    modifier: Modifier = Modifier,
-    onAddItem: () -> Unit,
-) {
+fun FirstItemPrompt(modifier: Modifier = Modifier, onAddItem: () -> Unit) {
     Column(
         modifier = modifier.padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

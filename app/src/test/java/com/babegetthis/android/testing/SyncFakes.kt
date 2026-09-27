@@ -77,7 +77,13 @@ class FakeSharedListRemote : SharedListRemote {
 class FakeSyncPointStore : SyncPointStore {
     val points = mutableMapOf<String, String>()
     override fun get(listId: String): String? = points[listId]
-    override fun set(listId: String, iso: String) { points[listId] = iso }
-    override fun remove(listId: String) { points.remove(listId) }
-    override fun clear() { points.clear() }
+    override fun set(listId: String, iso: String) {
+        points[listId] = iso
+    }
+    override fun remove(listId: String) {
+        points.remove(listId)
+    }
+    override fun clear() {
+        points.clear()
+    }
 }

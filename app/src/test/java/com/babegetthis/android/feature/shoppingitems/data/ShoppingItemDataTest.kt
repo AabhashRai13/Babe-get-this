@@ -34,16 +34,21 @@ class ShoppingItemDataTest {
     private fun <T> Result<T>.data(): T = (this as Result.Success).data
     private fun <T> Result<T>.error(): AppError = (this as Result.Error).error
 
-    private suspend fun seedList(id: String = "list-1") =
-        dbRule.listDao.insertList(TestData.listEntity(id = id))
+    private suspend fun seedList(id: String = "list-1") = dbRule.listDao.insertList(TestData.listEntity(id = id))
 
     // --- mappers ---
 
     @Test
     fun `entity toDomain carries every stored field`() {
         val domain = TestData.itemEntity(
-            id = "i1", listId = "l1", name = "Milk", quantity = "2",
-            isPickedUp = true, categoryId = "c1", shop = "Aldi", note = "semi",
+            id = "i1",
+            listId = "l1",
+            name = "Milk",
+            quantity = "2",
+            isPickedUp = true,
+            categoryId = "c1",
+            shop = "Aldi",
+            note = "semi",
         ).toDomain()
 
         assertEquals("i1", domain.id)
@@ -110,10 +115,10 @@ class ShoppingItemDataTest {
     fun `within one shop, nulls sort after categorised items`() = runTest {
         seedList()
         dbRule.itemDao.insertItem(
-            TestData.itemEntity(id = "uncat", name = "Apple", shop = "Aldi", categoryId = null)
+            TestData.itemEntity(id = "uncat", name = "Apple", shop = "Aldi", categoryId = null),
         )
         dbRule.itemDao.insertItem(
-            TestData.itemEntity(id = "cat", name = "Zucchini", shop = "Aldi", categoryId = "c1")
+            TestData.itemEntity(id = "cat", name = "Zucchini", shop = "Aldi", categoryId = "c1"),
         )
 
         val ids = dbRule.itemDao.getItemsByListId("list-1").first().map { it.id }

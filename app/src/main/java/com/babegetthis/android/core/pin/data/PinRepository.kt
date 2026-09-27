@@ -19,10 +19,7 @@ sealed interface PinResult {
 // Knows nothing about lists — unlocking lists on PIN removal is the caller's
 // job, so this stays a pure credential store.
 @Singleton
-class PinRepository @Inject constructor(
-    private val store: PinStore,
-    private val clock: PinClock,
-) {
+class PinRepository @Inject constructor(private val store: PinStore, private val clock: PinClock) {
     private val _pinExists = MutableStateFlow(store.pinHash != null)
     val pinExists: StateFlow<Boolean> = _pinExists.asStateFlow()
 
@@ -112,20 +109,28 @@ class PinRepository @Inject constructor(
         } else {
             registerFailure()
             val after = throttleRemaining()
-            if (after > 0) PinResult.LockedOut(after)
-            else PinResult.Wrong(PinThrottle.THRESHOLD - (store.attempts % PinThrottle.THRESHOLD))
+            if (after > 0) {
+                PinResult.LockedOut(after)
+            } else {
+                PinResult.Wrong(PinThrottle.THRESHOLD - (store.attempts % PinThrottle.THRESHOLD))
+            }
         }
     }
 
     private fun throttleRemaining(): Long = PinThrottle.remainingMs(
-        store.lockoutUntilWall, store.lockoutUntilElapsed,
-        clock.wallMillis(), clock.elapsedMillis(),
+        store.lockoutUntilWall,
+        store.lockoutUntilElapsed,
+        clock.wallMillis(),
+        clock.elapsedMillis(),
     )
 
     private fun registerFailure() {
         val next = PinThrottle.onFailure(
-            store.attempts, store.lockoutUntilWall, store.lockoutUntilElapsed,
-            clock.wallMillis(), clock.elapsedMillis(),
+            store.attempts,
+            store.lockoutUntilWall,
+            store.lockoutUntilElapsed,
+            clock.wallMillis(),
+            clock.elapsedMillis(),
         )
         store.attempts = next.attempts
         store.lockoutUntilWall = next.untilWall

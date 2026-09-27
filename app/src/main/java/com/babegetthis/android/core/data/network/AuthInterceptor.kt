@@ -9,9 +9,7 @@ import javax.inject.Inject
 // Like Dio's interceptor in Flutter: dio.interceptors.add(AuthInterceptor()).
 // If no token is saved (user not logged in), the request goes through without a header.
 
-class AuthInterceptor @Inject constructor(
-    private val tokenManager: TokenManager,
-) : Interceptor {
+class AuthInterceptor @Inject constructor(private val tokenManager: TokenManager) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
