@@ -4,6 +4,7 @@ import com.babegetthis.android.BuildConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.logging.LogLevel
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.serializer.KotlinXSerializer
@@ -28,6 +29,10 @@ object SupabaseModule {
         supabaseUrl = BuildConfig.SUPABASE_URL,
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY,
     ) {
+        // The SDK logs failed requests with their full URL and headers. Useful
+        // in development, but a release build has no business writing that to
+        // the device log.
+        if (!BuildConfig.DEBUG) defaultLogLevel = LogLevel.NONE
         // Explicit nulls: sync pushes whole rows, and clearing a column
         // (deleted_at = null when an undo revives a shared row) only reaches
         // the server if the null is actually serialized — omitted fields are
