@@ -75,6 +75,21 @@ suspend fun <T> safeCall(
                 else -> AppError.ServerError(e.code(), e.message ?: "Unexpected server response.")
             }
 
+            // Supabase (Postgrest, Auth, RPC) throws its own types, so the
+            // java.net and Retrofit arms above never see them. They used to land
+            // in UnknownError, which is logged and sent to crash reporting, and a
+            // RestException's message embeds the request headers: the
+            // Authorization bearer token, and with it the user's email. Mapped by
+            // status like Retrofit, and the message is never passed through.
+            is io.github.jan.supabase.exceptions.RestException -> when (e.statusCode) {
+                401 -> onUnauthorized()
+                in 400..499 -> onClientError(e.statusCode)
+                else -> AppError.ServerError(e.statusCode, "Server error. Please try later.")
+            }
+            // Supabase wraps every transport failure (DNS, refused, reset) in this.
+            is io.github.jan.supabase.exceptions.HttpRequestException -> AppError.NetworkError()
+            is io.ktor.client.plugins.HttpRequestTimeoutException -> AppError.TimeoutError()
+
             // Everything else. Deliberately does NOT pass e.message through:
             // this value is rendered straight into a snackbar, and an
             // unrecognised exception's text is internal detail. The concrete

@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.babegetthis.android.core.ui.TestTags
 import androidx.compose.ui.text.font.FontWeight
@@ -105,12 +106,13 @@ internal fun ShoppingListCard(
                 Text(
                     text = when {
                         list.itemCount == 0 -> "No items yet"
-                        isCompletedTab -> stringResource(
-                            R.string.shopping_list_items_count, list.itemCount
+                        isCompletedTab -> pluralStringResource(
+                            R.plurals.shopping_list_items_count, list.itemCount, list.itemCount
                         )
                         // Active tab — show progress like "3/5 items"
-                        else -> stringResource(
-                            R.string.shopping_list_items_progress,
+                        else -> pluralStringResource(
+                            R.plurals.shopping_list_items_progress,
+                            list.itemCount,
                             list.completedItemCount,
                             list.itemCount,
                         )

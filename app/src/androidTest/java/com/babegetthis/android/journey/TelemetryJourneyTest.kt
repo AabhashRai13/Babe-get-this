@@ -95,7 +95,7 @@ class TelemetryJourneyTest {
         }
         awaitText("Add Item")
         compose.onNodeWithText("Item name").performTextInput(name)
-        compose.onNodeWithText("Quantity or notes (e.g. 2 large, slightly firm)")
+        compose.onNodeWithText("Quantity (required)")
             .performTextInput("1")
         compose.onNode(hasText("Add") and !hasTestTag(TestTags.ADD_ITEM_FAB)).performClick()
         awaitText(name)

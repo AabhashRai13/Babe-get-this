@@ -96,7 +96,7 @@ class ListLifecycleTest {
         awaitText("Add Item")
 
         compose.onNodeWithText("Item name").performTextInput(name)
-        compose.onNodeWithText("Quantity or notes (e.g. 2 large, slightly firm)")
+        compose.onNodeWithText("Quantity (required)")
             .performTextInput(quantity)
         // Both the FAB and the dialog's confirm read "Add", and once the list has
         // items BOTH are on screen — so the confirm is "the Add that isn't the

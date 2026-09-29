@@ -148,6 +148,22 @@ class ShoppingItemsScreenTest {
         compose.onNodeWithText("1 of 3 picked up").assertExists()
     }
 
+    // The plain-text share and the mic used to announce "Unlock to share" and
+    // "Add", which describe neither.
+    @Test
+    fun `the top bar share button is labelled as a text share`() {
+        render(items = listOf(item("i1", "Milk")))
+
+        compose.onNodeWithContentDescription("Share as text").assertExists()
+    }
+
+    @Test
+    fun `the mic button is labelled as voice add`() {
+        render(items = listOf(item("i1", "Milk")))
+
+        compose.onNodeWithContentDescription("Add by voice").assertExists()
+    }
+
     @Test
     fun `a fully picked-up list celebrates`() {
         render(
@@ -165,7 +181,7 @@ class ShoppingItemsScreenTest {
         render(items = listOf(item("i1", "Milk"), item("i2", "Eggs", isPickedUp = true)))
 
         compose.onNodeWithText("ACTIVE ITEMS").assertExists()
-        compose.onNodeWithText("1 Items").assertExists()
+        compose.onNodeWithText("1 Item").assertExists()
     }
 
     @Test

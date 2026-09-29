@@ -2,8 +2,7 @@ package com.babegetthis.android.core.pin.data
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.babegetthis.android.core.data.local.openEncryptedPrefs
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,18 +27,7 @@ class PinStore @Inject constructor(
         private const val KEY_LOCKOUT_ELAPSED = "lockout_until_elapsed"
     }
 
-    private val prefs: SharedPreferences by lazy {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
-    }
+    private val prefs: SharedPreferences by lazy { openEncryptedPrefs(context, PREFS_NAME) }
 
     var pinHash: String?
         get() = prefs.getString(KEY_PIN_HASH, null)

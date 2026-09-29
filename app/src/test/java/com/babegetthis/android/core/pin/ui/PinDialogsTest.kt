@@ -4,6 +4,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
@@ -200,6 +201,20 @@ class PinDialogsTest {
 
         compose.onNodeWithText("ABCDEFGHJK", substring = true).assertExists()
         assertTrue("must not complete before acknowledgement", !completed)
+    }
+
+    // TalkBack reads the label before the tap, so it names the action, not
+    // the result.
+    @Test
+    fun `the recovery code copy button is labelled as an action`() {
+        coEvery { vm.setupPin(any()) } returns "ABCDEFGHJK"
+        setup()
+        typePin("1234")
+        click("Continue")
+        typePin("1234")
+        click("Confirm")
+
+        compose.onNodeWithContentDescription("Copy recovery code").assertExists()
     }
 
     @Test

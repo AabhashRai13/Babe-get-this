@@ -19,7 +19,7 @@ class ShoppingListShareTextTest {
             "Groceries",
             listOf(item("Milk", "2kg"), item("Eggs"), item("Coffee", pickedUp = true)),
         )
-        assertTrue(text.contains("[ ] Milk — 2kg"))
+        assertTrue(text.contains("[ ] Milk (2kg)"))
         assertTrue(text.contains("[ ] Eggs"))
         assertFalse(text.contains("Coffee"))
         assertTrue(text.contains("(1 already picked up)"))
@@ -30,7 +30,6 @@ class ShoppingListShareTextTest {
     fun blankQuantityShowsNameOnly() {
         val text = ShoppingListShareText.format("L", listOf(item("Bread")))
         assertTrue(text.contains("[ ] Bread\n"))
-        assertFalse(text.contains("—"))
     }
 
     // Sharing an empty message would be worse, so a fully-completed list shares
@@ -85,7 +84,7 @@ class ShoppingListShareTextTest {
     fun whitespaceQuantityIsTreatedAsAbsent() {
         val text = ShoppingListShareText.format("L", listOf(item("Bread", quantity = "   ")))
 
-        assertFalse(text.contains("—"))
+        assertTrue(text.contains("[ ] Bread\n"))
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.babegetthis.android.feature.settings.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +13,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.LockReset
 import androidx.compose.material.icons.outlined.Password
+import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.StarRate
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.BuildConfig
 import com.babegetthis.android.R
@@ -48,6 +52,9 @@ import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material3.Switch
 import com.babegetthis.android.core.ui.components.SettingsRow
 import kotlinx.coroutines.launch
+
+// The same page the Play listing links to.
+private const val PRIVACY_POLICY_URL = "https://babegetthis.com/privacy-policy.html"
 
 private enum class SettingsDialog { None, SetUp, Change, Remove, Regenerate, Forgot }
 
@@ -179,6 +186,19 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_rate_title),
                 subtitle = stringResource(R.string.settings_rate_subtitle),
                 onClick = { openPlayListing(context) },
+            )
+
+            SettingsRow(
+                icon = Icons.Outlined.PrivacyTip,
+                title = stringResource(R.string.settings_privacy_policy_title),
+                subtitle = stringResource(R.string.settings_privacy_policy_subtitle),
+                onClick = {
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, PRIVACY_POLICY_URL.toUri()))
+                    } catch (e: ActivityNotFoundException) {
+                        // No browser (kiosk or restricted profile): nothing to open.
+                    }
+                },
             )
 
             // Debug-only: the one reliable way to confirm crash reporting still

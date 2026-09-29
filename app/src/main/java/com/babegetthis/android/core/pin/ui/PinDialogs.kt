@@ -456,7 +456,7 @@ private fun RecoveryCodeStep(code: String, onAcknowledge: () -> Unit) {
                         textAlign = TextAlign.Center,
                     )
                     IconButton(onClick = { clipboard.setText(AnnotatedString(code)) }) {
-                        Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.recovery_copied))
+                        Icon(Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.recovery_copy))
                     }
                 }
             }

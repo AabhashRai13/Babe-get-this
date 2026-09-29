@@ -2,6 +2,9 @@ package com.babegetthis.android.feature.shoppingitems.ui
 
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -70,7 +73,7 @@ class AddItemDialogTest {
         compose.onNodeWithText("Item name").performTextInput(text)
 
     private fun typeQuantity(text: String) =
-        compose.onNodeWithText("Quantity or notes (e.g. 2 large, slightly firm)")
+        compose.onNodeWithText("Quantity (required)")
             .performTextInput(text)
 
     @Test
@@ -92,6 +95,18 @@ class AddItemDialogTest {
 
         typeQuantity("2")
         compose.onNodeWithText("Add").assertIsEnabled()
+    }
+
+    // The fields scroll and the buttons do not. When the buttons sat at the end
+    // of the scrolling column, the keyboard covered them on a normal phone and
+    // the only way to reach Add was to close the keyboard first.
+    @Test
+    fun `the action buttons sit outside the scrolling fields`() {
+        show()
+
+        compose.onNodeWithText("Item name").assert(hasAnyAncestor(hasScrollAction()))
+        compose.onNodeWithText("Add").assert(!hasAnyAncestor(hasScrollAction()))
+        compose.onNodeWithText("Cancel").assert(!hasAnyAncestor(hasScrollAction()))
     }
 
     @Test

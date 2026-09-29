@@ -122,226 +122,234 @@ fun AddItemDialog(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 4.dp,
         ) {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 20.dp),
-            ) {
-                Text(
-                    text = if (isEditMode) stringResource(R.string.shopping_items_edit_title)
-                           else stringResource(R.string.shopping_items_add_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                // Item name
-                OutlinedTextField(
-                    value = itemName,
-                    onValueChange = { if (it.length <= 60) itemName = it },
-                    label = { Text(stringResource(R.string.shopping_items_name_hint)) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.ShoppingCart,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    supportingText = if (itemName.length >= 60) {
-                        { Text("${itemName.length}/60") }
-                    } else null,
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = fieldColors,
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Quantity (required)
-                OutlinedTextField(
-                    value = quantity,
-                    onValueChange = { quantity = it },
-                    label = { Text(stringResource(R.string.shopping_items_quantity_hint)) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.AutoMirrored.Outlined.List,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = fieldColors,
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Note
-                OutlinedTextField(
-                    value = note,
-                    onValueChange = { if (it.length <= 80) note = it },
-                    label = { Text(stringResource(R.string.shopping_items_note)) },
-                    placeholder = { Text(stringResource(R.string.shopping_items_note_placeholder)) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    supportingText = if (note.length >= 80) {
-                        { Text("${note.length}/80") }
-                    } else null,
-                    singleLine = false,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = fieldColors,
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Shop
-                OutlinedTextField(
-                    value = shop,
-                    onValueChange = { if (it.length <= 40) shop = it },
-                    label = { Text(stringResource(R.string.shopping_items_shop)) },
-                    placeholder = { Text(stringResource(R.string.shopping_items_shop_placeholder)) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Outlined.Place,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    },
-                    supportingText = if (shop.length >= 40) {
-                        { Text("${shop.length}/40") }
-                    } else null,
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = fieldColors,
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Category dropdown
-                ExposedDropdownMenuBox(
-                    expanded = categoryDropdownExpanded,
-                    onExpandedChange = { categoryDropdownExpanded = it },
+            Column {
+                // Only the fields scroll. The buttons below sit outside the scroll so
+                // the keyboard can never cover them: weight(fill = false) lets this
+                // part shrink to whatever the keyboard leaves.
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 24.dp, end = 24.dp, top = 20.dp),
                 ) {
+                    Text(
+                        text = if (isEditMode) stringResource(R.string.shopping_items_edit_title)
+                               else stringResource(R.string.shopping_items_add_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    // Item name
                     OutlinedTextField(
-                        value = if (isCreatingNewCategory) stringResource(R.string.category_other) else categorySearchText,
-                        onValueChange = { newValue ->
-                            categorySearchText = newValue
-                            selectedCategory = null
-                            isCreatingNewCategory = false
-                            categoryDropdownExpanded = true
+                        value = itemName,
+                        onValueChange = { if (it.length <= 60) itemName = it },
+                        label = { Text(stringResource(R.string.shopping_items_name_hint)) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Outlined.ShoppingCart,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
                         },
-                        label = { Text(stringResource(R.string.shopping_items_category)) },
-                        placeholder = { Text(stringResource(R.string.shopping_items_category_placeholder)) },
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded)
-                        },
+                        supportingText = if (itemName.length >= 60) {
+                            { Text("${itemName.length}/60") }
+                        } else null,
                         singleLine = true,
-                        readOnly = isCreatingNewCategory,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryEditable),
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = fieldColors,
                     )
-                    ExposedDropdownMenu(
-                        expanded = categoryDropdownExpanded,
-                        onDismissRequest = { categoryDropdownExpanded = false },
-                        modifier = Modifier.heightIn(max = 250.dp),
-                    ) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(R.string.category_none),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            },
-                            onClick = {
-                                selectedCategory = null
-                                categorySearchText = ""
-                                isCreatingNewCategory = false
-                                categoryDropdownExpanded = false
-                            }
-                        )
 
-                        filteredCategories.forEach { category ->
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Quantity (required)
+                    OutlinedTextField(
+                        value = quantity,
+                        onValueChange = { quantity = it },
+                        label = { Text(stringResource(R.string.shopping_items_quantity_hint)) },
+                        placeholder = { Text(stringResource(R.string.shopping_items_quantity_placeholder)) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.List,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = fieldColors,
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Note
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = { if (it.length <= 80) note = it },
+                        label = { Text(stringResource(R.string.shopping_items_note)) },
+                        placeholder = { Text(stringResource(R.string.shopping_items_note_placeholder)) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Outlined.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        supportingText = if (note.length >= 80) {
+                            { Text("${note.length}/80") }
+                        } else null,
+                        singleLine = false,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = fieldColors,
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Shop
+                    OutlinedTextField(
+                        value = shop,
+                        onValueChange = { if (it.length <= 40) shop = it },
+                        label = { Text(stringResource(R.string.shopping_items_shop)) },
+                        placeholder = { Text(stringResource(R.string.shopping_items_shop_placeholder)) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Outlined.Place,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        supportingText = if (shop.length >= 40) {
+                            { Text("${shop.length}/40") }
+                        } else null,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = fieldColors,
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Category dropdown
+                    ExposedDropdownMenuBox(
+                        expanded = categoryDropdownExpanded,
+                        onExpandedChange = { categoryDropdownExpanded = it },
+                    ) {
+                        OutlinedTextField(
+                            value = if (isCreatingNewCategory) stringResource(R.string.category_other) else categorySearchText,
+                            onValueChange = { newValue ->
+                                categorySearchText = newValue
+                                selectedCategory = null
+                                isCreatingNewCategory = false
+                                categoryDropdownExpanded = true
+                            },
+                            label = { Text(stringResource(R.string.shopping_items_category)) },
+                            placeholder = { Text(stringResource(R.string.shopping_items_category_placeholder)) },
+                            trailingIcon = {
+                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded)
+                            },
+                            singleLine = true,
+                            readOnly = isCreatingNewCategory,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(MenuAnchorType.PrimaryEditable),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = fieldColors,
+                        )
+                        ExposedDropdownMenu(
+                            expanded = categoryDropdownExpanded,
+                            onDismissRequest = { categoryDropdownExpanded = false },
+                            modifier = Modifier.heightIn(max = 250.dp),
+                        ) {
                             DropdownMenuItem(
-                                text = { Text(category.name) },
+                                text = {
+                                    Text(
+                                        stringResource(R.string.category_none),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                },
                                 onClick = {
-                                    selectedCategory = category
-                                    categorySearchText = category.name
+                                    selectedCategory = null
+                                    categorySearchText = ""
                                     isCreatingNewCategory = false
                                     categoryDropdownExpanded = false
                                 }
                             )
-                        }
 
-                        if (filteredCategories.isEmpty() && categorySearchText.isNotBlank()) {
+                            filteredCategories.forEach { category ->
+                                DropdownMenuItem(
+                                    text = { Text(category.name) },
+                                    onClick = {
+                                        selectedCategory = category
+                                        categorySearchText = category.name
+                                        isCreatingNewCategory = false
+                                        categoryDropdownExpanded = false
+                                    }
+                                )
+                            }
+
+                            if (filteredCategories.isEmpty() && categorySearchText.isNotBlank()) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(R.string.shopping_items_category_no_match, categorySearchText),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    },
+                                    onClick = {},
+                                    enabled = false,
+                                )
+                            }
+
+                            HorizontalDivider()
+
                             DropdownMenuItem(
                                 text = {
                                     Text(
-                                        stringResource(R.string.shopping_items_category_no_match, categorySearchText),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        style = MaterialTheme.typography.bodySmall,
+                                        stringResource(R.string.category_other),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.bodyMedium,
                                     )
                                 },
-                                onClick = {},
-                                enabled = false,
+                                onClick = {
+                                    isCreatingNewCategory = true
+                                    selectedCategory = null
+                                    categorySearchText = ""
+                                    categoryDropdownExpanded = false
+                                }
                             )
                         }
-
-                        HorizontalDivider()
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(R.string.category_other),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            },
-                            onClick = {
-                                isCreatingNewCategory = true
-                                selectedCategory = null
-                                categorySearchText = ""
-                                categoryDropdownExpanded = false
-                            }
-                        )
                     }
-                }
 
-                // New category name field
-                AnimatedVisibility(visible = isCreatingNewCategory) {
-                    Column {
-                        Spacer(modifier = Modifier.height(14.dp))
-                        OutlinedTextField(
-                            value = newCategoryName,
-                            onValueChange = { newCategoryName = it },
-                            label = { Text(stringResource(R.string.shopping_items_new_category)) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = fieldColors,
-                        )
+                    // New category name field
+                    AnimatedVisibility(visible = isCreatingNewCategory) {
+                        Column {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            OutlinedTextField(
+                                value = newCategoryName,
+                                onValueChange = { newCategoryName = it },
+                                label = { Text(stringResource(R.string.shopping_items_new_category)) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = fieldColors,
+                            )
+                        }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                }
 
                 // Action buttons
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     TextButton(

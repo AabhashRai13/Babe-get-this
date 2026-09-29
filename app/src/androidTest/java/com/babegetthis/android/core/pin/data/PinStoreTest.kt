@@ -1,5 +1,7 @@
 package com.babegetthis.android.core.pin.data
 
+import android.content.Context
+import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -7,6 +9,7 @@ import org.junit.Before
 import org.junit.Test
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.runner.RunWith
+import java.security.KeyStore
 
 // NOTE: method names here are camelCase, not the backticked sentences used
 // everywhere in the JVM suite. Instrumented tests are dexed, and spaces in a
@@ -106,5 +109,27 @@ class PinStoreTest {
         val reopened = PinStore(ApplicationProvider.getApplicationContext())
 
         assertEquals("hash", reopened.pinHash)
+    }
+
+    // Auto Backup and device transfer copy the prefs file but never the
+    // Keystore key that encrypts it, so a restored app finds a keyset it cannot
+    // decrypt. That used to throw AEADBadTagException out of PinRepository's
+    // constructor, crashing Settings and every list. Deleting the key here is
+    // exactly the state a restore leaves behind.
+    @Test
+    fun aStoreWhoseKeystoreKeyIsGoneStartsEmptyInsteadOfCrashing() {
+        store.pinHash = "hash"
+        // apply() writes land about 100ms later on a background thread. Left
+        // pending, one lands after the reopen below has deleted the file and
+        // brings the undecryptable keyset back. commit() on the same file waits
+        // for them. A real restore has no such writes in flight.
+        ApplicationProvider.getApplicationContext<Context>()
+            .getSharedPreferences("bgt_pin_prefs", Context.MODE_PRIVATE).edit().commit()
+        KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            .deleteEntry(MasterKey.DEFAULT_MASTER_KEY_ALIAS)
+
+        val restored = PinStore(ApplicationProvider.getApplicationContext())
+
+        assertNull(restored.pinHash)
     }
 }
