@@ -142,7 +142,10 @@
     <string name="pin_confirm_body">Enter your PIN again to confirm</string>
     <string name="pin_new_title">Choose a new PIN</string>
     <string name="pin_mismatch">PINs don\'t match. Try again.</string>
-    <string name="pin_wrong">Wrong PIN. %1$d attempts left.</string>
+    <plurals name="pin_wrong">
+        <item quantity="one">Wrong PIN. %1$d attempt left.</item>
+        <item quantity="other">Wrong PIN. %1$d attempts left.</item>
+    </plurals>
     <string name="pin_locked_out">Too many attempts. Try again in %1$s.</string>
     <string name="pin_cancel">Cancel</string>
     <string name="pin_continue">Continue</string>
@@ -164,7 +167,10 @@
     <string name="lock_list">Lock list</string>
     <string name="unlock_list">Unlock list</string>
     <string name="lock_locked">Locked</string>
-    <string name="lock_remove_pin_warning">%1$d locked list(s) will be unlocked. Continue?</string>
+    <plurals name="lock_remove_pin_warning">
+        <item quantity="one">%1$d locked list will be unlocked. Continue?</item>
+        <item quantity="other">%1$d locked lists will be unlocked. Continue?</item>
+    </plurals>
     <string name="lock_delete_cancelled">Nothing was deleted</string>
 
     <!-- Auth prompts (one dialog, per-feature copy — task 8.4) -->

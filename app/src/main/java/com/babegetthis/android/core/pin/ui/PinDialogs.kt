@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -55,7 +56,7 @@ private fun formatDuration(ms: Long): String {
 
 @Composable
 private fun pinErrorText(result: PinResult?): String? = when (result) {
-    is PinResult.Wrong -> stringResource(R.string.pin_wrong, result.attemptsRemaining)
+    is PinResult.Wrong -> pluralStringResource(R.plurals.pin_wrong, result.attemptsRemaining, result.attemptsRemaining)
     is PinResult.LockedOut -> stringResource(R.string.pin_locked_out, formatDuration(result.remainingMs))
     else -> null
 }
@@ -392,7 +393,7 @@ fun RemovePinDialog(
             Column {
                 if (lockedCount > 0) {
                     Text(
-                        stringResource(R.string.lock_remove_pin_warning, lockedCount),
+                        pluralStringResource(R.plurals.lock_remove_pin_warning, lockedCount, lockedCount),
                         modifier = Modifier.padding(bottom = 12.dp),
                     )
                 }

@@ -87,6 +87,31 @@ class PinDialogsTest {
     }
 
     @Test
+    fun `the last attempt is counted in the singular`() {
+        coEvery { vm.verify(any()) } returns PinResult.Wrong(attemptsRemaining = 1)
+        prompt()
+        typePin("0000")
+
+        click("Unlock")
+
+        compose.onNodeWithText("Wrong PIN. 1 attempt left.").assertExists()
+    }
+
+    @Test
+    fun `removing the pin warns about one locked list in the singular`() {
+        compose.setContent { RemovePinDialog(lockedCount = 1, onRemoved = {}, onDismiss = {}, vm = vm) }
+
+        compose.onNodeWithText("1 locked list will be unlocked. Continue?").assertExists()
+    }
+
+    @Test
+    fun `removing the pin warns about several locked lists in the plural`() {
+        compose.setContent { RemovePinDialog(lockedCount = 3, onRemoved = {}, onDismiss = {}, vm = vm) }
+
+        compose.onNodeWithText("3 locked lists will be unlocked. Continue?").assertExists()
+    }
+
+    @Test
     fun `a wrong pin shows how many attempts remain`() {
         coEvery { vm.verify(any()) } returns PinResult.Wrong(attemptsRemaining = 3)
         prompt()

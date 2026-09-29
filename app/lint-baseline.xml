@@ -2,68 +2,13 @@
 <issues format="6" by="lint 8.13.2" type="baseline" client="gradle" dependencies="true" name="AGP (8.13.2)" variant="all" version="8.13.2">
 
     <issue
-        id="PluralsCandidate"
-        message="Formatting %d followed by words (&quot;items&quot;): This should probably be a plural rather than a string"
-        errorLine1="    &lt;string name=&quot;shopping_list_items_count&quot;>%d items&lt;/string>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="9"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="PluralsCandidate"
-        message="Formatting %d followed by words (&quot;items&quot;): This should probably be a plural rather than a string"
-        errorLine1="    &lt;string name=&quot;shopping_list_items_progress&quot;>%1$d/%2$d items&lt;/string>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="10"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="PluralsCandidate"
-        message="Formatting %d followed by words (&quot;Items&quot;): This should probably be a plural rather than a string"
-        errorLine1="    &lt;string name=&quot;shopping_items_count&quot;>%d Items&lt;/string>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="28"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="PluralsCandidate"
-        message="Formatting %d followed by words (&quot;attempts&quot;): This should probably be a plural rather than a string"
-        errorLine1="    &lt;string name=&quot;pin_wrong&quot;>Wrong PIN. %1$d attempts left.&lt;/string>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="115"
-            column="5"/>
-    </issue>
-
-    <issue
-        id="PluralsCandidate"
-        message="Formatting %d followed by words (&quot;locked&quot;): This should probably be a plural rather than a string"
-        errorLine1="    &lt;string name=&quot;lock_remove_pin_warning&quot;>%1$d locked list(s) will be unlocked. Continue?&lt;/string>"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/res/values/strings.xml"
-            line="137"
-            column="5"/>
-    </issue>
-
-    <issue
         id="UseKtx"
         message="Use the KTX extension function `SharedPreferences.edit` instead?"
         errorLine1="        set(v) = prefs.edit().putString(KEY_PIN_HASH, v).apply()"
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/pin/data/PinStore.kt"
-            line="44"
+            line="32"
             column="18"/>
     </issue>
 
@@ -74,7 +19,7 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/pin/data/PinStore.kt"
-            line="48"
+            line="36"
             column="18"/>
     </issue>
 
@@ -85,7 +30,7 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/pin/data/PinStore.kt"
-            line="52"
+            line="40"
             column="18"/>
     </issue>
 
@@ -96,7 +41,7 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/pin/data/PinStore.kt"
-            line="56"
+            line="44"
             column="18"/>
     </issue>
 
@@ -107,7 +52,7 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/pin/data/PinStore.kt"
-            line="60"
+            line="48"
             column="18"/>
     </issue>
 
@@ -118,7 +63,7 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/pin/data/PinStore.kt"
-            line="67"
+            line="55"
             column="18"/>
     </issue>
 
@@ -129,7 +74,7 @@
         errorLine2="                 ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/pin/data/PinStore.kt"
-            line="71"
+            line="59"
             column="18"/>
     </issue>
 
@@ -140,7 +85,7 @@
         errorLine2="        ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/pin/data/PinStore.kt"
-            line="74"
+            line="62"
             column="9"/>
     </issue>
 
@@ -228,7 +173,7 @@
         errorLine2="        ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/auth/data/TokenManager.kt"
-            line="40"
+            line="27"
             column="9"/>
     </issue>
 
@@ -239,7 +184,7 @@
         errorLine2="        ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/auth/data/TokenManager.kt"
-            line="46"
+            line="33"
             column="9"/>
     </issue>
 
@@ -250,7 +195,7 @@
         errorLine2="        ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/auth/data/TokenManager.kt"
-            line="52"
+            line="39"
             column="9"/>
     </issue>
 
@@ -261,7 +206,7 @@
         errorLine2="        ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/auth/data/TokenManager.kt"
-            line="58"
+            line="45"
             column="9"/>
     </issue>
 
@@ -272,7 +217,7 @@
         errorLine2="        ~~~~~~~~~~~~">
         <location
             file="src/main/java/com/babegetthis/android/core/auth/data/TokenManager.kt"
-            line="65"
+            line="52"
             column="9"/>
     </issue>
 

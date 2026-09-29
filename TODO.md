@@ -25,9 +25,9 @@ That baseline is debt, not a resolution. It should shrink over time.
 
 - **Baseline at adoption: 26 findings.** 20 × `UseKtx` (core-ktx extensions that
   would read better than the platform calls they replace, all in
-  SharedPreferences writes) and 5 × `PluralsCandidate` (item-count strings that should be `<plurals>`; genuinely
-  blocked until localization happens, since plurals only pay off across
-  languages).
+  SharedPreferences writes) and 5 × `PluralsCandidate`. All 5 plurals are
+  fixed now: three in 1.1.0 and the PIN attempts and locked-lists warnings
+  with this change. That leaves 20, all `UseKtx`.
 
   The first run produced 78. Of those, 33 were dependency-freshness checks now
   owned by Renovate and disabled in the `lint {}` block, and 19 were real and
@@ -51,9 +51,6 @@ were deliberately left alone rather than folded into that change.
 - [ ] **`listNotFoundException(listId)` in `ShoppingListRepository` ignores its
   `listId` parameter** — the message is a constant. Either use the id or drop
   the parameter.
-- [ ] **`app/lint-baseline.xml` still holds 5 `PluralsCandidate` findings** —
-  item-count strings that should be `<plurals>`. Genuinely blocked until
-  localization, since plurals only pay off across languages.
 - [ ] **Measure the baseline profile's effect on a physical device** —
   `StartupBenchmark` is written and runnable, but Macrobenchmark refuses to
   produce numbers on an emulator, correctly. Until it runs on real hardware the
