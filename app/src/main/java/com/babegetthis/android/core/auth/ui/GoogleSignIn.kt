@@ -32,9 +32,8 @@ fun interface GoogleTokenRequester {
 // token for the one picked, so it isn't opened at all.
 class GoogleSignInOfflineException : Exception("No internet connection")
 
-class CredentialManagerTokenRequester @Inject constructor(
-    private val networkMonitor: NetworkMonitor,
-) : GoogleTokenRequester {
+class CredentialManagerTokenRequester @Inject constructor(private val networkMonitor: NetworkMonitor) :
+    GoogleTokenRequester {
 
     override suspend fun request(activityContext: Context): GoogleSignInToken? {
         if (!networkMonitor.isOnline()) throw GoogleSignInOfflineException()
@@ -56,7 +55,6 @@ class CredentialManagerTokenRequester @Inject constructor(
     }
 }
 
-internal fun sha256Hex(value: String): String =
-    MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray())
-        .joinToString("") { "%02x".format(it) }
+internal fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256")
+    .digest(value.toByteArray())
+    .joinToString("") { "%02x".format(it) }

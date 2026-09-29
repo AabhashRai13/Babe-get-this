@@ -56,17 +56,16 @@ class SupabaseAuthRepository @Inject constructor(
         )
     }
 
-    override suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User> =
-        runCatchingAuth {
-            supabaseClient.auth.signInWith(IDToken) {
-                this.idToken = idToken
-                provider = Google
-                nonce = rawNonce
-            }
-            // Google puts the email and name in user_metadata, so there is
-            // nothing to fall back on here.
-            persistCurrentSession()
+    override suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User> = runCatchingAuth {
+        supabaseClient.auth.signInWith(IDToken) {
+            this.idToken = idToken
+            provider = Google
+            nonce = rawNonce
         }
+        // Google puts the email and name in user_metadata, so there is
+        // nothing to fall back on here.
+        persistCurrentSession()
+    }
 
     override suspend fun logout(): Result<Unit> {
         // NOT wrapped in runCatchingAuth: that guard fails fast when offline,

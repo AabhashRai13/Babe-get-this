@@ -1,21 +1,18 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -46,9 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,7 +62,14 @@ fun AddItemDialog(
     onCreateCategory: (name: String, onCreated: (Category) -> Unit) -> Unit = { _, _ -> },
     // Edit mode: when non-null, the dialog pre-fills with this item's data
     editingItem: ShoppingItem? = null,
-    onEdit: (itemId: String, name: String, quantity: String, categoryId: String?, shop: String?, note: String?) -> Unit = { _, _, _, _, _, _ -> },
+    onEdit: (
+        itemId: String,
+        name: String,
+        quantity: String,
+        categoryId: String?,
+        shop: String?,
+        note: String?,
+    ) -> Unit = { _, _, _, _, _, _ -> },
 ) {
     val isEditMode = editingItem != null
 
@@ -77,15 +79,19 @@ fun AddItemDialog(
     var note by remember { mutableStateOf(editingItem?.note ?: "") }
     var shop by remember { mutableStateOf(editingItem?.shop ?: "") }
     var selectedCategory by remember {
-        mutableStateOf(editingItem?.categoryId?.let { catId ->
-            categories.find { it.id == catId }
-        })
+        mutableStateOf(
+            editingItem?.categoryId?.let { catId ->
+                categories.find { it.id == catId }
+            },
+        )
     }
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
     var categorySearchText by remember {
-        mutableStateOf(editingItem?.categoryId?.let { catId ->
-            categories.find { it.id == catId }?.name
-        } ?: "")
+        mutableStateOf(
+            editingItem?.categoryId?.let { catId ->
+                categories.find { it.id == catId }?.name
+            } ?: "",
+        )
     }
     var isCreatingNewCategory by remember { mutableStateOf(false) }
     var newCategoryName by remember { mutableStateOf("") }
@@ -133,8 +139,11 @@ fun AddItemDialog(
                         .padding(start = 24.dp, end = 24.dp, top = 20.dp),
                 ) {
                     Text(
-                        text = if (isEditMode) stringResource(R.string.shopping_items_edit_title)
-                               else stringResource(R.string.shopping_items_add_title),
+                        text = if (isEditMode) {
+                            stringResource(R.string.shopping_items_edit_title)
+                        } else {
+                            stringResource(R.string.shopping_items_add_title)
+                        },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -154,7 +163,9 @@ fun AddItemDialog(
                         },
                         supportingText = if (itemName.length >= 60) {
                             { Text("${itemName.length}/60") }
-                        } else null,
+                        } else {
+                            null
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -201,7 +212,9 @@ fun AddItemDialog(
                         },
                         supportingText = if (note.length >= 80) {
                             { Text("${note.length}/80") }
-                        } else null,
+                        } else {
+                            null
+                        },
                         singleLine = false,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -226,7 +239,9 @@ fun AddItemDialog(
                         },
                         supportingText = if (shop.length >= 40) {
                             { Text("${shop.length}/40") }
-                        } else null,
+                        } else {
+                            null
+                        },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -241,7 +256,13 @@ fun AddItemDialog(
                         onExpandedChange = { categoryDropdownExpanded = it },
                     ) {
                         OutlinedTextField(
-                            value = if (isCreatingNewCategory) stringResource(R.string.category_other) else categorySearchText,
+                            value = if (isCreatingNewCategory) {
+                                stringResource(
+                                    R.string.category_other,
+                                )
+                            } else {
+                                categorySearchText
+                            },
                             onValueChange = { newValue ->
                                 categorySearchText = newValue
                                 selectedCategory = null
@@ -278,7 +299,7 @@ fun AddItemDialog(
                                     categorySearchText = ""
                                     isCreatingNewCategory = false
                                     categoryDropdownExpanded = false
-                                }
+                                },
                             )
 
                             filteredCategories.forEach { category ->
@@ -289,7 +310,7 @@ fun AddItemDialog(
                                         categorySearchText = category.name
                                         isCreatingNewCategory = false
                                         categoryDropdownExpanded = false
-                                    }
+                                    },
                                 )
                             }
 
@@ -297,7 +318,10 @@ fun AddItemDialog(
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            stringResource(R.string.shopping_items_category_no_match, categorySearchText),
+                                            stringResource(
+                                                R.string.shopping_items_category_no_match,
+                                                categorySearchText,
+                                            ),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             style = MaterialTheme.typography.bodySmall,
                                         )
@@ -322,7 +346,7 @@ fun AddItemDialog(
                                     selectedCategory = null
                                     categorySearchText = ""
                                     categoryDropdownExpanded = false
-                                }
+                                },
                             )
                         }
                     }
@@ -342,7 +366,6 @@ fun AddItemDialog(
                             )
                         }
                     }
-
                 }
 
                 // Action buttons
@@ -430,8 +453,11 @@ fun AddItemDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (isEditMode) stringResource(R.string.save)
-                                   else stringResource(R.string.add),
+                            text = if (isEditMode) {
+                                stringResource(R.string.save)
+                            } else {
+                                stringResource(R.string.add)
+                            },
                             fontWeight = FontWeight.SemiBold,
                         )
                     }

@@ -134,8 +134,7 @@ class ListLifecycleTest {
         }
     }
 
-    private fun back() =
-        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+    private fun back() = compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
 
     // Leaving an empty list deletes it, so the real system back asks first.
     // "Delete list" then leaves, and the list is gone from the home screen.

@@ -2,35 +2,40 @@ package com.babegetthis.android.feature.shoppingitems.ui.viewModels
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import com.babegetthis.android.core.model.Category
-import com.babegetthis.android.testing.TestData
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import org.junit.Assert.assertNull
 import app.cash.turbine.test
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
-import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
+import com.babegetthis.android.core.model.Category
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.Marker
+import com.babegetthis.android.core.telemetry.TelemetryMarkers
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.CategorySource
+import com.babegetthis.android.core.telemetry.model.InputMethod
+import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
+import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import com.babegetthis.android.testing.FakeSharedListRemote
-import kotlinx.coroutines.CoroutineScope
+import com.babegetthis.android.testing.TestData
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -42,13 +47,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import com.babegetthis.android.core.telemetry.AnalyticsRepository
-import com.babegetthis.android.core.telemetry.TelemetryMarkers
-import com.babegetthis.android.core.telemetry.Marker
-import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
-import com.babegetthis.android.core.telemetry.model.CategorySource
-import com.babegetthis.android.core.telemetry.model.InputMethod
-import io.mockk.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShoppingItemsViewModelTest {
@@ -118,11 +116,7 @@ class ShoppingItemsViewModelTest {
         applicationScope = CoroutineScope(testDispatcher),
     )
 
-    private fun item(
-        id: String,
-        isPickedUp: Boolean = false,
-        name: String = "Item-$id",
-    ) = ShoppingItem(
+    private fun item(id: String, isPickedUp: Boolean = false, name: String = "Item-$id") = ShoppingItem(
         id = id,
         listId = "L1",
         name = name,
@@ -366,17 +360,19 @@ class ShoppingItemsViewModelTest {
         )
 
         coVerify {
-            itemRepository.updateItem(match { updated ->
-                updated.id == "1" &&
-                    updated.listId == "L1" &&
-                    updated.createdAt == 1_000L &&
-                    updated.isPickedUp &&
-                    updated.name == "Whole Milk" &&
-                    updated.quantity == "2" &&
-                    updated.categoryId == "new-cat" &&
-                    updated.shop == "new shop" &&
-                    updated.note == "new note"
-            })
+            itemRepository.updateItem(
+                match { updated ->
+                    updated.id == "1" &&
+                        updated.listId == "L1" &&
+                        updated.createdAt == 1_000L &&
+                        updated.isPickedUp &&
+                        updated.name == "Whole Milk" &&
+                        updated.quantity == "2" &&
+                        updated.categoryId == "new-cat" &&
+                        updated.shop == "new shop" &&
+                        updated.note == "new note"
+                },
+            )
         }
     }
 

@@ -32,10 +32,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import com.babegetthis.android.core.ui.TestTags
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.babegetthis.android.R
+import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 import com.babegetthis.android.ui.theme.ListAccentColor
 
@@ -86,8 +86,11 @@ internal fun ShoppingListCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = if (isCompletedTab) Icons.Filled.Check
-                                  else Icons.Outlined.ShoppingCart,
+                    imageVector = if (isCompletedTab) {
+                        Icons.Filled.Check
+                    } else {
+                        Icons.Outlined.ShoppingCart
+                    },
                     contentDescription = null,
                     tint = accent.onContainer,
                     modifier = Modifier.size(22.dp),
@@ -99,15 +102,20 @@ internal fun ShoppingListCard(
                     text = list.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = if (isCompletedTab) FontWeight.Normal else FontWeight.SemiBold,
-                    color = if (isCompletedTab) MaterialTheme.colorScheme.onSurfaceVariant
-                            else MaterialTheme.colorScheme.onSurface,
+                    color = if (isCompletedTab) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = when {
                         list.itemCount == 0 -> "No items yet"
                         isCompletedTab -> pluralStringResource(
-                            R.plurals.shopping_list_items_count, list.itemCount, list.itemCount
+                            R.plurals.shopping_list_items_count,
+                            list.itemCount,
+                            list.itemCount,
                         )
                         // Active tab — show progress like "3/5 items"
                         else -> pluralStringResource(

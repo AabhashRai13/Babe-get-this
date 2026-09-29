@@ -1,10 +1,10 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
-import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -286,8 +286,7 @@ class ShoppingItemsScreenTest {
     // Leaving an empty list deletes it, so system back asks first. (Back on a
     // list with items isn't intercepted at all; the end-to-end suite covers
     // that path through the real navigation graph.)
-    private fun pressBack() =
-        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+    private fun pressBack() = compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
 
     @Test
     fun `going back from an empty list asks before leaving`() {
