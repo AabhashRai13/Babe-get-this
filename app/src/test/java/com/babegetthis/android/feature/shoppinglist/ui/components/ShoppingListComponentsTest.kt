@@ -95,6 +95,20 @@ class ShoppingListComponentsTest {
     }
 
     @Test
+    fun `a single item is counted in the singular`() {
+        card(itemCount = 1, completedItemCount = 1, isCompletedTab = true)
+
+        compose.onNodeWithText("1 item").assertIsDisplayed()
+    }
+
+    @Test
+    fun `progress out of a single item is singular`() {
+        card(itemCount = 1, completedItemCount = 0)
+
+        compose.onNodeWithText("0/1 item").assertIsDisplayed()
+    }
+
+    @Test
     fun `an unlocked list shows no lock badge`() {
         card(isLocked = false)
 
@@ -202,7 +216,21 @@ class ShoppingListComponentsTest {
     fun `summary reports nothing to pick up when the count is zero`() {
         compose.setContent { GreetingSection(listCount = 3, itemsToGet = 0) }
 
-        compose.onNodeWithText("3 lists — nothing to pick up yet").assertIsDisplayed()
+        compose.onNodeWithText("3 lists · nothing to pick up yet").assertIsDisplayed()
+    }
+
+    @Test
+    fun `one list with nothing to get is singular`() {
+        compose.setContent { GreetingSection(listCount = 1, itemsToGet = 0) }
+
+        compose.onNodeWithText("1 list · nothing to pick up yet").assertIsDisplayed()
+    }
+
+    @Test
+    fun `one item to get is singular`() {
+        compose.setContent { GreetingSection(listCount = 3, itemsToGet = 1) }
+
+        compose.onNodeWithText("3 lists · 1 item to get").assertIsDisplayed()
     }
 
     @Test

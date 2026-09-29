@@ -28,7 +28,9 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -194,6 +196,19 @@ class ShoppingItemsViewModelTest {
         }
     }
 
+    // Product rule: nine of ten ticked and the tenth no longer needed, so it is
+    // deleted. The trip is done, and that counts as completing the list.
+    @Test
+    fun `deleting the last unticked item completes the list`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.events.test {
+            itemsFlow.value = listOf(item("1", isPickedUp = true), item("2"))
+            itemsFlow.value = listOf(item("1", isPickedUp = true))
+            assertEquals(ShoppingItemsViewModel.UiEvent.ListJustCompleted, awaitItem())
+        }
+    }
+
     @Test
     fun `empty list never triggers ListJustCompleted`() = runTest {
         val viewModel = buildViewModel()
@@ -265,6 +280,59 @@ class ShoppingItemsViewModelTest {
         }
         // No undo emission, no restore allowed.
         coVerify(exactly = 0) { itemRepository.restoreItem(any()) }
+    }
+
+    // -- Leaving an empty list --
+
+    // onCleared deletes a list left with no items, so the screen asks before
+    // leaving whenever this flag is true.
+    private fun TestScope.leavingDeletesList(viewModel: ShoppingItemsViewModel): StateFlow<Boolean> {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.leavingDeletesList.collect { }
+        }
+        return viewModel.leavingDeletesList
+    }
+
+    @Test
+    fun `leaving an empty list would delete it`() = runTest {
+        itemsFlow.value = emptyList()
+
+        assertTrue(leavingDeletesList(buildViewModel()).value)
+    }
+
+    @Test
+    fun `leaving a list with items keeps it`() = runTest {
+        itemsFlow.value = listOf(item("1"))
+
+        assertFalse(leavingDeletesList(buildViewModel()).value)
+    }
+
+    // Shared lists are never auto-deleted (the partner may still be using
+    // them), so asking would be untrue there.
+    @Test
+    fun `leaving an empty shared list keeps it`() = runTest {
+        shareCodeFlow.value = "ABC123"
+
+        assertFalse(leavingDeletesList(buildViewModel()).value)
+    }
+
+    @Test
+    fun `adding the first item stops the question`() = runTest {
+        val flag = leavingDeletesList(buildViewModel())
+        assertTrue(flag.value)
+
+        itemsFlow.value = listOf(item("1"))
+
+        assertFalse(flag.value)
+    }
+
+    // Until the database answers, the list's contents are unknown; assuming
+    // "empty" would ask on a quick back press from a full list.
+    @Test
+    fun `nothing is claimed before the items have loaded`() = runTest {
+        every { itemRepository.getItemsByListId(any()) } returns MutableSharedFlow()
+
+        assertFalse(leavingDeletesList(buildViewModel()).value)
     }
 
     // -- Edit flow --

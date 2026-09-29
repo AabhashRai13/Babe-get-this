@@ -20,7 +20,7 @@ object ShoppingListShareText {
             append("🛒 ").append(listName).append("\n\n")
             toList.forEach { item ->
                 append("[ ] ").append(item.name)
-                if (item.quantity.isNotBlank()) append(" — ").append(item.quantity)
+                if (item.quantity.isNotBlank()) append(" (").append(item.quantity).append(")")
                 append("\n")
             }
             if (pickedUpCount > 0) {

@@ -95,7 +95,7 @@ class TelemetryJourneyTest {
         }
         awaitText("Add Item")
         compose.onNodeWithText("Item name").performTextInput(name)
-        compose.onNodeWithText("Quantity or notes (e.g. 2 large, slightly firm)")
+        compose.onNodeWithText("Quantity (required)")
             .performTextInput("1")
         compose.onNode(hasText("Add") and !hasTestTag(TestTags.ADD_ITEM_FAB)).performClick()
         awaitText(name)
@@ -168,11 +168,13 @@ class TelemetryJourneyTest {
         addItem("Eggs")
         analytics.clear()
 
-        repeat(2) {
+        // Wait on the progress text, not waitForIdle(): the tick reaches the
+        // screen through Room's background executor, which waitForIdle() does
+        // not track. Clicking again too early hits the row just ticked.
+        for (ticked in 1..2) {
             compose.onAllNodes(anItemCheckbox()).onFirst().performClick()
-            compose.waitForIdle()
+            awaitText(if (ticked < 2) "$ticked of 2 picked up" else "All done!")
         }
-        awaitText("All done!")
 
         assertEquals(2, analytics.events.count { it == AnalyticsEvent.ItemCheckedOff })
         // Once, on the transition — not on every emission of an all-done list.
@@ -188,7 +190,7 @@ class TelemetryJourneyTest {
         awaitText("Add your first item to get started")
         addItem("Milk")
         compose.onAllNodes(anItemCheckbox()).onFirst().performClick()
-        compose.waitForIdle()
+        awaitText("All done!") // the tick has landed, so the assertion is not vacuous
 
         assertEquals(0, analytics.events.count {
             it == AnalyticsEvent.SharedListFirstEditByJoiner
@@ -205,7 +207,7 @@ class TelemetryJourneyTest {
         awaitText("Add your first item to get started")
         addItem("Milk")
         compose.onAllNodes(anItemCheckbox()).onFirst().performClick()
-        compose.waitForIdle()
+        awaitText("All done!")
 
         assertEquals(
             "non-fatals from a clean journey: ${crashReporter.reported}",

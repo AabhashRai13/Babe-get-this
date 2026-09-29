@@ -5,7 +5,8 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -32,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -54,7 +56,8 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class ShoppingItemsScreenTest {
 
-    @get:Rule val compose = createComposeRule()
+    // An Android rule (not createComposeRule) so tests can press system back.
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val itemRepository = mockk<ShoppingItemRepository>(relaxed = true)
     private val categoryRepository = mockk<CategoryRepository>(relaxed = true)
@@ -145,6 +148,22 @@ class ShoppingItemsScreenTest {
         compose.onNodeWithText("1 of 3 picked up").assertExists()
     }
 
+    // The plain-text share and the mic used to announce "Unlock to share" and
+    // "Add", which describe neither.
+    @Test
+    fun `the top bar share button is labelled as a text share`() {
+        render(items = listOf(item("i1", "Milk")))
+
+        compose.onNodeWithContentDescription("Share as text").assertExists()
+    }
+
+    @Test
+    fun `the mic button is labelled as voice add`() {
+        render(items = listOf(item("i1", "Milk")))
+
+        compose.onNodeWithContentDescription("Add by voice").assertExists()
+    }
+
     @Test
     fun `a fully picked-up list celebrates`() {
         render(
@@ -162,7 +181,7 @@ class ShoppingItemsScreenTest {
         render(items = listOf(item("i1", "Milk"), item("i2", "Eggs", isPickedUp = true)))
 
         compose.onNodeWithText("ACTIVE ITEMS").assertExists()
-        compose.onNodeWithText("1 Items").assertExists()
+        compose.onNodeWithText("1 Item").assertExists()
     }
 
     @Test
@@ -266,6 +285,45 @@ class ShoppingItemsScreenTest {
         compose.onNodeWithText("Undo").performClick()
 
         coVerify { itemRepository.restoreItem(any()) }
+    }
+
+    // Leaving an empty list deletes it, so system back asks first. (Back on a
+    // list with items isn't intercepted at all; the end-to-end suite covers
+    // that path through the real navigation graph.)
+    private fun pressBack() =
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+
+    @Test
+    fun `going back from an empty list asks before leaving`() {
+        render(items = emptyList())
+
+        pressBack()
+
+        compose.onNodeWithText("Delete this empty list?").assertIsDisplayed()
+        compose.onNodeWithText("This list has no items, so it will be deleted when you leave.")
+            .assertIsDisplayed()
+        assertFalse(navigatedBack)
+    }
+
+    @Test
+    fun `delete list leaves the screen`() {
+        render(items = emptyList())
+        pressBack()
+
+        compose.onNodeWithText("Delete list").performClick()
+
+        assertTrue(navigatedBack)
+    }
+
+    @Test
+    fun `keep editing stays on the list`() {
+        render(items = emptyList())
+        pressBack()
+
+        compose.onNodeWithText("Keep editing").performClick()
+
+        compose.onNodeWithText("Delete this empty list?").assertDoesNotExist()
+        assertFalse(navigatedBack)
     }
 
     @Test

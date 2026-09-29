@@ -68,6 +68,20 @@ class FakeAuthRepository @Inject constructor(
         }
     }
 
+    // The Google sheet still runs in dev (same UI path as every flavor), but
+    // the token is ignored — there is no Supabase to verify it against.
+    override suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User> {
+        delay(800)
+        val userId = UUID.randomUUID().toString()
+        authStateManager.login(
+            token = "fake-token-${UUID.randomUUID()}",
+            userId = userId,
+            userName = "Dev User",
+            userEmail = "dev@gmail.com",
+        )
+        return Result.Success(User(id = userId, email = "dev@gmail.com", name = "Dev User"))
+    }
+
     override suspend fun requestPasswordReset(email: String): Result<Unit> {
         delay(800)
         return when (email.lowercase()) {

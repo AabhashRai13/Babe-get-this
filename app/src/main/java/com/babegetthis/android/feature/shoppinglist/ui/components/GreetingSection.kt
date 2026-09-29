@@ -11,8 +11,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.babegetthis.android.R
 import java.util.Calendar
 
 // Time-aware greeting — small touch that makes the app feel personal.
@@ -43,11 +46,15 @@ internal fun GreetingSection(
         getGreeting()
     }
 
-    val summary = when {
-        itemsToGet == 0 -> "$listCount lists — nothing to pick up yet"
-        listCount == 1 -> "1 list · $itemsToGet items to get"
-        else -> "$listCount lists · $itemsToGet items to get"
-    }
+    val summary = stringResource(
+        R.string.greeting_summary,
+        pluralStringResource(R.plurals.greeting_lists, listCount, listCount),
+        if (itemsToGet == 0) {
+            stringResource(R.string.greeting_nothing_to_get)
+        } else {
+            pluralStringResource(R.plurals.greeting_items_to_get, itemsToGet, itemsToGet)
+        },
+    )
 
     Surface(
         modifier = Modifier

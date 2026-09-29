@@ -29,6 +29,12 @@ val localProperties = Properties().apply {
 }
 val supabaseUrl: String = localProperties.getProperty("SUPABASE_URL") ?: ""
 val supabaseAnonKey: String = localProperties.getProperty("SUPABASE_ANON_KEY") ?: ""
+// The staging flavor has its own Supabase project, so its data and its
+// destructive manual tests never touch production. Empty when absent (CI
+// builds only prod and dev), which fails loudly at runtime rather than
+// silently pointing staging at production.
+val stagingSupabaseUrl: String = localProperties.getProperty("STAGING_SUPABASE_URL") ?: ""
+val stagingSupabaseAnonKey: String = localProperties.getProperty("STAGING_SUPABASE_ANON_KEY") ?: ""
 
 // Release signing (upload key for Play App Signing). Also read from
 // local.properties so the keystore path/passwords never get committed.
@@ -49,8 +55,8 @@ android {
         applicationId = "com.babegetthis.android"
         minSdk = 24
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.0.0"
+        versionCode = 10
+        versionName = "1.1.0"
 
         // Custom runner so instrumented tests boot HiltTestApplication instead of
         // BabeGetThisApp — that is what allows @TestInstallIn modules to replace
@@ -58,9 +64,8 @@ android {
         testInstrumentationRunner = "com.babegetthis.android.testing.HiltTestRunner"
 
         // Supabase config, exposed to Kotlin as BuildConfig.SUPABASE_URL / _ANON_KEY.
-        // Lives in defaultConfig (not per-flavor) because all flavors point at the
-        // same Supabase project for now. If we add separate dev/prod Supabase
-        // projects later, these move into the productFlavors blocks like BASE_URL.
+        // defaultConfig holds the production project (dev and prod use it);
+        // the staging flavor overrides both with its own project below.
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
@@ -84,11 +89,16 @@ android {
             dimension = "environment"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-production.up.railway.app/\"")
+            // Railway's `staging` environment: same backend code, but it validates
+            // tokens against the staging Supabase project below. Pointing staging at
+            // the production backend 401s every call and signs the user out.
+            buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-staging.up.railway.app/\"")
             // WS_URL is a placeholder — websockets aren't implemented yet. Repointed
             // off the dead babegetthis.com domains to the live Railway host so it
             // isn't misleading; revisit the exact /ws path when realtime sync lands.
             buildConfigField("String", "WS_URL", "\"wss://babegetthisapis-production.up.railway.app/ws\"")
+            buildConfigField("String", "SUPABASE_URL", "\"$stagingSupabaseUrl\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"$stagingSupabaseAnonKey\"")
         }
         create("prod") {
             dimension = "environment"
@@ -344,9 +354,16 @@ dependencies {
     // realtime-kt powers live updates for shared lists.
     implementation(libs.supabase.realtime)
     implementation(libs.ktor.client.okhttp)
+    // Google sign-in. play-services-auth is the Credential Manager backend on
+    // devices without a built-in provider (everything below Android 14).
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     // Play Core in-app update (flexible/immediate flow).
     implementation(libs.play.app.update.ktx)
+    // Play Core in-app review, requested when a list is completed.
+    implementation(libs.play.review.ktx)
 
     // Firebase — analytics and crash reporting. The BOM pins every firebase
     // module to one mutually-compatible version, same idea as the Compose and

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +30,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -46,6 +48,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -66,6 +71,9 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsState()
     var passwordVisible by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // The Google sheet is UI and needs the Activity; the ViewModel owns the flow.
+    val context = LocalContext.current
 
     // Navigate back after successful login
     LaunchedEffect(Unit) {
@@ -96,195 +104,228 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
+                .imePadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Close button — lets the user bail out and go back to their list
-            Box(
+            // The form scrolls; the sign-up route below does not, so it is on screen
+            // from the first frame however tall the form gets.
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                contentAlignment = Alignment.CenterStart,
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Close",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Branded icon — layered circle matching the app's empty state style.
-            // Gives the login screen a visual anchor instead of just text.
-            Box(contentAlignment = Alignment.Center) {
+                // Close button — lets the user bail out and go back to their list
                 Box(
                     modifier = Modifier
-                        .size(104.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Branded icon — layered circle matching the app's empty state style.
+                // Gives the login screen a visual anchor instead of just text.
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(104.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(76.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ShoppingCart,
+                            contentDescription = null,
+                            modifier = Modifier.size(36.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Header
+                Text(
+                    text = stringResource(R.string.auth_welcome),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.auth_login_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Form card — groups the fields visually on a surface container.
+                // This creates a subtle "panel" effect that separates the form from the background.
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                    ) {
+                        // Email field
+                        OutlinedTextField(
+                            value = uiState.email,
+                            onValueChange = viewModel::onEmailChange,
+                            label = { Text(stringResource(R.string.auth_email)) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Email,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            },
+                            isError = uiState.emailError != null,
+                            supportingText = uiState.emailError?.let { { Text(it) } },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = fieldColors,
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Password field — with a text toggle so users can check their input.
+                        OutlinedTextField(
+                            value = uiState.password,
+                            onValueChange = viewModel::onPasswordChange,
+                            label = { Text(stringResource(R.string.auth_password)) },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Outlined.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            },
+                            trailingIcon = {
+                                TextButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Text(
+                                        text = if (passwordVisible) "Hide" else "Show",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            visualTransformation = if (passwordVisible)
+                                VisualTransformation.None
+                            else
+                                PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = fieldColors,
+                        )
+                    }
+                }
+
+                // Forgot password — right-aligned under the form, like most login screens.
                 Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    TextButton(onClick = onNavigateToForgotPassword) {
+                        Text(
+                            text = stringResource(R.string.auth_forgot_password),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Login button — 56dp height and 16dp corners to match the rest of the app.
+                Button(
+                    onClick = { viewModel.login() },
+                    enabled = uiState.isFormValid && !uiState.isLoading,
                     modifier = Modifier
-                        .size(76.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                ) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.padding(4.dp),
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.auth_login),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = { viewModel.signInWithGoogle(context) },
+                    enabled = !uiState.isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Outlined.ShoppingCart,
+                        painter = painterResource(R.drawable.ic_google_logo),
                         contentDescription = null,
-                        modifier = Modifier.size(36.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(20.dp),
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Header
-            Text(
-                text = stringResource(R.string.auth_welcome),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.auth_login_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Form card — groups the fields visually on a surface container.
-            // This creates a subtle "panel" effect that separates the form from the background.
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                ) {
-                    // Email field
-                    OutlinedTextField(
-                        value = uiState.email,
-                        onValueChange = viewModel::onEmailChange,
-                        label = { Text(stringResource(R.string.auth_email)) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Outlined.Email,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        isError = uiState.emailError != null,
-                        supportingText = uiState.emailError?.let { { Text(it) } },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = fieldColors,
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Password field — with a text toggle so users can check their input.
-                    OutlinedTextField(
-                        value = uiState.password,
-                        onValueChange = viewModel::onPasswordChange,
-                        label = { Text(stringResource(R.string.auth_password)) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        trailingIcon = {
-                            TextButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Text(
-                                    text = if (passwordVisible) "Hide" else "Show",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        visualTransformation = if (passwordVisible)
-                            VisualTransformation.None
-                        else
-                            PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = fieldColors,
-                    )
-                }
-            }
-
-            // Forgot password — right-aligned under the form, like most login screens.
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                TextButton(onClick = onNavigateToForgotPassword) {
+                    Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = stringResource(R.string.auth_forgot_password),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Login button — 56dp height and 16dp corners to match the rest of the app.
-            Button(
-                onClick = { viewModel.login() },
-                enabled = uiState.isFormValid && !uiState.isLoading,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.padding(4.dp),
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.auth_login),
+                        text = stringResource(R.string.auth_continue_with_google),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.weight(1f))
+            }
 
             // Navigate to register
             Row(
+                modifier = Modifier.padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -300,8 +341,6 @@ fun LoginScreen(
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }

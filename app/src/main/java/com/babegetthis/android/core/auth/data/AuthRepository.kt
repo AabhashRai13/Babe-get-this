@@ -7,6 +7,11 @@ import com.babegetthis.android.core.error.Result
 interface AuthRepository {
     suspend fun register(email: String, password: String, name: String): Result<RegisterResult>
     suspend fun login(email: String, password: String): Result<User>
+
+    // Exchanges a Google ID token (from Credential Manager) for a Supabase
+    // session. Creates the account on first use, so there is no Google
+    // "register". rawNonce is the unhashed nonce whose SHA-256 went to Google.
+    suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User>
     suspend fun logout(): Result<Unit>
     suspend fun updateUserName(name: String): Result<User>
 

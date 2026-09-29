@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.shoppingitems.ui
 
 import android.content.Intent
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.LockOpen
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -37,6 +39,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -44,11 +47,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -62,6 +67,7 @@ import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptPurpose
 import com.babegetthis.android.core.pin.ui.PinSetupDialog
+import com.babegetthis.android.core.review.requestInAppReview
 import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
@@ -75,6 +81,7 @@ import com.babegetthis.android.feature.shoppingitems.ui.components.SectionHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShopSubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShoppingItemCard
 import com.babegetthis.android.feature.shoppingitems.ui.viewModels.ShoppingItemsViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +96,8 @@ fun ShoppingItemsScreen(
     val showDialog by viewModel.showAddItemDialog.collectAsState()
     val editingItem by viewModel.editingItem.collectAsState()
     val shareCodeDialog by viewModel.shareCodeDialog.collectAsState()
+    val leavingDeletesList by viewModel.leavingDeletesList.collectAsState()
+    var confirmLeave by remember { mutableStateOf(false) }
     val showShareAuthPrompt by viewModel.showShareAuthPrompt.collectAsState()
 
     val isLocked by viewModel.isLocked.collectAsState()
@@ -131,6 +140,7 @@ fun ShoppingItemsScreen(
 
     val snackBarHostState = remember { SnackbarHostState() }
     val haptic = rememberHaptic()
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     // Drives the voice-capture sheet for adding items to THIS list.
@@ -158,13 +168,18 @@ fun ShoppingItemsScreen(
     }
 
     // Fire a Success haptic the moment the list goes from
-    // "some unchecked" → "all checked off". The ViewModel filters out the
-    // initial load of an already-complete list, so this only buzzes on
-    // the actual transition.
+    // "some unchecked" → "all checked off", then ask Play for a review. The
+    // ViewModel filters out the initial load of an already-complete list, so
+    // this only fires on the actual transition.
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                is ShoppingItemsViewModel.UiEvent.ListJustCompleted -> haptic(Haptic.Success)
+                is ShoppingItemsViewModel.UiEvent.ListJustCompleted -> {
+                    haptic(Haptic.Success)
+                    // Launched, not awaited: the Play round trip must not hold
+                    // up this collector, which also delivers ShareList.
+                    activity?.let { scope.launch { requestInAppReview(it) } }
+                }
                 is ShoppingItemsViewModel.UiEvent.ShareList -> {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -190,13 +205,17 @@ fun ShoppingItemsScreen(
         }
     }
 
+    // Leaving an empty list deletes it, so back asks first. Only intercepted
+    // while that is true; otherwise back goes straight to navigation as before.
+    BackHandler(enabled = leavingDeletesList) { confirmLeave = true }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackBarHostState) },
         topBar = {
             BgtTopAppBar(
                 title = viewModel.listName,
                 navigationIcon = Icons.AutoMirrored.Outlined.ArrowBack,
-                onNavigationClick = onNavigateBack,
+                onNavigationClick = { if (leavingDeletesList) confirmLeave = true else onNavigateBack() },
                 actionSlot = {
                     // Lock toggle sits beside Share. Locking with no PIN yet
                     // walks the user through creating one; unlocking a list
@@ -232,7 +251,7 @@ fun ShoppingItemsScreen(
                     }) {
                         Icon(
                             imageVector = Icons.Filled.Share,
-                            contentDescription = stringResource(R.string.pin_share_title),
+                            contentDescription = stringResource(R.string.share_as_text),
                         )
                     }
                 },
@@ -262,7 +281,7 @@ fun ShoppingItemsScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Mic,
-                        contentDescription = stringResource(R.string.add),
+                        contentDescription = stringResource(R.string.voice_add),
                     )
                 }
 
@@ -325,7 +344,7 @@ fun ShoppingItemsScreen(
                     item {
                         SectionHeader(
                             title = stringResource(R.string.shopping_items_active),
-                            count = stringResource(R.string.shopping_items_count, activeItems.size),
+                            count = pluralStringResource(R.plurals.shopping_items_count, activeItems.size, activeItems.size),
                         )
                     }
 
@@ -472,6 +491,31 @@ fun ShoppingItemsScreen(
             // transitions to Done. The new rows appear via the items Flow and
             // animate in. No navigation — the user is already in the list.
             onConfirm = { drafts -> viewModel.addItemsWithVoice(drafts) },
+        )
+    }
+
+    if (confirmLeave) {
+        AlertDialog(
+            onDismissRequest = { confirmLeave = false },
+            shape = RoundedCornerShape(20.dp),
+            title = { Text(stringResource(R.string.leave_empty_list_title)) },
+            text = { Text(stringResource(R.string.leave_empty_list_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmLeave = false
+                    onNavigateBack()
+                }) {
+                    Text(
+                        text = stringResource(R.string.leave_empty_list_confirm),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmLeave = false }) {
+                    Text(stringResource(R.string.leave_empty_list_stay))
+                }
+            },
         )
     }
 

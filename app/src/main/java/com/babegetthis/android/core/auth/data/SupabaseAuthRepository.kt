@@ -7,7 +7,9 @@ import com.babegetthis.android.core.network.NetworkMonitor
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.IDToken
 import io.github.jan.supabase.auth.user.UserInfo
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.json.buildJsonObject
@@ -53,6 +55,18 @@ class SupabaseAuthRepository @Inject constructor(
                 fallbackName = email.substringBefore("@"),
                 fallbackEmail = email,
             )
+        }
+
+    override suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User> =
+        runCatchingAuth {
+            supabaseClient.auth.signInWith(IDToken) {
+                this.idToken = idToken
+                provider = Google
+                nonce = rawNonce
+            }
+            // Google puts the email and name in user_metadata, so there is
+            // nothing to fall back on here.
+            persistCurrentSession()
         }
 
     override suspend fun logout(): Result<Unit> {
@@ -134,15 +148,17 @@ class SupabaseAuthRepository @Inject constructor(
     // Reads the current Supabase session, copies it into our own storage via
     // AuthStateManager (which flips AuthState to Authenticated), and returns the
     // domain User. Throws if there is somehow no active session.
-    private fun persistCurrentSession(fallbackName: String, fallbackEmail: String): User {
+    private fun persistCurrentSession(fallbackName: String = "", fallbackEmail: String = ""): User {
         val session = supabaseClient.auth.currentSessionOrNull()
             ?: error("Authentication succeeded but no session was found.")
         val userInfo = session.user
             ?: supabaseClient.auth.currentUserOrNull()
             ?: error("Authentication succeeded but no user was found.")
 
-        val resolvedName = userInfo.readName() ?: fallbackName
         val resolvedEmail = userInfo.email ?: fallbackEmail
+        // No name anywhere (e.g. a Google account without one): use the email's
+        // local part rather than showing a blank name.
+        val resolvedName = userInfo.readName() ?: fallbackName.ifBlank { resolvedEmail.substringBefore("@") }
 
         authStateManager.login(
             token = session.accessToken,

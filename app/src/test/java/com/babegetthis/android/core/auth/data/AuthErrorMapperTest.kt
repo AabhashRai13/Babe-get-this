@@ -122,6 +122,19 @@ class AuthErrorMapperTest {
         )
     }
 
+    // Google ID-token rejections mention "id_token"/"ID token" or "nonce". They
+    // must not fall through to the OTP "token"/"expired" branches, which would
+    // tell a Google user to check an email code that was never sent.
+    @Test
+    fun `google id token rejections get the google message`() {
+        val google = GOOGLE_SIGN_IN_FAILED
+
+        assertEquals(google, friendlyAuthMessage(Exception("Unacceptable audience in id_token: [abc]")))
+        assertEquals(google, friendlyAuthMessage(Exception("Bad ID token")))
+        assertEquals(google, friendlyAuthMessage(Exception("Nonces mismatch")))
+        assertEquals(google, friendlyAuthMessage(Exception("id_token has expired")))
+    }
+
     // The point of the else branch: never surface raw provider wording.
     @Test
     fun `an unrecognised message is replaced, not passed through`() {

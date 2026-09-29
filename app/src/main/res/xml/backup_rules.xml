@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?><!--
    Auto-backup rules (pre-API-31 path; API 31+ uses data_extraction_rules.xml).
 
-   bgt_secure_prefs is EncryptedSharedPreferences: its master key lives in the
-   device Keystore and is never backed up, so a restored copy is undecryptable
-   at best — and at worst restores a previous user's session onto a device
-   that never logged in. Exclude it from backup entirely.
+   bgt_secure_prefs and bgt_pin_prefs are EncryptedSharedPreferences: their
+   master key lives in the device Keystore and is never backed up, so a
+   restored copy is undecryptable. For the session file it is worse: it can
+   restore a previous user's session onto a device that never logged in.
+   Exclude both from backup entirely.
 -->
 <full-backup-content>
     <exclude domain="sharedpref" path="bgt_secure_prefs.xml" />
+    <exclude domain="sharedpref" path="bgt_pin_prefs.xml" />
 </full-backup-content>

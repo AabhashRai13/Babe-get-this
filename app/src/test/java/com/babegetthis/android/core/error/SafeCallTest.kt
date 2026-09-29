@@ -1,5 +1,9 @@
 package com.babegetthis.android.core.error
 
+import io.github.jan.supabase.exceptions.HttpRequestException
+import io.github.jan.supabase.exceptions.RestException
+import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.request.HttpRequestBuilder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -181,4 +185,63 @@ class SafeCallTest {
 
         assertTrue((result as Result.Error).error.message.contains("600"))
     }
+
+    // Supabase (Postgrest, Auth, RPC) raises its own exception types, not
+    // Retrofit's. They used to fall through to UnknownError, which is reported to
+    // Crashlytics, and a RestException's message carries the request headers,
+    // Authorization bearer token included. Mapped by status like Retrofit's.
+    @Test
+    fun `maps a Supabase 401 through onUnauthorized`() = runTest {
+        val result = safeCall { throw restException(401) }
+
+        assertTrue((result as Result.Error).error is AppError.UnauthorizedError)
+    }
+
+    @Test
+    fun `maps a Supabase 4xx through onClientError`() = runTest {
+        val result = safeCall(onClientError = { AppError.ValidationError("client $it") }) {
+            throw restException(403)
+        }
+
+        assertEquals("client 403", (result as Result.Error).error.message)
+    }
+
+    @Test
+    fun `maps a Supabase 5xx to ServerError carrying the code`() = runTest {
+        val result = safeCall { throw restException(502) }
+
+        val error = (result as Result.Error).error
+        assertTrue(error is AppError.ServerError)
+        assertEquals(502, (error as AppError.ServerError).code)
+    }
+
+    @Test
+    fun `a Supabase error message never reaches the user-facing error`() = runTest {
+        val result = safeCall { throw restException(600) }
+
+        assertTrue("Bearer" !in (result as Result.Error).error.message)
+    }
+
+    // Supabase wraps every transport failure (no DNS, refused, reset) in its own
+    // HttpRequestException, so the java.net arms above never see them.
+    @Test
+    fun `maps a Supabase transport failure to NetworkError`() = runTest {
+        val result = safeCall { throw HttpRequestException("Unable to resolve host", HttpRequestBuilder()) }
+
+        assertTrue((result as Result.Error).error is AppError.NetworkError)
+    }
+
+    @Test
+    fun `maps a Supabase request timeout to TimeoutError`() = runTest {
+        val result = safeCall { throw HttpRequestTimeoutException("https://x.supabase.co", 10_000L) }
+
+        assertTrue((result as Result.Error).error is AppError.TimeoutError)
+    }
+
+    private fun restException(code: Int) = RestException(
+        error = "boom",
+        description = null,
+        statusCode = code,
+        message = "boom\nHeaders: [Authorization=[Bearer secret]]",
+    )
 }

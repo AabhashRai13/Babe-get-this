@@ -96,7 +96,7 @@ class ListLifecycleTest {
         awaitText("Add Item")
 
         compose.onNodeWithText("Item name").performTextInput(name)
-        compose.onNodeWithText("Quantity or notes (e.g. 2 large, slightly firm)")
+        compose.onNodeWithText("Quantity (required)")
             .performTextInput(quantity)
         // Both the FAB and the dialog's confirm read "Add", and once the list has
         // items BOTH are on screen — so the confirm is "the Add that isn't the
@@ -120,12 +120,43 @@ class ListLifecycleTest {
 
         // Tick the first ACTIVE item three times: a ticked row moves down into the
         // completed section, so the first match is always the next one still to do.
-        repeat(3) {
+        // That only holds once the tick has landed, and it lands through Room's
+        // background executor, which waitForIdle() does not track. So each click
+        // waits for the progress text to catch up before the next one.
+        for (ticked in 1..3) {
             compose.onAllNodes(anItemCheckbox()).onFirst().performClick()
-            compose.waitForIdle()
+            awaitText(if (ticked < 3) "$ticked of 3 picked up" else "All done!")
         }
+    }
 
-        awaitText("All done!")
+    private fun back() =
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+
+    // Leaving an empty list deletes it, so the real system back asks first.
+    // "Delete list" then leaves, and the list is gone from the home screen.
+    @Test
+    fun leavingAnEmptyListAsksThenDeletesIt() {
+        createList("Hardware")
+        awaitText("Add your first item to get started")
+
+        back()
+        awaitText("Delete this empty list?")
+        compose.onNodeWithText("Delete list").performClick()
+
+        awaitText("No lists yet")
+    }
+
+    // "Keep editing" stays on the list instead of leaving.
+    @Test
+    fun keepEditingStaysOnTheEmptyList() {
+        createList("Hardware")
+        awaitText("Add your first item to get started")
+
+        back()
+        awaitText("Delete this empty list?")
+        compose.onNodeWithText("Keep editing").performClick()
+
+        compose.onNodeWithText("Add your first item to get started").assertIsDisplayed()
     }
 
     @Test
