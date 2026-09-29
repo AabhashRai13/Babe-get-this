@@ -1,16 +1,15 @@
 package com.babegetthis.android.feature.shoppingitems.ui
 
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import com.babegetthis.android.core.model.Category
@@ -34,13 +33,20 @@ class AddItemDialogTest {
     @get:Rule val compose = createComposeRule()
 
     private data class Added(
-        val name: String, val quantity: String, val categoryId: String?,
-        val shop: String?, val note: String?,
+        val name: String,
+        val quantity: String,
+        val categoryId: String?,
+        val shop: String?,
+        val note: String?,
     )
 
     private data class Edited(
-        val id: String, val name: String, val quantity: String,
-        val categoryId: String?, val shop: String?, val note: String?,
+        val id: String,
+        val name: String,
+        val quantity: String,
+        val categoryId: String?,
+        val shop: String?,
+        val note: String?,
     )
 
     private var added: Added? = null
@@ -69,12 +75,10 @@ class AddItemDialogTest {
 
     // Both the name and the quantity field carry a label, so address each by its
     // own label rather than by position.
-    private fun typeName(text: String) =
-        compose.onNodeWithText("Item name").performTextInput(text)
+    private fun typeName(text: String) = compose.onNodeWithText("Item name").performTextInput(text)
 
-    private fun typeQuantity(text: String) =
-        compose.onNodeWithText("Quantity (required)")
-            .performTextInput(text)
+    private fun typeQuantity(text: String) = compose.onNodeWithText("Quantity (required)")
+        .performTextInput(text)
 
     @Test
     fun `add mode shows the add title`() {
@@ -199,8 +203,12 @@ class AddItemDialogTest {
     // --- edit mode ---
 
     private val existing = TestData.item(
-        id = "i1", name = "Milk", quantity = "2", categoryId = "c1",
-        shop = "Aldi", note = "semi",
+        id = "i1",
+        name = "Milk",
+        quantity = "2",
+        categoryId = "c1",
+        shop = "Aldi",
+        note = "semi",
     )
 
     @Test

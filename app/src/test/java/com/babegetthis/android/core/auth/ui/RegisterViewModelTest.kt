@@ -136,24 +136,23 @@ class RegisterViewModelTest {
     }
 
     @Test
-    fun `ConfirmationRequired result shows the confirm message and does not signal success`() =
-        runTest {
-            coEvery { authRepository.register(any(), any(), any()) } returns
-                Result.Success(RegisterResult.ConfirmationRequired)
+    fun `ConfirmationRequired result shows the confirm message and does not signal success`() = runTest {
+        coEvery { authRepository.register(any(), any(), any()) } returns
+            Result.Success(RegisterResult.ConfirmationRequired)
 
-            val viewModel = buildViewModel()
-            viewModel.fillValid()
+        val viewModel = buildViewModel()
+        viewModel.fillValid()
 
-            viewModel.registerSuccess.test {
-                viewModel.register()
-                expectNoEvents() // confirmation is NOT a success
-            }
-            assertEquals(
-                "Check your email to confirm your account, then sign in.",
-                viewModel.uiState.value.errorMessage,
-            )
-            assertFalse(viewModel.uiState.value.isLoading)
+        viewModel.registerSuccess.test {
+            viewModel.register()
+            expectNoEvents() // confirmation is NOT a success
         }
+        assertEquals(
+            "Check your email to confirm your account, then sign in.",
+            viewModel.uiState.value.errorMessage,
+        )
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
 
     @Test
     fun `repository error surfaces the error message`() = runTest {

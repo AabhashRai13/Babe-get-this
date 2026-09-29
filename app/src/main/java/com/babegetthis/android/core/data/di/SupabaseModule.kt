@@ -1,6 +1,10 @@
 package com.babegetthis.android.core.data.di
 
 import com.babegetthis.android.BuildConfig
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
@@ -9,10 +13,6 @@ import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.serializer.KotlinXSerializer
 import kotlinx.serialization.json.Json
-import dagger.Module
-import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 // Hilt module that builds the single, app-wide SupabaseClient.
@@ -42,7 +42,7 @@ object SupabaseModule {
                 ignoreUnknownKeys = true
                 encodeDefaults = true
                 explicitNulls = true
-            }
+            },
         )
         // The Auth plugin manages sign-up/sign-in, the session, and automatic
         // token refresh for us — that's why we're not hand-rolling any of it.

@@ -62,9 +62,27 @@ playReview = "2.0.2"
 firebaseBom = "33.16.0"
 googleServices = "4.5.0"
 crashlyticsPlugin = "3.0.7"
+# Formatting gate. Spotless drives ktlint over both Kotlin sources and the
+# Gradle .kts scripts, so one configuration covers everything — which is why
+# it is here rather than the ktlint Gradle plugin, which only sees .kt files.
+spotless = "7.0.2"
+ktlint = "1.5.0"
+# Backports the Android 12 splash screen API to every level this app supports,
+# so the cold-start window is the same on API 24 as on API 35 with no branch.
+coreSplashscreen = "1.0.1"
+# Baseline profiles. The plugin version tracks AGP's tooling, the runtime
+# artifacts are what the app and the generator module depend on.
+baselineprofile = "1.4.1"
+uiautomator = "2.3.0"
+benchmarkMacro = "1.4.1"
+profileinstaller = "1.4.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmarkMacro" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -100,6 +118,7 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTest" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidxTestRunner" }
 androidx-arch-core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "archCoreTesting" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
@@ -135,4 +154,7 @@ hilt-android-plugin = { id = "com.google.dagger.hilt.android", version.ref = "hi
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "crashlyticsPlugin" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
+android-test = { id = "com.android.test", version.ref = "agp" }
+baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
 

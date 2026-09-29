@@ -21,14 +21,8 @@ data class ShoppingItemsUiState(
 
 // One shop's worth of active items, split into category buckets.
 // shopName == null means "no shop assigned".
-data class ShopSection(
-    val shopName: String?,
-    val categories: List<CategorySection>,
-)
+data class ShopSection(val shopName: String?, val categories: List<CategorySection>)
 
 // One category bucket inside a shop. label == null means "uncategorized"
 // (item has no categoryId); the screen decides whether to draw a header for it.
-data class CategorySection(
-    val label: String?,
-    val items: List<ShoppingItem>,
-)
+data class CategorySection(val label: String?, val items: List<ShoppingItem>)

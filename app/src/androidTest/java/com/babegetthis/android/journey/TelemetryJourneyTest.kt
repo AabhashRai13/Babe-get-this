@@ -47,17 +47,24 @@ import javax.inject.Inject
 @RunWith(AndroidJUnit4::class)
 class TelemetryJourneyTest {
 
-    @get:Rule(order = 0) val hilt = HiltAndroidRule(this)
+    @get:Rule(order = 0)
+    val hilt = HiltAndroidRule(this)
+
     @Inject lateinit var database: AppDatabase
+
     @Inject lateinit var authStateManager: AuthStateManager
+
     @Inject lateinit var pinStore: PinStore
+
     @Inject lateinit var analytics: RecordingAnalytics
+
     @Inject lateinit var crashReporter: RecordingCrashReporter
 
     @get:Rule(order = 1)
     val reset = ResetAppStateRule(hilt, { database }, { authStateManager }, { pinStore })
 
-    @get:Rule(order = 2) val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 2)
+    val compose = createAndroidComposeRule<MainActivity>()
 
     // Names chosen to be unmistakable in a payload dump, and to be the kind of
     // thing a person would not want leaving their phone.
@@ -111,8 +118,10 @@ class TelemetryJourneyTest {
         compose.waitForIdle()
 
         val transmitted = analytics.allTransmittedStrings()
-        assertTrue("nothing was recorded — the journey did not exercise telemetry",
-            transmitted.isNotEmpty())
+        assertTrue(
+            "nothing was recorded — the journey did not exercise telemetry",
+            transmitted.isNotEmpty(),
+        )
 
         // Substring, not equality: a leak would more likely arrive embedded in a
         // route or a composed string than as a bare parameter value.
@@ -192,9 +201,12 @@ class TelemetryJourneyTest {
         compose.onAllNodes(anItemCheckbox()).onFirst().performClick()
         awaitText("All done!") // the tick has landed, so the assertion is not vacuous
 
-        assertEquals(0, analytics.events.count {
-            it == AnalyticsEvent.SharedListFirstEditByJoiner
-        })
+        assertEquals(
+            0,
+            analytics.events.count {
+                it == AnalyticsEvent.SharedListFirstEditByJoiner
+            },
+        )
     }
 
     // -- Crash reporting --

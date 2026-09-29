@@ -35,11 +35,7 @@ import com.babegetthis.android.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateListChooserSheet(
-    onDismiss: () -> Unit,
-    onPickType: () -> Unit,
-    onPickVoice: () -> Unit,
-) {
+fun CreateListChooserSheet(onDismiss: () -> Unit, onPickType: () -> Unit, onPickVoice: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,

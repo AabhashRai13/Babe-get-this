@@ -11,9 +11,7 @@ import javax.inject.Singleton
 // The rest of the app never touches SharedPreferences directly; it goes through this class.
 
 @Singleton
-class TokenManager @Inject constructor(
-    @ApplicationContext private val context: Context,
-) {
+class TokenManager @Inject constructor(@ApplicationContext private val context: Context) {
     companion object {
         private const val PREFS_NAME = "bgt_secure_prefs"
         private const val KEY_AUTH_TOKEN = "auth_token"
@@ -29,33 +27,25 @@ class TokenManager @Inject constructor(
         prefs.edit().putString(KEY_AUTH_TOKEN, token).apply()
     }
 
-    fun getToken(): String? {
-        return prefs.getString(KEY_AUTH_TOKEN, null)
-    }
+    fun getToken(): String? = prefs.getString(KEY_AUTH_TOKEN, null)
 
     fun saveUserId(userId: String) {
         prefs.edit().putString(KEY_USER_ID, userId).apply()
     }
 
-    fun getUserId(): String? {
-        return prefs.getString(KEY_USER_ID, null)
-    }
+    fun getUserId(): String? = prefs.getString(KEY_USER_ID, null)
 
     fun saveUserName(name: String) {
         prefs.edit().putString(KEY_USER_NAME, name).apply()
     }
 
-    fun getUserName(): String? {
-        return prefs.getString(KEY_USER_NAME, null)
-    }
+    fun getUserName(): String? = prefs.getString(KEY_USER_NAME, null)
 
     fun saveUserEmail(email: String) {
         prefs.edit().putString(KEY_USER_EMAIL, email).apply()
     }
 
-    fun getUserEmail(): String? {
-        return prefs.getString(KEY_USER_EMAIL, null)
-    }
+    fun getUserEmail(): String? = prefs.getString(KEY_USER_EMAIL, null)
 
     // clear() wipes all keys including the new name/email — no change needed.
     fun clear() {

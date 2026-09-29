@@ -35,9 +35,7 @@ data class ForgotPasswordUiState(
 }
 
 @HiltViewModel
-class ForgotPasswordViewModel @Inject constructor(
-    private val authRepository: AuthRepository,
-) : ViewModel() {
+class ForgotPasswordViewModel @Inject constructor(private val authRepository: AuthRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ForgotPasswordUiState())
     val uiState: StateFlow<ForgotPasswordUiState> = _uiState.asStateFlow()

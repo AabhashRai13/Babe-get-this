@@ -43,24 +43,21 @@ class SupabaseSharedListRemote(private val client: SupabaseClient) : SharedListR
         client.from("items").upsert(rows)
     }
 
-    override suspend fun fetchList(listId: String, sinceIso: String?): List<ListRow> =
-        client.from("lists").select {
-            filter {
-                eq("id", listId)
-                if (sinceIso != null) gte("updated_at", sinceIso)
-            }
-        }.decodeList<ListRow>()
+    override suspend fun fetchList(listId: String, sinceIso: String?): List<ListRow> = client.from("lists").select {
+        filter {
+            eq("id", listId)
+            if (sinceIso != null) gte("updated_at", sinceIso)
+        }
+    }.decodeList<ListRow>()
 
-    override suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow> =
-        client.from("items").select {
-            filter {
-                eq("list_id", listId)
-                if (sinceIso != null) gte("updated_at", sinceIso)
-            }
-        }.decodeList<ItemRow>()
+    override suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow> = client.from("items").select {
+        filter {
+            eq("list_id", listId)
+            if (sinceIso != null) gte("updated_at", sinceIso)
+        }
+    }.decodeList<ItemRow>()
 
-    override suspend fun fetchAllLists(): List<ListRow> =
-        client.from("lists").select().decodeList<ListRow>()
+    override suspend fun fetchAllLists(): List<ListRow> = client.from("lists").select().decodeList<ListRow>()
 
     override suspend fun joinListByCode(code: String): String? = try {
         client.postgrest.rpc(

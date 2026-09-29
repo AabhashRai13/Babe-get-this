@@ -1,8 +1,10 @@
 package com.babegetthis.android.core.voice.ui.viewModels
 
-import app.cash.turbine.test
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.VoiceFailureReason
 import com.babegetthis.android.core.voice.data.AudioRecorder
 import com.babegetthis.android.core.voice.data.repository.VoiceRepository
 import com.babegetthis.android.core.voice.model.ItemDraft
@@ -13,6 +15,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
+import io.mockk.verifyOrder
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -22,10 +25,6 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import java.io.IOException
-import com.babegetthis.android.core.telemetry.AnalyticsRepository
-import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
-import com.babegetthis.android.core.telemetry.model.VoiceFailureReason
-import io.mockk.verifyOrder
 
 // AudioRecorder is mocked directly rather than hidden behind a new interface.
 // Task 10.3 called for extracting one, but MockK handles the final class without
@@ -176,7 +175,10 @@ class VoiceCaptureViewModelTest {
         coEvery { voiceRepository.transcribeAndParse(any()) } returns Result.Success(emptyList())
         var persisted = false
         val vm = viewModel()
-        vm.setPersist { persisted = true; Result.Success("list-1") }
+        vm.setPersist {
+            persisted = true
+            Result.Success("list-1")
+        }
         vm.startRecording()
 
         vm.stopRecording()
@@ -252,7 +254,10 @@ class VoiceCaptureViewModelTest {
         coEvery { voiceRepository.transcribeAndParse(any()) } returns Result.Success(drafts)
         var received: List<ItemDraft>? = null
         val vm = viewModel()
-        vm.setPersist { received = it; Result.Success("list-1") }
+        vm.setPersist {
+            received = it
+            Result.Success("list-1")
+        }
         vm.startRecording()
 
         vm.stopRecording()
@@ -296,7 +301,10 @@ class VoiceCaptureViewModelTest {
         coEvery { recorder.stop() } returns audioFile
         coEvery { voiceRepository.transcribeAndParse(any()) } returns Result.Success(drafts)
         val vm = viewModel()
-        vm.setPersist { gate.await(); Result.Success("list-1") }
+        vm.setPersist {
+            gate.await()
+            Result.Success("list-1")
+        }
         vm.startRecording()
 
         vm.stopRecording()
@@ -331,7 +339,10 @@ class VoiceCaptureViewModelTest {
         }
         var persisted = false
         val vm = viewModel()
-        vm.setPersist { persisted = true; Result.Success("list-1") }
+        vm.setPersist {
+            persisted = true
+            Result.Success("list-1")
+        }
         vm.startRecording()
         vm.stopRecording()
 
@@ -381,7 +392,10 @@ class VoiceCaptureViewModelTest {
             Result.Success(drafts)
         }
         val vm = viewModel()
-        vm.setPersist { persistGate.await(); Result.Success("list-1") }
+        vm.setPersist {
+            persistGate.await()
+            Result.Success("list-1")
+        }
 
         vm.startRecording()
         assertTrue(vm.state.value is VoiceCaptureUiState.Recording)

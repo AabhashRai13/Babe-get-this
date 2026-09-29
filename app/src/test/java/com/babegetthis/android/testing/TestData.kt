@@ -101,17 +101,11 @@ object TestData {
         updatedAt = updatedAt,
     )
 
-    fun categoryEntity(
-        id: String = "cat-1",
-        name: String = "Dairy",
-        isDefault: Boolean = true,
-    ) = CategoryEntity(id = id, name = name, isDefault = isDefault)
+    fun categoryEntity(id: String = "cat-1", name: String = "Dairy", isDefault: Boolean = true) =
+        CategoryEntity(id = id, name = name, isDefault = isDefault)
 
-    fun category(
-        id: String = "cat-1",
-        name: String = "Dairy",
-        isDefault: Boolean = true,
-    ) = Category(id = id, name = name, isDefault = isDefault)
+    fun category(id: String = "cat-1", name: String = "Dairy", isDefault: Boolean = true) =
+        Category(id = id, name = name, isDefault = isDefault)
 
     fun draft(
         name: String = "Milk",

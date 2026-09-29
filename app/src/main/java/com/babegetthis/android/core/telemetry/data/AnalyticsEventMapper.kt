@@ -188,10 +188,9 @@ object AnalyticsEventMapper {
     // Exposed for AnalyticsEventMapperTest, which asserts every event in the
     // catalog produces a name GA4 will accept. Not used at runtime: by the
     // time a name is wrong, checking it changes nothing.
-    fun isValidEventName(name: String): Boolean =
-        name.length <= MAX_NAME_LENGTH &&
-            name.isNotEmpty() &&
-            name.first().isLetter() &&
-            name.all { it.isLetterOrDigit() || it == '_' } &&
-            RESERVED_PREFIXES.none { name.startsWith(it) }
+    fun isValidEventName(name: String): Boolean = name.length <= MAX_NAME_LENGTH &&
+        name.isNotEmpty() &&
+        name.first().isLetter() &&
+        name.all { it.isLetterOrDigit() || it == '_' } &&
+        RESERVED_PREFIXES.none { name.startsWith(it) }
 }

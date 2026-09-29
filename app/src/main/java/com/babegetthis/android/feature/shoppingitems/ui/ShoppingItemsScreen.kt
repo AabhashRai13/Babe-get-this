@@ -21,9 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material3.AlertDialog
@@ -51,8 +51,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -74,9 +74,9 @@ import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
+import com.babegetthis.android.feature.shoppingitems.ui.components.CategorySubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.FirstItemPrompt
 import com.babegetthis.android.feature.shoppingitems.ui.components.ProgressCard
-import com.babegetthis.android.feature.shoppingitems.ui.components.CategorySubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.SectionHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShopSubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.ShoppingItemCard
@@ -89,7 +89,7 @@ fun ShoppingItemsScreen(
     onNavigateBack: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
     onNavigateToRegister: () -> Unit = {},
-    viewModel: ShoppingItemsViewModel = hiltViewModel()
+    viewModel: ShoppingItemsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val categories by viewModel.categories.collectAsState()
@@ -231,7 +231,7 @@ fun ShoppingItemsScreen(
                         Icon(
                             imageVector = if (isLocked) Icons.Filled.Lock else Icons.Outlined.LockOpen,
                             contentDescription = stringResource(
-                                if (isLocked) R.string.unlock_list else R.string.lock_list
+                                if (isLocked) R.string.unlock_list else R.string.lock_list,
                             ),
                         )
                     }
@@ -307,7 +307,7 @@ fun ShoppingItemsScreen(
                     }
                 }
             }
-        }
+        },
     ) { padding ->
         if (needsUnlock) {
             // Gated: render no items until the PIN prompt (below) succeeds.
@@ -321,7 +321,7 @@ fun ShoppingItemsScreen(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize(),
-                onAddItem = { viewModel.onAddItemClick() }
+                onAddItem = { viewModel.onAddItemClick() },
             )
         } else {
             LazyColumn(
@@ -344,7 +344,11 @@ fun ShoppingItemsScreen(
                     item {
                         SectionHeader(
                             title = stringResource(R.string.shopping_items_active),
-                            count = pluralStringResource(R.plurals.shopping_items_count, activeItems.size, activeItems.size),
+                            count = pluralStringResource(
+                                R.plurals.shopping_items_count,
+                                activeItems.size,
+                                activeItems.size,
+                            ),
                         )
                     }
 
@@ -397,7 +401,7 @@ fun ShoppingItemsScreen(
                                                 haptic(Haptic.Light)
                                                 viewModel.togglePickedUp(
                                                     shoppingItem.id,
-                                                    !shoppingItem.isPickedUp
+                                                    !shoppingItem.isPickedUp,
                                                 )
                                             },
                                         )
@@ -437,7 +441,7 @@ fun ShoppingItemsScreen(
                                         haptic(Haptic.Light)
                                         viewModel.togglePickedUp(
                                             shoppingItem.id,
-                                            !shoppingItem.isPickedUp
+                                            !shoppingItem.isPickedUp,
                                         )
                                     },
                                 )
@@ -464,7 +468,10 @@ fun ShoppingItemsScreen(
     // Locking a list with no PIN yet — create one, then apply the lock.
     if (showLockSetup) {
         PinSetupDialog(
-            onComplete = { viewModel.setListLocked(true); showLockSetup = false },
+            onComplete = {
+                viewModel.setListLocked(true)
+                showLockSetup = false
+            },
             onDismiss = { showLockSetup = false },
         )
     }
@@ -473,7 +480,10 @@ fun ShoppingItemsScreen(
     if (showUnlockToDisable) {
         PinPromptDialog(
             purpose = PinPromptPurpose.VerifyCurrent,
-            onVerified = { viewModel.setListLocked(false); showUnlockToDisable = false },
+            onVerified = {
+                viewModel.setListLocked(false)
+                showUnlockToDisable = false
+            },
             onDismiss = { showUnlockToDisable = false },
         )
     }
@@ -533,10 +543,10 @@ fun ShoppingItemsScreen(
     if (showShareAuthPrompt || showVoiceAuthPrompt) {
         AuthPromptDialog(
             title = stringResource(
-                if (showShareAuthPrompt) R.string.share_auth_title else R.string.voice_auth_title
+                if (showShareAuthPrompt) R.string.share_auth_title else R.string.voice_auth_title,
             ),
             body = stringResource(
-                if (showShareAuthPrompt) R.string.share_auth_body else R.string.voice_auth_body
+                if (showShareAuthPrompt) R.string.share_auth_body else R.string.voice_auth_body,
             ),
             onLogin = onNavigateToLogin,
             onRegister = onNavigateToRegister,
@@ -556,7 +566,7 @@ fun ShoppingItemsScreen(
             },
             onCreateCategory = { name, onCreated ->
                 viewModel.addCategory(name, onCreated)
-            }
+            },
         )
     }
 
@@ -571,7 +581,7 @@ fun ShoppingItemsScreen(
             },
             onCreateCategory = { name, onCreated ->
                 viewModel.addCategory(name, onCreated)
-            }
+            },
         )
     }
 }

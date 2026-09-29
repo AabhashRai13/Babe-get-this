@@ -13,9 +13,7 @@ private const val TAG = "FeatureFlagRepository"
 private data class FeatureFlagRow(val key: String, val enabled: Boolean)
 
 @Singleton
-class FeatureFlagRepository @Inject constructor(
-    private val supabaseClient: SupabaseClient,
-) {
+class FeatureFlagRepository @Inject constructor(private val supabaseClient: SupabaseClient) {
     // Best-effort: on any failure (offline, table not created yet) flags come
     // back empty, which FeatureFlagCache treats as "everything off" — never
     // blocks app startup.

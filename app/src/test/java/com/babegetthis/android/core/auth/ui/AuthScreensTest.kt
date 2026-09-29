@@ -2,11 +2,10 @@ package com.babegetthis.android.core.auth.ui
 
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
@@ -36,6 +35,7 @@ import org.robolectric.RobolectricTestRunner
 class AuthScreensTest {
 
     @get:Rule val compose = createComposeRule()
+
     @get:Rule val mainDispatcherRule = MainDispatcherRule()
 
     private val repository = mockk<AuthRepository>(relaxed = true)
@@ -46,11 +46,9 @@ class AuthScreensTest {
     private var navigatedToForgot = false
     private var succeeded = false
 
-    private fun click(label: String) =
-        compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.OnClick)
+    private fun click(label: String) = compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.OnClick)
 
-    private fun type(label: String, text: String) =
-        compose.onNodeWithText(label).performTextInput(text)
+    private fun type(label: String, text: String) = compose.onNodeWithText(label).performTextInput(text)
 
     // --- LoginScreen ---
 
@@ -196,10 +194,7 @@ class AuthScreensTest {
         )
     }
 
-    private fun fillRegisterForm(
-        password: String = "secret123",
-        confirm: String = "secret123",
-    ) {
+    private fun fillRegisterForm(password: String = "secret123", confirm: String = "secret123") {
         type("Your name", "Aabhash")
         type("Email", "a@b.c")
         type("Password", password)
@@ -364,13 +359,15 @@ class AuthScreensTest {
             AuthPromptDialog(
                 title = "Sign in to share",
                 body = "Create an account to share lists with your partner and sync across devices.",
-                onLogin = {}, onRegister = {}, onDismiss = {},
+                onLogin = {},
+                onRegister = {},
+                onDismiss = {},
             )
         }
 
         compose.onNodeWithText("Sign in to share").assertExists()
         compose.onNodeWithText(
-            "Create an account to share lists with your partner and sync across devices."
+            "Create an account to share lists with your partner and sync across devices.",
         ).assertExists()
     }
 

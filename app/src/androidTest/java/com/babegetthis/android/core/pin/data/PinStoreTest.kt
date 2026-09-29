@@ -3,11 +3,11 @@ package com.babegetthis.android.core.pin.data
 import android.content.Context
 import androidx.security.crypto.MasterKey
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.runner.RunWith
 import java.security.KeyStore
 

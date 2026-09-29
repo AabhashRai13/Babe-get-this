@@ -58,10 +58,8 @@ fun inMemoryPinStore(): PinStore {
 // deliberate step rather than a real wait. Two independent clocks because the
 // throttle honours whichever leaves more time — that is the anti-tamper
 // property, and testing it needs them to move independently.
-class FakePinClock(
-    var wall: Long = 1_000_000L,
-    var elapsed: Long = 500_000L,
-) : com.babegetthis.android.core.pin.data.PinClock {
+class FakePinClock(var wall: Long = 1_000_000L, var elapsed: Long = 500_000L) :
+    com.babegetthis.android.core.pin.data.PinClock {
     override fun wallMillis(): Long = wall
     override fun elapsedMillis(): Long = elapsed
 
@@ -94,7 +92,10 @@ fun inMemoryTokenManager(): com.babegetthis.android.core.auth.data.TokenManager 
     every { manager.getUserEmail() } answers { userEmail }
     every { manager.saveUserEmail(any()) } answers { userEmail = firstArg() }
     every { manager.clear() } answers {
-        token = null; userId = null; userName = null; userEmail = null
+        token = null
+        userId = null
+        userName = null
+        userEmail = null
     }
 
     return manager

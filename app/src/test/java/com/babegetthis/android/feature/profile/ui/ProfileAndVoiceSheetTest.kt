@@ -35,10 +35,10 @@ import java.io.File
 class ProfileAndVoiceSheetTest {
 
     @get:Rule val compose = createComposeRule()
+
     @get:Rule val mainDispatcherRule = MainDispatcherRule()
 
-    private fun click(label: String) =
-        compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.OnClick)
+    private fun click(label: String) = compose.onNodeWithText(label).performSemanticsAction(SemanticsActions.OnClick)
 
     // --- ProfileBottomSheet ---
 
@@ -199,7 +199,7 @@ class ProfileAndVoiceSheetTest {
         vm.stopRecording()
 
         assertTrue(
-            vm.state.value is com.babegetthis.android.core.voice.model.VoiceCaptureUiState.Done
+            vm.state.value is com.babegetthis.android.core.voice.model.VoiceCaptureUiState.Done,
         )
     }
 }

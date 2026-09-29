@@ -3,9 +3,9 @@ package com.babegetthis.android.feature.profile.ui
 import app.cash.turbine.test
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.core.auth.model.User
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder

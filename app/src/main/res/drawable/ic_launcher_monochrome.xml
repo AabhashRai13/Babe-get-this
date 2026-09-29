@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Monochrome layer for themed icons (Android 13+). The system tints this by
+   alpha, so it cannot be a desaturated copy of the full icon — the two pebble
+   characters and the clipboard would collapse into one unreadable blob at
+   launcher size. It is instead a simplified glyph of what the app is: a list
+   with a checked item and a heart. Structure is carried by outline and negative
+   space rather than by colour, which is the only thing that survives tinting.
+
+   Everything sits inside the 66dp safe zone of the 108dp canvas, so no part of
+   it is lost to a circular, squircle, or rounded-square mask.
+
+   This drawable does double duty: it is the <monochrome> launcher layer AND the
+   splash screen icon. The two consume it differently — the launcher tints it by
+   alpha and ignores the colour entirely, while the splash draws it as-authored.
+   Hence @color/splash_icon rather than a hardcoded white: white is invisible on
+   the light splash background, and the launcher does not care either way.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Clipboard body, outline only. -->
+    <path
+        android:pathData="M38,31 L70,31 A6,6 0 0 1 76,37 L76,77 A6,6 0 0 1 70,83 L38,83 A6,6 0 0 1 32,77 L32,37 A6,6 0 0 1 38,31 Z"
+        android:strokeWidth="5"
+        android:strokeColor="@color/splash_icon"
+        android:strokeLineJoin="round" />
+
+    <!-- The clip at the top, filled so it reads as solid against the outline. -->
+    <path
+        android:pathData="M49,23 L59,23 A4,4 0 0 1 63,27 L63,31 A4,4 0 0 1 59,35 L49,35 A4,4 0 0 1 45,31 L45,27 A4,4 0 0 1 49,23 Z"
+        android:fillColor="@color/splash_icon"
+        android:strokeWidth="5"
+        android:strokeColor="@color/splash_icon"
+        android:strokeLineJoin="round" />
+
+    <!-- Checked item. -->
+    <path
+        android:pathData="M41,50 l6,6 l13,-14"
+        android:strokeWidth="5"
+        android:strokeColor="@color/splash_icon"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Heart — what makes this glyph this app rather than any to-do list. -->
+    <path
+        android:pathData="M54,70 c0,-5 -8,-6 -8,-1 c0,5 8,9 8,9 c0,0 8,-4 8,-9 c0,-5 -8,-4 -8,1z"
+        android:fillColor="@color/splash_icon" />
+</vector>

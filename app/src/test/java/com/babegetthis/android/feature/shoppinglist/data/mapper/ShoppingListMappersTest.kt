@@ -9,19 +9,16 @@ import org.junit.Test
 
 class ShoppingListMappersTest {
 
-    private fun withCounts(
-        itemCount: Int,
-        completedItemCount: Int,
-        isLocked: Boolean = false,
-    ) = ShoppingListWithItemCount(
-        id = "list-1",
-        name = "Groceries",
-        createdAt = TestData.T0,
-        updatedAt = TestData.T0,
-        isLocked = isLocked,
-        itemCount = itemCount,
-        completedItemCount = completedItemCount,
-    )
+    private fun withCounts(itemCount: Int, completedItemCount: Int, isLocked: Boolean = false) =
+        ShoppingListWithItemCount(
+            id = "list-1",
+            name = "Groceries",
+            createdAt = TestData.T0,
+            updatedAt = TestData.T0,
+            isLocked = isLocked,
+            itemCount = itemCount,
+            completedItemCount = completedItemCount,
+        )
 
     @Test
     fun `WithItemCount toDomain carries every field`() {

@@ -7,10 +7,10 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
-import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toDomain
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toEntity
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
+import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import java.util.UUID
@@ -28,19 +28,16 @@ class ShoppingItemRepository @Inject constructor(
     // One raw lookup decides every write's sync behavior: items of shared
     // lists are marked pendingSync and kick a push; local-only items behave
     // exactly as before this feature existed.
-    private suspend fun isShared(listId: String): Boolean =
-        shoppingListDao.getListRaw(listId)?.shareCode != null
+    private suspend fun isShared(listId: String): Boolean = shoppingListDao.getListRaw(listId)?.shareCode != null
 
-    fun getItemsByListId(listId: String): Flow<List<ShoppingItem>> {
-        return combine(
-            shoppingItemDao.getItemsByListId(listId),
-            categoryDao.getAllCategories()
-        ) { items, categories ->
-            val categoryMap = categories.associate { it.id to it.name }
+    fun getItemsByListId(listId: String): Flow<List<ShoppingItem>> = combine(
+        shoppingItemDao.getItemsByListId(listId),
+        categoryDao.getAllCategories(),
+    ) { items, categories ->
+        val categoryMap = categories.associate { it.id to it.name }
 
-            items.map { entity ->
-                entity.toDomain(categoryName = entity.categoryId?.let { categoryMap[it] })
-            }
+        items.map { entity ->
+            entity.toDomain(categoryName = entity.categoryId?.let { categoryMap[it] })
         }
     }
 

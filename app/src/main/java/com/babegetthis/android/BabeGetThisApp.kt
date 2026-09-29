@@ -23,10 +23,15 @@ import javax.inject.Inject
 class BabeGetThisApp : Application() {
 
     @Inject lateinit var supabaseClient: SupabaseClient
+
     @Inject lateinit var authStateManager: AuthStateManager
+
     @Inject lateinit var featureFlagRepository: FeatureFlagRepository
+
     @Inject lateinit var featureFlagCache: FeatureFlagCache
+
     @Inject lateinit var syncTrigger: SyncTrigger
+
     @Inject lateinit var telemetryContext: TelemetryContext
 
     // App-scoped so it lives for the whole process (survives Activity recreation),

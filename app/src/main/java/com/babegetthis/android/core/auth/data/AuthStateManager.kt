@@ -15,9 +15,7 @@ import javax.inject.Singleton
 // On 401 from server, AuthAuthenticator calls logout() → nav auto-redirects to login.
 
 @Singleton
-class AuthStateManager @Inject constructor(
-    private val tokenManager: TokenManager,
-) {
+class AuthStateManager @Inject constructor(private val tokenManager: TokenManager) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 

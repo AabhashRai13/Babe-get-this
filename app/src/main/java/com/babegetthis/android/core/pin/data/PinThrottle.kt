@@ -15,13 +15,7 @@ internal object PinThrottle {
     fun remainingMs(untilWall: Long, untilElapsed: Long, nowWall: Long, nowElapsed: Long): Long =
         maxOf(untilWall - nowWall, untilElapsed - nowElapsed).coerceAtLeast(0L)
 
-    fun onFailure(
-        attempts: Int,
-        oldWall: Long,
-        oldElapsed: Long,
-        nowWall: Long,
-        nowElapsed: Long,
-    ): Next {
+    fun onFailure(attempts: Int, oldWall: Long, oldElapsed: Long, nowWall: Long, nowElapsed: Long): Next {
         val n = attempts + 1
         if (n % THRESHOLD != 0) return Next(n, oldWall, oldElapsed)
         val tier = ((n / THRESHOLD) - 1).coerceIn(0, delaysMs.lastIndex)

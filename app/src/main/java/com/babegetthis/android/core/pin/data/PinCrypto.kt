@@ -55,15 +55,14 @@ internal object PinCrypto {
     // U is excluded from the alphabet for a different reason (it keeps generated
     // codes from spelling words), so there is nothing to map it to — it stays
     // dropped, same as any other stray character.
-    fun normalizeCode(input: String): String =
-        input.uppercase()
-            .map {
-                when (it) {
-                    'O' -> '0'
-                    'I', 'L' -> '1'
-                    else -> it
-                }
+    fun normalizeCode(input: String): String = input.uppercase()
+        .map {
+            when (it) {
+                'O' -> '0'
+                'I', 'L' -> '1'
+                else -> it
             }
-            .filter { it in ALPHABET }
-            .joinToString("")
+        }
+        .filter { it in ALPHABET }
+        .joinToString("")
 }

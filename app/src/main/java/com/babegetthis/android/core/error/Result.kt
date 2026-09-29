@@ -36,90 +36,88 @@ suspend fun <T> safeCall(
     onUnauthorized: () -> AppError = { AppError.UnauthorizedError() },
     onClientError: (code: Int) -> AppError = { AppError.AuthError("Request failed.") },
     block: suspend () -> T,
-): Result<T> {
-    return try {
-        Result.Success(block())
-    } catch (e: kotlinx.coroutines.CancellationException) {
-        // MUST rethrow, and must come before the general catch below.
-        // CancellationException is an Exception, so `catch (e: Exception)` used to
-        // swallow it and hand back Result.Error(UnknownError) — meaning a cancelled
-        // coroutine reported itself as a failed operation and its parent never
-        // learned it was cancelled. That is a structured-concurrency break, and it
-        // had a visible symptom: dismissing the voice sheet cancels the in-flight
-        // transcribe job, the cancellation came back as an error Result, and the
-        // sheet rendered a failure for something the user deliberately dismissed.
-        throw e
-    } catch (e: Exception) {
-        // Map the exception to the right AppError type
-        val error = when (e) {
-            // An AppError the caller chose deliberately — pass it straight
-            // through rather than re-deriving one from the exception type.
-            is AppErrorException -> e.appError
+): Result<T> = try {
+    Result.Success(block())
+} catch (e: kotlinx.coroutines.CancellationException) {
+    // MUST rethrow, and must come before the general catch below.
+    // CancellationException is an Exception, so `catch (e: Exception)` used to
+    // swallow it and hand back Result.Error(UnknownError) — meaning a cancelled
+    // coroutine reported itself as a failed operation and its parent never
+    // learned it was cancelled. That is a structured-concurrency break, and it
+    // had a visible symptom: dismissing the voice sheet cancels the in-flight
+    // transcribe job, the cancellation came back as an error Result, and the
+    // sheet rendered a failure for something the user deliberately dismissed.
+    throw e
+} catch (e: Exception) {
+    // Map the exception to the right AppError type
+    val error = when (e) {
+        // An AppError the caller chose deliberately — pass it straight
+        // through rather than re-deriving one from the exception type.
+        is AppErrorException -> e.appError
 
-            // Database errors
-            is android.database.sqlite.SQLiteException -> AppError.DatabaseError()
+        // Database errors
+        is android.database.sqlite.SQLiteException -> AppError.DatabaseError()
 
-            // Network errors — no internet, DNS failure, connection refused
-            is java.net.UnknownHostException -> AppError.NetworkError()
-            is java.net.ConnectException -> AppError.NetworkError("Cannot reach server.")
-            is javax.net.ssl.SSLException -> AppError.NetworkError("Secure connection failed.")
+        // Network errors — no internet, DNS failure, connection refused
+        is java.net.UnknownHostException -> AppError.NetworkError()
+        is java.net.ConnectException -> AppError.NetworkError("Cannot reach server.")
+        is javax.net.ssl.SSLException -> AppError.NetworkError("Secure connection failed.")
 
-            // Timeout
-            is java.net.SocketTimeoutException -> AppError.TimeoutError()
+        // Timeout
+        is java.net.SocketTimeoutException -> AppError.TimeoutError()
 
-            // HTTP errors from Retrofit — server returned an error status code
-            is retrofit2.HttpException -> when (e.code()) {
-                401 -> onUnauthorized()
-                in 400..499 -> onClientError(e.code())
-                in 500..599 -> AppError.ServerError(e.code(), "Server error. Please try later.")
-                else -> AppError.ServerError(e.code(), e.message ?: "Unexpected server response.")
-            }
-
-            // Supabase (Postgrest, Auth, RPC) throws its own types, so the
-            // java.net and Retrofit arms above never see them. They used to land
-            // in UnknownError, which is logged and sent to crash reporting, and a
-            // RestException's message embeds the request headers: the
-            // Authorization bearer token, and with it the user's email. Mapped by
-            // status like Retrofit, and the message is never passed through.
-            is io.github.jan.supabase.exceptions.RestException -> when (e.statusCode) {
-                401 -> onUnauthorized()
-                in 400..499 -> onClientError(e.statusCode)
-                else -> AppError.ServerError(e.statusCode, "Server error. Please try later.")
-            }
-            // Supabase wraps every transport failure (DNS, refused, reset) in this.
-            is io.github.jan.supabase.exceptions.HttpRequestException -> AppError.NetworkError()
-            is io.ktor.client.plugins.HttpRequestTimeoutException -> AppError.TimeoutError()
-
-            // Everything else. Deliberately does NOT pass e.message through:
-            // this value is rendered straight into a snackbar, and an
-            // unrecognised exception's text is internal detail. The concrete
-            // leak was a missing cache file — FileNotFoundException's message is
-            // the full path, so the voice flow would have shown the user
-            // "/data/user/0/.../cache/voice-1717200000000.m4a (No such file or
-            // directory)". SupabaseAuthRepository already took this care with
-            // provider text; safeCall did the opposite for everyone else.
-            //
-            // The raw text was never actionable for a user, so it is logged for
-            // diagnosis instead of surfaced.
-            else -> {
-                // runCatching: android.util.Log throws on plain-JVM unit tests
-                // (not mocked); on device/Robolectric it logs normally.
-                runCatching { android.util.Log.e("safeCall", "Unrecognised exception → UnknownError", e) }
-                AppError.UnknownError()
-            }
+        // HTTP errors from Retrofit — server returned an error status code
+        is retrofit2.HttpException -> when (e.code()) {
+            401 -> onUnauthorized()
+            in 400..499 -> onClientError(e.code())
+            in 500..599 -> AppError.ServerError(e.code(), "Server error. Please try later.")
+            else -> AppError.ServerError(e.code(), e.message ?: "Unexpected server response.")
         }
-        // Offer it to crash reporting. What actually gets transmitted is
-        // decided by ErrorReportingPolicy, behind CrashReporter.recordNonFatal
-        // — most of these are ordinary offline-first outcomes and are dropped.
+
+        // Supabase (Postgrest, Auth, RPC) throws its own types, so the
+        // java.net and Retrofit arms above never see them. They used to land
+        // in UnknownError, which is logged and sent to crash reporting, and a
+        // RestException's message embeds the request headers: the
+        // Authorization bearer token, and with it the user's email. Mapped by
+        // status like Retrofit, and the message is never passed through.
+        is io.github.jan.supabase.exceptions.RestException -> when (e.statusCode) {
+            401 -> onUnauthorized()
+            in 400..499 -> onClientError(e.statusCode)
+            else -> AppError.ServerError(e.statusCode, "Server error. Please try later.")
+        }
+        // Supabase wraps every transport failure (DNS, refused, reset) in this.
+        is io.github.jan.supabase.exceptions.HttpRequestException -> AppError.NetworkError()
+        is io.ktor.client.plugins.HttpRequestTimeoutException -> AppError.TimeoutError()
+
+        // Everything else. Deliberately does NOT pass e.message through:
+        // this value is rendered straight into a snackbar, and an
+        // unrecognised exception's text is internal detail. The concrete
+        // leak was a missing cache file — FileNotFoundException's message is
+        // the full path, so the voice flow would have shown the user
+        // "/data/user/0/.../cache/voice-1717200000000.m4a (No such file or
+        // directory)". SupabaseAuthRepository already took this care with
+        // provider text; safeCall did the opposite for everyone else.
         //
-        // Positioned after the mapping and after the CancellationException
-        // rethrow above, so a cancelled coroutine never reaches it: dismissing
-        // the voice sheet is a user gesture, not a defect.
-        //
-        // runCatching for the same reason the Log call above has one — a
-        // failure inside reporting must never turn a handled error into an
-        // unhandled one.
-        runCatching { ErrorReportingHook.report?.invoke(e, error) }
-        Result.Error(error)
+        // The raw text was never actionable for a user, so it is logged for
+        // diagnosis instead of surfaced.
+        else -> {
+            // runCatching: android.util.Log throws on plain-JVM unit tests
+            // (not mocked); on device/Robolectric it logs normally.
+            runCatching { android.util.Log.e("safeCall", "Unrecognised exception → UnknownError", e) }
+            AppError.UnknownError()
+        }
     }
+    // Offer it to crash reporting. What actually gets transmitted is
+    // decided by ErrorReportingPolicy, behind CrashReporter.recordNonFatal
+    // — most of these are ordinary offline-first outcomes and are dropped.
+    //
+    // Positioned after the mapping and after the CancellationException
+    // rethrow above, so a cancelled coroutine never reaches it: dismissing
+    // the voice sheet is a user gesture, not a defect.
+    //
+    // runCatching for the same reason the Log call above has one — a
+    // failure inside reporting must never turn a handled error into an
+    // unhandled one.
+    runCatching { ErrorReportingHook.report?.invoke(e, error) }
+    Result.Error(error)
 }

@@ -83,7 +83,8 @@ class ShoppingListRepositoryTest {
     @Test
     fun `draft quantity null becomes empty string to match typed items`() = runTest {
         val id = repository.createListWithItems(
-            "L", listOf(TestData.draft(name = "Milk", quantity = null)),
+            "L",
+            listOf(TestData.draft(name = "Milk", quantity = null)),
         ).data()
 
         assertEquals("", dbRule.itemDao.getItemsByListIdOnce(id).single().quantity)
@@ -96,7 +97,8 @@ class ShoppingListRepositoryTest {
         dbRule.categoryDao.insertCategory(TestData.categoryEntity(id = "cat-dairy"))
 
         val id = repository.createListWithItems(
-            "L", listOf(TestData.draft(name = "Milk", category = "cat-dairy")),
+            "L",
+            listOf(TestData.draft(name = "Milk", category = "cat-dairy")),
         ).data()
 
         assertEquals("cat-dairy", dbRule.itemDao.getItemsByListIdOnce(id).single().categoryId)
@@ -105,7 +107,8 @@ class ShoppingListRepositoryTest {
     @Test
     fun `unknown draft category is dropped`() = runTest {
         val id = repository.createListWithItems(
-            "L", listOf(TestData.draft(name = "Milk", category = "cat-not-real")),
+            "L",
+            listOf(TestData.draft(name = "Milk", category = "cat-not-real")),
         ).data()
 
         assertNull(dbRule.itemDao.getItemsByListIdOnce(id).single().categoryId)
@@ -114,7 +117,8 @@ class ShoppingListRepositoryTest {
     @Test
     fun `null draft category stays null`() = runTest {
         val id = repository.createListWithItems(
-            "L", listOf(TestData.draft(name = "Milk", category = null)),
+            "L",
+            listOf(TestData.draft(name = "Milk", category = null)),
         ).data()
 
         assertNull(dbRule.itemDao.getItemsByListIdOnce(id).single().categoryId)
@@ -123,7 +127,8 @@ class ShoppingListRepositoryTest {
     @Test
     fun `draft note and shop are carried through`() = runTest {
         val id = repository.createListWithItems(
-            "L", listOf(TestData.draft(name = "Milk", note = "semi-skimmed", shop = "Aldi")),
+            "L",
+            listOf(TestData.draft(name = "Milk", note = "semi-skimmed", shop = "Aldi")),
         ).data()
 
         val item = dbRule.itemDao.getItemsByListIdOnce(id).single()

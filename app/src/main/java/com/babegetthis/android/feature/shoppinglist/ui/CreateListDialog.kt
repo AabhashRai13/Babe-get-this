@@ -33,8 +33,11 @@ fun CreateListDialog(
         shape = RoundedCornerShape(20.dp),
         title = {
             Text(
-                text = if (isEditMode) stringResource(R.string.shopping_list_edit_title)
-                       else stringResource(R.string.shopping_list_create_title),
+                text = if (isEditMode) {
+                    stringResource(R.string.shopping_list_edit_title)
+                } else {
+                    stringResource(R.string.shopping_list_create_title)
+                },
                 style = MaterialTheme.typography.titleLarge,
             )
         },
@@ -46,7 +49,9 @@ fun CreateListDialog(
                 placeholder = { Text("e.g. Weekly Groceries") },
                 supportingText = if (listName.length >= 40) {
                     { Text("${listName.length}/40") }
-                } else null,
+                } else {
+                    null
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -62,8 +67,11 @@ fun CreateListDialog(
                 enabled = listName.isNotBlank(),
             ) {
                 Text(
-                    if (isEditMode) stringResource(R.string.save)
-                    else stringResource(R.string.create)
+                    if (isEditMode) {
+                        stringResource(R.string.save)
+                    } else {
+                        stringResource(R.string.create)
+                    },
                 )
             }
         },
@@ -71,6 +79,6 @@ fun CreateListDialog(
             TextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.cancel))
             }
-        }
+        },
     )
 }

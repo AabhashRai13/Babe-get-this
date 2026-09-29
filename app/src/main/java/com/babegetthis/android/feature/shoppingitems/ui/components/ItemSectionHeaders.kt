@@ -27,10 +27,7 @@ import androidx.compose.ui.unit.dp
 
 // Section header for "Active" / "Completed" groups, with an optional count badge.
 @Composable
-fun SectionHeader(
-    title: String,
-    count: String?,
-) {
+fun SectionHeader(title: String, count: String?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

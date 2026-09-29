@@ -59,10 +59,7 @@ import kotlinx.coroutines.launch
 // All three skip on the initial composition (hasInitialized guard) so
 // opening a list that's already complete doesn't replay the celebration.
 @Composable
-fun ProgressCard(
-    totalItems: Int,
-    completedCount: Int,
-) {
+fun ProgressCard(totalItems: Int, completedCount: Int) {
     val progress = if (totalItems > 0) completedCount.toFloat() / totalItems else 0f
     val allDone = completedCount == totalItems && totalItems > 0
 
@@ -114,10 +111,11 @@ fun ProgressCard(
 
     // Pulse the container from primaryContainer toward primary and back on
     // completion, then settle. Steady-state color is unchanged.
-    val baseContainer = if (allDone)
+    val baseContainer = if (allDone) {
         MaterialTheme.colorScheme.primaryContainer
-    else
+    } else {
         MaterialTheme.colorScheme.surfaceContainerLow
+    }
     val pulseTarget = MaterialTheme.colorScheme.primary
     val containerColor = lerp(baseContainer, pulseTarget, pulseProgress.value)
 
@@ -128,10 +126,14 @@ fun ProgressCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        border = if (!allDone) BorderStroke(
-            width = 0.5.dp,
-            color = MaterialTheme.colorScheme.outlineVariant,
-        ) else null,
+        border = if (!allDone) {
+            BorderStroke(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+            )
+        } else {
+            null
+        },
     ) {
         Column(
             modifier = Modifier
@@ -169,32 +171,38 @@ fun ProgressCard(
                         }
                     }
                     Text(
-                        text = if (allDone) "All done!"
-                               else "$completedCount of $totalItems picked up",
+                        text = if (allDone) {
+                            "All done!"
+                        } else {
+                            "$completedCount of $totalItems picked up"
+                        },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (allDone)
+                        color = if (allDone) {
                             MaterialTheme.colorScheme.onPrimaryContainer
-                        else
-                            MaterialTheme.colorScheme.onSurface,
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                     )
                 }
                 // Percentage badge
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = if (allDone)
+                    color = if (allDone) {
                         MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.primaryContainer,
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    },
                 ) {
                     Text(
                         text = "${(progress * 100).toInt()}%",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (allDone)
+                        color = if (allDone) {
                             MaterialTheme.colorScheme.onPrimary
-                        else
-                            MaterialTheme.colorScheme.onPrimaryContainer,
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                     )
                 }

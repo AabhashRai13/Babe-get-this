@@ -10,6 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.LockReset
 import androidx.compose.material.icons.outlined.Password
@@ -21,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,9 +50,6 @@ import com.babegetthis.android.core.pin.ui.RegenerateRecoveryDialog
 import com.babegetthis.android.core.pin.ui.RemovePinDialog
 import com.babegetthis.android.core.review.openPlayListing
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
-import androidx.compose.material.icons.outlined.Analytics
-import androidx.compose.material.icons.outlined.BugReport
-import androidx.compose.material3.Switch
 import com.babegetthis.android.core.ui.components.SettingsRow
 import kotlinx.coroutines.launch
 
@@ -60,10 +60,7 @@ private enum class SettingsDialog { None, SetUp, Change, Remove, Regenerate, For
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
-    onNavigateBack: () -> Unit = {},
-    viewModel: SettingsViewModel = hiltViewModel(),
-) {
+fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
     val pinExists by viewModel.pinExists.collectAsState()
     val analyticsEnabled by viewModel.analyticsEnabled.collectAsState()
     val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
@@ -250,7 +247,10 @@ fun SettingsScreen(
             onDismiss = { dialog = SettingsDialog.None },
         )
         SettingsDialog.Change -> ChangePinDialog(
-            onComplete = { dialog = SettingsDialog.None; toast(R.string.settings_pin_changed) },
+            onComplete = {
+                dialog = SettingsDialog.None
+                toast(R.string.settings_pin_changed)
+            },
             onDismiss = { dialog = SettingsDialog.None },
         )
         SettingsDialog.Remove -> RemovePinDialog(

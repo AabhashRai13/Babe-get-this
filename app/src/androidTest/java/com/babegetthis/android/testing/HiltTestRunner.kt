@@ -13,9 +13,6 @@ import dagger.hilt.android.testing.HiltTestApplication
 // tests — so the Supabase sessionStatus collector it installs is absent, and the
 // tests are not racing a background auth refresh.
 class HiltTestRunner : AndroidJUnitRunner() {
-    override fun newApplication(
-        cl: ClassLoader?,
-        className: String?,
-        context: Context?,
-    ): Application = super.newApplication(cl, HiltTestApplication::class.java.name, context)
+    override fun newApplication(cl: ClassLoader?, className: String?, context: Context?): Application =
+        super.newApplication(cl, HiltTestApplication::class.java.name, context)
 }

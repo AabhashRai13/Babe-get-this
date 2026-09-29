@@ -5,20 +5,19 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.ui.theme.ListAccentColor
-import androidx.compose.ui.graphics.Color
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -139,10 +138,9 @@ class ShoppingListComponentsTest {
         TabPill("Completed", Icons.Outlined.CheckCircle, Icons.Filled.CheckCircle),
     )
 
-    private fun tabRow(selectedIndex: Int = 0, onTabSelected: (Int) -> Unit = {}) =
-        compose.setContent {
-            TabPillRow(tabs = tabs, selectedIndex = selectedIndex, onTabSelected = onTabSelected)
-        }
+    private fun tabRow(selectedIndex: Int = 0, onTabSelected: (Int) -> Unit = {}) = compose.setContent {
+        TabPillRow(tabs = tabs, selectedIndex = selectedIndex, onTabSelected = onTabSelected)
+    }
 
     @Test
     fun `both tab labels render`() {
@@ -266,17 +264,14 @@ class ShoppingListComponentsTest {
 
     // --- CreateListChooserSheet ---
 
-    private fun chooser(
-        onDismiss: () -> Unit = {},
-        onPickType: () -> Unit = {},
-        onPickVoice: () -> Unit = {},
-    ) = compose.setContent {
-        CreateListChooserSheet(
-            onDismiss = onDismiss,
-            onPickType = onPickType,
-            onPickVoice = onPickVoice,
-        )
-    }
+    private fun chooser(onDismiss: () -> Unit = {}, onPickType: () -> Unit = {}, onPickVoice: () -> Unit = {}) =
+        compose.setContent {
+            CreateListChooserSheet(
+                onDismiss = onDismiss,
+                onPickType = onPickType,
+                onPickVoice = onPickVoice,
+            )
+        }
 
     @Test
     fun `chooser offers both entry points`() {

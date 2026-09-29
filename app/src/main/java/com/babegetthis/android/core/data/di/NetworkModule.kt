@@ -43,10 +43,7 @@ object NetworkModule {
     //   - AuthAuthenticator: handles 401 responses (auto-logout)
     @Provides
     @Singleton
-    fun provideOkHttpClient(
-        authInterceptor: AuthInterceptor,
-        authAuthenticator: AuthAuthenticator,
-    ): OkHttpClient {
+    fun provideOkHttpClient(authInterceptor: AuthInterceptor, authAuthenticator: AuthAuthenticator): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
             .authenticator(authAuthenticator)
@@ -75,10 +72,7 @@ object NetworkModule {
     // The AuthInterceptor still attaches the Supabase access token to those calls.
     @Provides
     @Singleton
-    fun provideRetrofit(
-        okHttpClient: OkHttpClient,
-        json: Json,
-    ): Retrofit {
+    fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         val contentType = "application/json".toMediaType()
         return Retrofit.Builder()
             .baseUrl(BuildConfig.BASE_URL)
@@ -95,10 +89,7 @@ object NetworkModule {
     // the read timeout — connect/write stay at the shared defaults.
     @Provides
     @Singleton
-    fun provideTranscribeApiService(
-        okHttpClient: OkHttpClient,
-        json: Json,
-    ): TranscribeApiService {
+    fun provideTranscribeApiService(okHttpClient: OkHttpClient, json: Json): TranscribeApiService {
         val transcribeClient = okHttpClient.newBuilder()
             .readTimeout(60, TimeUnit.SECONDS)
             .build()

@@ -15,9 +15,7 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 
 @Singleton
-class AudioRecorder @Inject constructor(
-    @ApplicationContext private val context: Context,
-) {
+class AudioRecorder @Inject constructor(@ApplicationContext private val context: Context) {
     private var recorder: MediaRecorder? = null
     private var outputFile: File? = null
 
@@ -95,11 +93,10 @@ class AudioRecorder @Inject constructor(
         player.start()
     }
 
-    private fun buildRecorder(): MediaRecorder =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
-        }
+    private fun buildRecorder(): MediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        MediaRecorder(context)
+    } else {
+        @Suppress("DEPRECATION")
+        MediaRecorder()
+    }
 }

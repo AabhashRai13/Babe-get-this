@@ -13,10 +13,10 @@ import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingLis
             entity = ShoppingListEntity::class,
             parentColumns = ["id"],
             childColumns = ["listId"],
-            onDelete = ForeignKey.CASCADE
-        )
+            onDelete = ForeignKey.CASCADE,
+        ),
     ],
-    indices = [Index("listId")]
+    indices = [Index("listId")],
 )
 data class ShoppingItemEntity(
     @PrimaryKey val id: String,

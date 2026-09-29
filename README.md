@@ -1,6 +1,21 @@
 # Babe, Get This
 
+[![Build AAB](https://github.com/AabhashRai13/Babe-get-this/actions/workflows/build-aab.yml/badge.svg)](https://github.com/AabhashRai13/Babe-get-this/actions/workflows/build-aab.yml)
+[![Instrumented tests](https://github.com/AabhashRai13/Babe-get-this/actions/workflows/instrumented-tests.yml/badge.svg)](https://github.com/AabhashRai13/Babe-get-this/actions/workflows/instrumented-tests.yml)
+
 A modern, offline-first shopping list app for couples — built with Jetpack Compose and Material 3. Create shared lists, add items as you think of them, and sync with your partner when you're online.
+
+## Screenshots
+
+| Home | A list, by shop | Another list |
+| :--: | :--: | :--: |
+| <img src="docs/screenshots/01-home.png" width="240" alt="Home screen showing the list catalog"> | <img src="docs/screenshots/02-sunday-roast.png" width="240" alt="A shopping list grouped by shop, in dark theme"> | <img src="docs/screenshots/04-byron-bay.png" width="240" alt="A shopping list grouped by shop, in light theme"> |
+
+Light and dark both follow the system setting:
+
+<img src="docs/screenshots/05-home-dark.png" width="240" alt="Home screen in dark theme">
+
+<img src="docs/screenshots/demo.gif" width="280" alt="Adding items to a list and marking them picked up">
 
 ## Features
 
@@ -58,17 +73,68 @@ feature/<name>/
 └── ui/           # Screens, ViewModels, components
 ```
 
-## Build & Run
+## Building locally
 
-The project uses Gradle's Kotlin DSL.
+Clone, add a `local.properties`, build. Nothing else is needed for a debug build.
+
+### Configuration
+
+`local.properties` is gitignored and holds every secret the build reads. It is
+also where the Android SDK path lives, so the file already exists after opening
+the project in Android Studio once.
+
+| Key | Needed for | If absent |
+| --- | --- | --- |
+| `SUPABASE_URL` | Any build that signs in | Falls back to an empty string; the app builds and runs, and auth calls fail |
+| `SUPABASE_ANON_KEY` | Any build that signs in | Same as above |
+| `RELEASE_STORE_FILE` | Signed release builds only | The release build is produced unsigned |
+| `RELEASE_STORE_PASSWORD` | Signed release builds only | Same as above |
+| `RELEASE_KEY_ALIAS` | Signed release builds only | Same as above |
+| `RELEASE_KEY_PASSWORD` | Signed release builds only | Same as above |
+
+The Supabase anon key is safe to ship inside the app — it is public by design,
+and the actual protection is Supabase Row-Level Security. It lives in
+`local.properties` to keep it out of git history, not because exposure would be
+a breach.
+
+The `dev` flavour uses a fake auth repository and needs no Supabase keys at all,
+so `./gradlew installDevDebug` works on a fresh clone with an empty
+`local.properties`.
+
+```properties
+# local.properties
+sdk.dir=/Users/you/Library/Android/sdk
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+```
+
+### Commands
 
 ```bash
-./gradlew assembleDebug              # Build the debug APK
-./gradlew installDebug               # Install on a connected device or emulator
-./gradlew test                       # Run unit tests
-./gradlew connectedAndroidTest       # Run instrumented tests (device required)
-./gradlew lint                       # Run the linter
+./gradlew installDevDebug            # Build and install; no configuration needed
+./gradlew spotlessApply              # Format Kotlin and Gradle scripts
+./gradlew spotlessCheck              # Fails on unformatted code
+./gradlew lintProdDebug              # Android Lint; warnings are errors
+./gradlew testProdDebugUnitTest      # Unit and Compose tests, on the JVM
+./gradlew koverVerifyDevDebug        # Coverage gate
+./gradlew bundleProdRelease          # Minified release bundle
 ```
+
+JDK 17 is required to run Gradle. The app itself compiles to Java 17 bytecode.
+
+### Release builds
+
+Release builds run R8 with resource shrinking — roughly half the bundle size of
+an unshrunk build. The keep-rules for the reflection-dependent libraries are in
+[`app/proguard-rules.pro`](app/proguard-rules.pro), each block commented with
+what breaks without it.
+
+Because the shipped code is obfuscated, a release crash is only readable through
+the R8 mapping file. The Crashlytics Gradle plugin uploads it automatically on
+every release build.
+
+A baseline profile ships with the release artifact and is regenerated from
+[`:baselineprofile`](baselineprofile/README.md) when the startup path changes.
 
 ### Build Variants
 
@@ -138,6 +204,13 @@ Three layers, each answering a different question:
 | Unit | `src/test/` | Is this logic correct? |
 | Compose | `src/test/` (Robolectric) | Does the screen render and dispatch correctly? |
 | End-to-end | `src/androidTest/` | Are the pieces actually wired together? |
+| Minified smoke | `baselineprofile/` | Does the *shipped* build still start? |
+
+That last row exists because the end-to-end suite cannot answer it. Those tests
+call app internals, and R8's optimizer removes members no shipping code path
+reaches — so running them against a minified build fails for reasons that are
+not defects. `MinifiedSmokeTest` drives the shrunk, obfuscated app through
+UiAutomator instead, with no compile-time reference to anything inside it.
 
 Compose tests run on the JVM under Robolectric, so only the five end-to-end
 journeys need a device. Nothing in either suite touches the network — auth,
@@ -167,7 +240,7 @@ A few things that help PRs land quickly:
 1. **Open an issue first** for anything that changes scope or architecture so we can align before you build.
 2. **Keep PRs focused** — one logical change per PR, with a short note on *why*.
 3. **Match the existing style** — feature-based packages, MVVM + Repository, Compose for UI, Material 3 color roles for theming.
-4. **Run `./gradlew lint test`** before pushing.
+4. **Run `./gradlew spotlessApply lintProdDebug testProdDebugUnitTest koverVerifyDevDebug`** before pushing. CI runs all four and blocks on each.
 
 If you are not sure where to start, look for issues labeled `good first issue` or open one with your idea — happy to help scope it.
 

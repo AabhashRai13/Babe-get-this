@@ -9,6 +9,7 @@ import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingLis
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,7 +20,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import io.mockk.mockk
 
 // Real in-memory Room (same rule the repository tests use) so LWW and the
 // guarded flag-clears are exercised against real SQL, with a fake remote.
@@ -48,8 +48,14 @@ class SyncEngineTest {
         pendingSync: Boolean = false,
         deletedAt: Long? = null,
     ) = ShoppingListEntity(
-        id = id, name = "Groceries", createdAt = 500L, updatedAt = updatedAt,
-        isLocked = false, shareCode = shareCode, deletedAt = deletedAt, pendingSync = pendingSync,
+        id = id,
+        name = "Groceries",
+        createdAt = 500L,
+        updatedAt = updatedAt,
+        isLocked = false,
+        shareCode = shareCode,
+        deletedAt = deletedAt,
+        pendingSync = pendingSync,
     )
 
     private fun itemEntity(
@@ -69,8 +75,14 @@ class SyncEngineTest {
         name: String = "Groceries",
         updatedAt: String? = t10,
         deletedAt: String? = null,
-    ) = ListRow(id = id, name = name, shareCode = "ABC123", createdBy = "user-1",
-        updatedAt = updatedAt, deletedAt = deletedAt)
+    ) = ListRow(
+        id = id,
+        name = name,
+        shareCode = "ABC123",
+        createdBy = "user-1",
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+    )
 
     private fun itemRow(
         id: String = "item-1",
@@ -78,8 +90,14 @@ class SyncEngineTest {
         name: String = "Milk",
         updatedAt: String? = t10,
         deletedAt: String? = null,
-    ) = ItemRow(id = id, listId = listId, name = name, quantity = "1",
-        updatedAt = updatedAt, deletedAt = deletedAt)
+    ) = ItemRow(
+        id = id,
+        listId = listId,
+        name = name,
+        quantity = "1",
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+    )
 
     // --- push ---------------------------------------------------------------
 
@@ -302,8 +320,11 @@ class SyncEngineTest {
 
         assertTrue(result is Result.Success)
         assertEquals("Groceries", dbRule.listDao.getListRaw("discovered-1")!!.name)
-        assertEquals("items ride in via the per-list catch-up",
-            "Milk", dbRule.itemDao.getItemRaw("item-9")!!.name)
+        assertEquals(
+            "items ride in via the per-list catch-up",
+            "Milk",
+            dbRule.itemDao.getItemRaw("item-9")!!.name,
+        )
     }
 
     @Test
@@ -329,8 +350,11 @@ class SyncEngineTest {
         val result = engine.evictSharedReplicas()
 
         assertTrue(result is Result.Success)
-        assertEquals("queued edit pushed before eviction", listOf("i1"),
-            remote.upsertedItems.map { it.id })
+        assertEquals(
+            "queued edit pushed before eviction",
+            listOf("i1"),
+            remote.upsertedItems.map { it.id },
+        )
         assertNull("shared replica gone", dbRule.listDao.getListRaw("shared-1"))
         assertNull("its items gone via CASCADE", dbRule.itemDao.getItemRaw("i1"))
         assertNotNull("local-only list untouched", dbRule.listDao.getListRaw("local-1"))
@@ -359,5 +383,4 @@ class SyncEngineTest {
         assertTrue(result is Result.Success)
         assertEquals(setOf("shared-1", "shared-2"), remote.fetchedListIds.toSet())
     }
-
 }

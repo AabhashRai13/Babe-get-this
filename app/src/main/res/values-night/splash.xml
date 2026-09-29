@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Splash colours, dark. Background matches DarkThemeBackground and the icon
+   matches DarkThemePrimary in ui/theme/Color.kt.
+-->
+<resources>
+    <color name="splash_background">#121212</color>
+    <color name="splash_icon">#B0BEC5</color>
+</resources>
