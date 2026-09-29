@@ -92,13 +92,22 @@ is nothing to switch by hand:
 | `staging` | `babe-get-this-stg`    | staging                                                       |
 | `prod`    | `babe-get-this`        | production                                                    |
 
-Google only shows the account sheet when the installed app's package name and
-signing-key SHA-1 match an Android OAuth client. Each Firebase app lists the
-debug SHA-1 and the release SHA-1. The prod app's Play App Signing key is our
-own upload key, so the release SHA-1 also covers Play installs. A new signing
-key (new machine, Play re-sign) needs its SHA-1 added to the matching Firebase
-app, then a fresh `google-services.json`. Get local SHA-1s from
-`./gradlew signingReport`.
+Google sign-in only succeeds when the installed app's package name and
+signing-key SHA-1 match an Android OAuth client. The account sheet can still
+open when they don't; it fails after an account is picked. Play re-signs every
+install with its own app signing key, which is not our upload key, so the prod
+Firebase app lists three fingerprints:
+
+- debug, for Android Studio builds
+- the upload key, for locally built release builds
+- the Play App Signing key, for installs from Play. Copy it from Play Console →
+  Test and release → App integrity → App signing.
+
+A missing Play fingerprint breaks sign-in only in the Play build, and every
+sideloaded build still works, so test Google sign-in on a Play-installed build
+before a release. Get local SHA-1s from `./gradlew signingReport`. The app
+reads only the web client ID from `google-services.json`, so adding a
+fingerprint in Firebase takes effect without a new build.
 
 In Supabase (Authentication → Sign In / Providers → Google), each project's
 **Client IDs** holds only its own environment's web client ID. The client
