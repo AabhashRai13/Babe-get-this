@@ -84,10 +84,11 @@ jobs:
           # compile-time reference to anything inside it. If a keep-rule is
           # missing badly enough to stop the app starting, this is what catches
           # it before a release does.
+          # One command per line, no backslash continuations: the action runs
+          # each line as its own shell command.
           script: |
             ./gradlew connectedDevDebugAndroidTest
-            ./gradlew :baselineprofile:connectedProdBenchmarkReleaseAndroidTest \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.babegetthis.android.baselineprofile.MinifiedSmokeTest
+            ./gradlew :baselineprofile:connectedProdBenchmarkReleaseAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.babegetthis.android.baselineprofile.MinifiedSmokeTest
 
       - name: Upload report on failure
         if: failure()
