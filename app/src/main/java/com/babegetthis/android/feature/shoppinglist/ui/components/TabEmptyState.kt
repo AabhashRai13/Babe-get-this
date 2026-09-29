@@ -23,9 +23,7 @@ import com.babegetthis.android.R
 
 // Empty state shown inside a tab when there are no lists for that tab.
 @Composable
-internal fun TabEmptyState(
-    isActiveTab: Boolean,
-) {
+internal fun TabEmptyState(isActiveTab: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -41,8 +39,11 @@ internal fun TabEmptyState(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = if (isActiveTab) stringResource(R.string.shopping_list_all_completed)
-                   else stringResource(R.string.shopping_list_no_completed),
+            text = if (isActiveTab) {
+                stringResource(R.string.shopping_list_all_completed)
+            } else {
+                stringResource(R.string.shopping_list_no_completed)
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

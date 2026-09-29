@@ -79,7 +79,7 @@ fun VoiceCaptureSheet(
         onResult = { granted ->
             viewModel.onPermissionResult(granted)
             if (granted) viewModel.startRecording()
-        }
+        },
     )
 
     // Auto-start: the moment the sheet opens, seed the VM with the persist
@@ -90,10 +90,14 @@ fun VoiceCaptureSheet(
         viewModel.onSheetOpened()
         viewModel.setPersist(onConfirm)
         val alreadyGranted = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.RECORD_AUDIO
+            context,
+            Manifest.permission.RECORD_AUDIO,
         ) == PackageManager.PERMISSION_GRANTED
-        if (alreadyGranted) viewModel.startRecording()
-        else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        if (alreadyGranted) {
+            viewModel.startRecording()
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
     }
 
     // Auto-dismiss when the flow completes successfully. Navigation into the new
@@ -268,11 +272,7 @@ private fun LoadingMode(label: String) {
 }
 
 @Composable
-private fun FailedMode(
-    message: String,
-    onRetry: () -> Unit,
-    onTypeInstead: () -> Unit,
-) {
+private fun FailedMode(message: String, onRetry: () -> Unit, onTypeInstead: () -> Unit) {
     Spacer(Modifier.height(16.dp))
     Text(
         text = message,

@@ -39,7 +39,7 @@ class FakeAuthRepository @Inject constructor(
                 )
 
                 Result.Success(
-                    RegisterResult.SignedIn(User(id = userId, email = email, name = name))
+                    RegisterResult.SignedIn(User(id = userId, email = email, name = name)),
                 )
             }
         }
@@ -62,7 +62,7 @@ class FakeAuthRepository @Inject constructor(
                 )
 
                 Result.Success(
-                    User(id = userId, email = email, name = "Dev User")
+                    User(id = userId, email = email, name = "Dev User"),
                 )
             }
         }

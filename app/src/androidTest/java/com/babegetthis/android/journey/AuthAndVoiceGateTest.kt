@@ -9,16 +9,16 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import com.babegetthis.android.MainActivity
-import dagger.hilt.android.testing.HiltAndroidRule
-import dagger.hilt.android.testing.HiltAndroidTest
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.pin.data.PinStore
 import com.babegetthis.android.testing.ResetAppStateRule
-import javax.inject.Inject
+import dagger.hilt.android.testing.HiltAndroidRule
+import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import javax.inject.Inject
 
 // Two journeys that share a setup: what the app does about being signed in.
 //
@@ -30,9 +30,13 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AuthAndVoiceGateTest {
 
-    @get:Rule(order = 0) val hilt = HiltAndroidRule(this)
+    @get:Rule(order = 0)
+    val hilt = HiltAndroidRule(this)
+
     @Inject lateinit var database: AppDatabase
+
     @Inject lateinit var authStateManager: AuthStateManager
+
     @Inject lateinit var pinStore: PinStore
 
     // Order 1: injects, then wipes state left by the previous test — before the
@@ -40,7 +44,8 @@ class AuthAndVoiceGateTest {
     @get:Rule(order = 1)
     val reset = ResetAppStateRule(hilt, { database }, { authStateManager }, { pinStore })
 
-    @get:Rule(order = 2) val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 2)
+    val compose = createAndroidComposeRule<MainActivity>()
 
     // Once signed in, opening voice asks for RECORD_AUDIO — a SYSTEM dialog that
     // Compose cannot see or dismiss, so the test would hang behind it. Granting it
@@ -56,12 +61,11 @@ class AuthAndVoiceGateTest {
         }
     }
 
-    private fun present(text: String) =
-        compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
+    private fun present(text: String) = compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
 
     private fun openCreateChooser() {
         compose.onNodeWithText(
-            if (present("Create your first list")) "Create your first list" else "Create list"
+            if (present("Create your first list")) "Create your first list" else "Create list",
         ).performClick()
         awaitText("Voice")
     }

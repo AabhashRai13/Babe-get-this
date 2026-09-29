@@ -14,11 +14,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.telemetry.TelemetryContext
 import com.babegetthis.android.core.telemetry.model.Screen
@@ -34,10 +35,16 @@ class MainActivity : ComponentActivity() {
     // Hilt injects the singleton AuthStateManager here.
     // Like using GetIt.instance<AuthStateManager>() in Flutter.
     @Inject lateinit var authStateManager: AuthStateManager
+
     @Inject lateinit var inAppUpdateManager: InAppUpdateManager
+
     @Inject lateinit var telemetryContext: TelemetryContext
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before super.onCreate, deliberately: this is what swaps the launch
+        // theme (Theme.BabeGetThis.Starting) for the app theme. Called any later
+        // and the splash window is already gone.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 

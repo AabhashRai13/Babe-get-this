@@ -24,9 +24,7 @@ import javax.inject.Singleton
 // when the queue fills), respecting connectivity. Rebuilding that would be
 // pure waste, and worse than the original.
 @Singleton
-class FirebaseAnalyticsRepository @Inject constructor(
-    @ApplicationContext context: Context,
-) : AnalyticsRepository {
+class FirebaseAnalyticsRepository @Inject constructor(@ApplicationContext context: Context) : AnalyticsRepository {
 
     private val analytics: FirebaseAnalytics = FirebaseAnalytics.getInstance(context)
 

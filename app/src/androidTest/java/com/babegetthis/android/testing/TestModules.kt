@@ -6,6 +6,7 @@ import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.data.RegisterResult
 import com.babegetthis.android.core.auth.di.GoogleSignInModule
+import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.auth.ui.GoogleSignInToken
 import com.babegetthis.android.core.auth.ui.GoogleTokenRequester
 import com.babegetthis.android.core.data.di.DatabaseModule
@@ -16,7 +17,6 @@ import com.babegetthis.android.core.data.local.DEFAULT_CATEGORIES
 import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.voice.data.repository.VoiceRepository
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
@@ -44,14 +44,13 @@ object TestDatabaseModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(
-        @dagger.hilt.android.qualifiers.ApplicationContext context: Context,
-    ): AppDatabase = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
-        .build()
-        .also { db ->
-            db.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
-            runBlocking { db.categoryDao().insertAll(DEFAULT_CATEGORIES) }
-        }
+    fun provideDatabase(@dagger.hilt.android.qualifiers.ApplicationContext context: Context): AppDatabase =
+        Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+            .build()
+            .also { db ->
+                db.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+                runBlocking { db.categoryDao().insertAll(DEFAULT_CATEGORIES) }
+            }
 
     @Provides
     fun provideShoppingListDao(db: AppDatabase): ShoppingListDao = db.shoppingListDao()
@@ -78,22 +77,18 @@ object TestAuthModule {
 
     @Provides
     @Singleton
-    fun provideAuthRepository(authStateManager: AuthStateManager): AuthRepository =
-        TestAuthRepository(authStateManager)
+    fun provideAuthRepository(authStateManager: AuthStateManager): AuthRepository = TestAuthRepository(authStateManager)
 }
 
 // Signs in locally against AuthStateManager without any network. `failWith` lets
 // a test drive the failure paths.
 @Singleton
-class TestAuthRepository @Inject constructor(
-    private val authStateManager: AuthStateManager,
-) : AuthRepository {
+class TestAuthRepository @Inject constructor(private val authStateManager: AuthStateManager) : AuthRepository {
 
     @Volatile
     var failWith: AppError? = null
 
-    private fun <T> guarded(block: () -> T): Result<T> =
-        failWith?.let { Result.Error(it) } ?: Result.Success(block())
+    private fun <T> guarded(block: () -> T): Result<T> = failWith?.let { Result.Error(it) } ?: Result.Success(block())
 
     private fun signIn(email: String, name: String): User {
         authStateManager.login(
@@ -108,8 +103,7 @@ class TestAuthRepository @Inject constructor(
     override suspend fun register(email: String, password: String, name: String) =
         guarded { RegisterResult.SignedIn(signIn(email, name)) }
 
-    override suspend fun login(email: String, password: String) =
-        guarded { signIn(email, email.substringBefore("@")) }
+    override suspend fun login(email: String, password: String) = guarded { signIn(email, email.substringBefore("@")) }
 
     override suspend fun signInWithGoogle(idToken: String, rawNonce: String) =
         guarded { signIn("google@test.com", "google") }

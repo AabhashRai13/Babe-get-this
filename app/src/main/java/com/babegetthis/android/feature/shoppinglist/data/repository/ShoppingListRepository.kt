@@ -1,17 +1,17 @@
 package com.babegetthis.android.feature.shoppinglist.data.repository
 
+import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
-import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.sync.SyncKicker
+import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
-import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
-import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toEntity
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
+import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import com.babegetthis.android.feature.shoppinglist.data.mapper.toDomain
 import com.babegetthis.android.feature.shoppinglist.data.mapper.toEntity
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
@@ -31,22 +31,16 @@ class ShoppingListRepository @Inject constructor(
 ) {
     // Flows don't need Result wrapping — Room handles errors internally
     // and the Flow just stops emitting. We wrap write operations only.
-    fun getAllLists(): Flow<List<ShoppingList>> {
-        return shoppingListDao.getAllListsWithItemCount().map { list ->
-            list.map { it.toDomain() }
-        }
+    fun getAllLists(): Flow<List<ShoppingList>> = shoppingListDao.getAllListsWithItemCount().map { list ->
+        list.map { it.toDomain() }
     }
 
-    fun getListById(listId: String): Flow<ShoppingList?> {
-        return shoppingListDao.getListById(listId).map { it?.toDomain() }
-    }
+    fun getListById(listId: String): Flow<ShoppingList?> = shoppingListDao.getListById(listId).map { it?.toDomain() }
 
     // Live share state of a list — null while it's local-only (and again if it
     // gets tombstoned; getListById filters tombstones). Drives the realtime
     // subscription lifecycle in the items ViewModel.
-    fun getShareCode(listId: String): Flow<String?> {
-        return shoppingListDao.getListById(listId).map { it?.shareCode }
-    }
+    fun getShareCode(listId: String): Flow<String?> = shoppingListDao.getListById(listId).map { it?.shareCode }
 
     suspend fun createList(name: String): Result<String> = safeCall {
         val now = System.currentTimeMillis()
@@ -70,10 +64,7 @@ class ShoppingListRepository @Inject constructor(
     // and per-item defaults follow ShoppingItemRepository.addItem so voice items
     // look identical to manually-typed ones. Returns the new list id so the
     // ViewModel can navigate into it.
-    suspend fun createListWithItems(
-        name: String,
-        drafts: List<ItemDraft>,
-    ): Result<String> = safeCall {
+    suspend fun createListWithItems(name: String, drafts: List<ItemDraft>): Result<String> = safeCall {
         val now = System.currentTimeMillis()
         val listId = UUID.randomUUID().toString()
 
@@ -100,11 +91,7 @@ class ShoppingListRepository @Inject constructor(
     // category id only if it's a real row) so it lives in ONE place instead of
     // being copy-pasted. suspend because it snapshots the live categories Flow
     // via first().
-    private suspend fun draftsToItems(
-        listId: String,
-        drafts: List<ItemDraft>,
-        now: Long,
-    ): List<ShoppingItemEntity> {
+    private suspend fun draftsToItems(listId: String, drafts: List<ItemDraft>, now: Long): List<ShoppingItemEntity> {
         val knownCategoryIds = categoryDao.getAllCategories().first().mapTo(HashSet()) { it.id }
         return drafts.map { draft ->
             ShoppingItem(
@@ -128,10 +115,7 @@ class ShoppingListRepository @Inject constructor(
     // already viewing. No list is created and no navigation happens — the rows
     // just materialise in the open list via its Room Flow. Returns the listId so
     // the voice VM can transition to Done, mirroring createListWithItems.
-    suspend fun addItemsToList(
-        listId: String,
-        drafts: List<ItemDraft>,
-    ): Result<String> = safeCall {
+    suspend fun addItemsToList(listId: String, drafts: List<ItemDraft>): Result<String> = safeCall {
         val now = System.currentTimeMillis()
         val isShared = shoppingListDao.getListRaw(listId)?.shareCode != null
         val itemEntities = draftsToItems(listId, drafts, now)
@@ -154,7 +138,7 @@ class ShoppingListRepository @Inject constructor(
         return trimmed
     }
 
-    private fun ListNotFoundException(listId: String) =
+    private fun listNotFoundException(listId: String) =
         AppErrorException(AppError.NotFoundError("That list no longer exists."))
 
     suspend fun setLocked(listId: String, locked: Boolean): Result<Unit> = safeCall {
@@ -175,18 +159,18 @@ class ShoppingListRepository @Inject constructor(
     suspend fun updateListName(listId: String, newName: String): Result<Unit> = safeCall {
         val now = System.currentTimeMillis()
         val entity = shoppingListDao.getListById(listId).first()
-        // NotFoundError rather than the bare IllegalStateException this used to
-        // throw — safeCall maps unrecognised exceptions to UnknownError carrying
-        // the raw exception text, so "List not found" was rendered to the user
-        // verbatim in a snackbar.
-            ?: throw ListNotFoundException(listId)
+            // NotFoundError rather than the bare IllegalStateException this used to
+            // throw — safeCall maps unrecognised exceptions to UnknownError carrying
+            // the raw exception text, so "List not found" was rendered to the user
+            // verbatim in a snackbar.
+            ?: throw listNotFoundException(listId)
         val isShared = entity.shareCode != null
         shoppingListDao.updateList(
             entity.copy(
                 name = newName.requireListName(),
                 updatedAt = now,
                 pendingSync = entity.pendingSync || isShared,
-            )
+            ),
         )
         if (isShared) syncKicker.pushSoon()
     }
@@ -225,10 +209,7 @@ class ShoppingListRepository @Inject constructor(
 
     // Re-insert a previously deleted list along with its items (for undo).
     // Restores both so derived fields like isCompleted recompute correctly.
-    suspend fun restoreListWithItems(
-        list: ShoppingList,
-        items: List<ShoppingItemEntity>,
-    ): Result<Unit> = safeCall {
+    suspend fun restoreListWithItems(list: ShoppingList, items: List<ShoppingItemEntity>): Result<Unit> = safeCall {
         val raw = shoppingListDao.getListRaw(list.id)
         if (raw?.shareCode != null) {
             // Shared soft-deleted list: the rows never left Room, so undo is
@@ -236,7 +217,7 @@ class ShoppingListRepository @Inject constructor(
             // too). Re-inserting from the domain model instead would wipe
             // shareCode and silently detach the list from sync.
             shoppingListDao.insertList(
-                raw.copy(deletedAt = null, updatedAt = System.currentTimeMillis(), pendingSync = true)
+                raw.copy(deletedAt = null, updatedAt = System.currentTimeMillis(), pendingSync = true),
             )
             syncKicker.pushSoon()
         } else {

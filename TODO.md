@@ -8,14 +8,60 @@ feature ideas and the v1/v2 roadmap below.
 From a full-codebase review (2026-07-02). The code itself came back clean — no dead
 code, no debug logs, no secrets in git, real unit tests. What's left is polish:
 
-- [ ] **Add a LICENSE file** — the repo has none, so nobody can legally use the code. MIT or Apache-2.0.
-- [ ] **Merge `feat/cicd`** — `.github/workflows/build-aab.yml` already exists on that branch. Merge it and add a build badge to the README.
-- [ ] **Extract ~15 hardcoded UI strings to `strings.xml`** — `AddItemDialog` (note/shop/category field labels), `ProfileBottomSheet` ("Name", "Save", "Log out"), `CreateListChooserSheet` ("Type", "Voice"), `ShoppingListScreen` ("Sign in").
+- [ ] **Extract the last 13 hardcoded UI strings to `strings.xml`** — `VoiceCaptureSheet` ("Allow microphone", "Stop", "Try again", "Type instead"), `AddItemDialog` and `CreateListDialog` character counters, `ProfileBottomSheet` delete-account dialog, `JoinListDialog`/`CreateListDialog` placeholders. Seven genuinely-unused strings were deleted while adopting the lint gate; these are the ones still inline in code.
 - [ ] **Naming consistency** — rename `ShoppingListModel.kt` → `ShoppingListEntity.kt` (to match `ShoppingItemEntity`); pick one ViewModel package convention (`ui/` vs `ui/viewModels/`) and apply it to both features; rename `ItemDraft.shop` → `location` to match the DTO and backend.
-- [ ] **Delete template stubs** — `ExampleUnitTest.kt` and `ExampleInstrumentedTest.kt` are untouched Android Studio boilerplate.
 - [ ] **Split the oversized composables** — `ShoppingListScreen` (462 lines: extract the create-list flow and the list pane), `AddItemDialog` (433: extract a `CategoryDropdownField`), `ShoppingItemsScreen` (357: extract the by-shop items section).
-- [ ] **Accessibility** — add `contentDescription` to the stop icon in `VoiceCaptureSheet` and a semantics label to `TranscribingWaveform`.
+- [ ] **Accessibility** — add `contentDescription` to the stop icon in `VoiceCaptureSheet` and a semantics label to `TranscribingWaveform`. Broader: 40 `contentDescription = null` sites have never been reviewed against TalkBack, and touch targets have never been audited.
 - [ ] **Update CLAUDE.md** — SDK versions are stale (says min 26 / target 35; actual is min 24 / target 36), and the token-refresh bug note is obsolete: the fix already shipped (`BabeGetThisApp` observes `sessionStatus` and writes rotated tokens back).
+
+## Static analysis backlog
+
+Android Lint runs as a blocking gate with `warningsAsErrors = true` (see the
+`lint {}` block in `app/build.gradle.kts`). Findings that existed when the gate
+was adopted are recorded in `app/lint-baseline.xml` so the gate could be enabled
+immediately without a large unrelated cleanup.
+
+That baseline is debt, not a resolution. It should shrink over time.
+
+- **Baseline at adoption: 26 findings.** 20 × `UseKtx` (core-ktx extensions that
+  would read better than the platform calls they replace, all in
+  SharedPreferences writes) and 5 × `PluralsCandidate`. All 5 plurals are
+  fixed now: three in 1.1.0 and the PIN attempts and locked-lists warnings
+  with this change. That leaves 20, all `UseKtx`.
+
+  The first run produced 78. Of those, 33 were dependency-freshness checks now
+  owned by Renovate and disabled in the `lint {}` block, and 19 were real and
+  fixed rather than baselined: 7 dead strings and the whole Android Studio
+  template colour palette deleted, a redundant activity label removed, a raw
+  dependency coordinate moved into the version catalog, the monochrome launcher
+  icon added, and a min-SDK bug caught in this change's own new theme.
+- [ ] **Shrink the lint baseline** — regenerate with `./gradlew lintProdDebug`
+  after deleting `app/lint-baseline.xml`, and confirm the count went down rather
+  than sideways.
+
+## Deferred by the build-hardening change (2026-08-26)
+
+These came up while enabling R8, Lint, Spotless, and the baseline profile, and
+were deliberately left alone rather than folded into that change.
+
+- [ ] **Move off Kotlin 2.0.21** — pinned by Supabase 3.0.x, which pins the
+  Firebase BOM to 33.x. Renovate is configured to surface this as a standing
+  dashboard item rather than silently omitting it. Moving is a toolchain-wide
+  change and needs its own pass.
+- [ ] **`listNotFoundException(listId)` in `ShoppingListRepository` ignores its
+  `listId` parameter** — the message is a constant. Either use the id or drop
+  the parameter.
+- [ ] **Measure the baseline profile's effect on a physical device** —
+  `StartupBenchmark` is written and runnable, but Macrobenchmark refuses to
+  produce numbers on an emulator, correctly. Until it runs on real hardware the
+  profile's benefit is assumed rather than measured. Do NOT set
+  `androidx.benchmark.suppressErrors=EMULATOR` to get a number out of it.
+- [ ] **Verify a deobfuscated release crash reaches Crashlytics** — the mapping
+  upload runs on every release build, but nobody has confirmed a real
+  obfuscated trace resolves in the console. Do this before the first minified
+  release ships.
+- [ ] **Themed icon and splash screen on real hardware** — both verified on an
+  API 37 emulator only.
 
 ## Bugs & tech debt
 

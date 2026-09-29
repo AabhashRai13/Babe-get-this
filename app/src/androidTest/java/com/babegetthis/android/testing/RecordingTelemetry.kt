@@ -11,7 +11,6 @@ import com.babegetthis.android.core.telemetry.di.TelemetryModule
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import dagger.Module
 import dagger.Provides
-import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.hilt.testing.TestInstallIn
 import javax.inject.Singleton
@@ -38,6 +37,7 @@ class RecordingAnalytics : AnalyticsRepository {
     val events = mutableListOf<AnalyticsEvent>()
     val mapped = mutableListOf<MappedEvent>()
     var userId: String? = null
+
     // NOT named `collectionEnabled`: that property's generated setter has the
     // same JVM signature as the interface method it would record.
     var lastCollectionEnabled: Boolean = true
@@ -85,6 +85,7 @@ class RecordingCrashReporter : CrashReporter {
     val offered = mutableListOf<AppError>()
 
     var userId: String? = null
+
     // NOT named `collectionEnabled`: that property's generated setter has the
     // same JVM signature as the interface method it would record.
     var lastCollectionEnabled: Boolean = true

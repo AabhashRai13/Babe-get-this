@@ -1,5 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
-    <style name="Theme.BabeGetThis" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+       The app theme. This is what the window resolves BEFORE Compose has drawn
+       anything, and it used to be Light unconditionally — so on a device in dark
+       mode the whole of cold start painted white. Compose draws its own colours
+       from BabeGetThisTheme, so this parent only ever governs the frames before
+       the first composition, which is exactly why it has to agree with the
+       system setting.
+
+       Light here, dark in values-night/, rather than a DayNight parent:
+       android:Theme.DeviceDefault.DayNight requires API 29 and this app's
+       minSdk is 24, so a DayNight parent would fail to resolve on a fifth of
+       the supported range. The resource qualifier does the same job from API
+       21 down.
+    -->
+    <style name="Theme.BabeGetThis" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+    </style>
+
+    <!--
+       The launch theme, applied to MainActivity in the manifest and handed off
+       to Theme.BabeGetThis by installSplashScreen() in onCreate. Its whole job
+       is the window between tapping the icon and the first Compose frame.
+    -->
+    <style name="Theme.BabeGetThis.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_monochrome</item>
+        <item name="postSplashScreenTheme">@style/Theme.BabeGetThis</item>
+    </style>
 </resources>

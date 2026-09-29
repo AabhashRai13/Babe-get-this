@@ -37,27 +37,22 @@ import com.babegetthis.android.core.ui.haptics.rememberHaptic
 // outlined when inactive, filled when active. Per the icon-style rule
 // (filled = action/active, outlined = passive/structural) this gives a
 // stronger state cue than a pure color swap.
-internal data class TabPill(
-    val label: String,
-    val iconInactive: ImageVector,
-    val iconActive: ImageVector,
-)
+internal data class TabPill(val label: String, val iconInactive: ImageVector, val iconActive: ImageVector)
 
 // Pill-style tab row — clean alternative to PrimaryTabRow's bottom divider.
 // Selected tab gets a tinted pill background + bold text + primary color.
 // Unselected tabs have transparent background with muted text.
 // Touch ripple is bounded to the pill shape for a polished feel.
 @Composable
-internal fun TabPillRow(
-    tabs: List<TabPill>,
-    selectedIndex: Int,
-    onTabSelected: (Int) -> Unit,
-) {
+internal fun TabPillRow(tabs: List<TabPill>, selectedIndex: Int, onTabSelected: (Int) -> Unit) {
     val haptic = rememberHaptic()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainer).padding(4.dp),
+            .padding(
+                horizontal = 16.dp,
+                vertical = 8.dp,
+            ).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainer).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         tabs.forEachIndexed { index, tab ->
@@ -66,18 +61,20 @@ internal fun TabPillRow(
             // M3: selected state uses the primary role for high emphasis,
             // animated so the change reads as a transition not a swap.
             val backgroundColor by animateColorAsState(
-                targetValue = if (isSelected)
+                targetValue = if (isSelected) {
                     MaterialTheme.colorScheme.primary
-                else
-                    Color.Transparent,
+                } else {
+                    Color.Transparent
+                },
                 animationSpec = tween(durationMillis = 200),
                 label = "tabBackground",
             )
             val contentColor by animateColorAsState(
-                targetValue = if (isSelected)
+                targetValue = if (isSelected) {
                     MaterialTheme.colorScheme.onPrimary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant,
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 animationSpec = tween(durationMillis = 200),
                 label = "tabContent",
             )
@@ -90,7 +87,7 @@ internal fun TabPillRow(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
                         ),
                         onClick = {
                             haptic(Haptic.Medium)
@@ -111,7 +108,7 @@ internal fun TabPillRow(
                         imageVector = if (isSelected) tab.iconActive else tab.iconInactive,
                         contentDescription = null,
                         tint = contentColor,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(

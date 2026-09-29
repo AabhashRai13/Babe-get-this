@@ -8,10 +8,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -66,7 +66,7 @@ fun BgtTopAppBar(
                 onClick = {
                     haptic(Haptic.Light)
                     onNavigationClick()
-                }
+                },
             ) {
                 Icon(
                     imageVector = navigationIcon,
@@ -85,7 +85,7 @@ fun BgtTopAppBar(
                 onClick = {
                     haptic(Haptic.Light)
                     onActionClick()
-                }
+                },
             ) {
                 Icon(
                     imageVector = actionIcon,

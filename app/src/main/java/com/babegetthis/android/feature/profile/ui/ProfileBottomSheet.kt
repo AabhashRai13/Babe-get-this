@@ -258,7 +258,7 @@ fun ProfileBottomSheet(
             text = {
                 Text(
                     "This permanently deletes your account and can't be undone. " +
-                        "Your lists are stored on this device and won't be affected."
+                        "Your lists are stored on this device and won't be affected.",
                 )
             },
             confirmButton = {

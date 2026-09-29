@@ -44,8 +44,11 @@ class ShoppingItemComponentsTest {
     ) = compose.setContent {
         ShoppingItemCard(
             item = TestData.item(
-                id = "i1", name = "Milk", quantity = quantity,
-                isPickedUp = isPickedUp, note = note,
+                id = "i1",
+                name = "Milk",
+                quantity = quantity,
+                isPickedUp = isPickedUp,
+                note = note,
             ),
             onClick = onClick,
             onTogglePickedUp = onToggle,

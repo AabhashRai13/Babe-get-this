@@ -36,37 +36,29 @@ object DatabaseModule {
         // when the callback fires. Provider delays access until it's ready.
         // Like a late final in Dart — it exists but isn't initialized yet.
         databaseProvider: Provider<AppDatabase>,
-    ): AppDatabase {
-        return Room.databaseBuilder(
-            context,
-            AppDatabase::class.java,
-            "babe_get_this.db"
-        )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
-            .addCallback(object : RoomDatabase.Callback() {
-                override fun onCreate(db: SupportSQLiteDatabase) {
-                    super.onCreate(db)
-                    CoroutineScope(Dispatchers.IO).launch {
-                        // Use the SAME database instance, not a new one
-                        databaseProvider.get().categoryDao().insertAll(DEFAULT_CATEGORIES)
-                    }
+    ): AppDatabase = Room.databaseBuilder(
+        context,
+        AppDatabase::class.java,
+        "babe_get_this.db",
+    )
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        .addCallback(object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                super.onCreate(db)
+                CoroutineScope(Dispatchers.IO).launch {
+                    // Use the SAME database instance, not a new one
+                    databaseProvider.get().categoryDao().insertAll(DEFAULT_CATEGORIES)
                 }
-            })
-            .build()
-    }
+            }
+        })
+        .build()
 
     @Provides
-    fun provideShoppingListDao(database: AppDatabase): ShoppingListDao {
-        return database.shoppingListDao()
-    }
+    fun provideShoppingListDao(database: AppDatabase): ShoppingListDao = database.shoppingListDao()
 
     @Provides
-    fun provideShoppingItemDao(database: AppDatabase): ShoppingItemDao {
-        return database.shoppingItemDao()
-    }
+    fun provideShoppingItemDao(database: AppDatabase): ShoppingItemDao = database.shoppingItemDao()
 
     @Provides
-    fun provideCategoryDao(database: AppDatabase): CategoryDao {
-        return database.categoryDao()
-    }
+    fun provideCategoryDao(database: AppDatabase): CategoryDao = database.categoryDao()
 }

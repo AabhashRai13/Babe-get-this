@@ -7,11 +7,15 @@ import org.junit.Test
 
 class ShoppingListShareTextTest {
 
-    private fun item(name: String, quantity: String = "", pickedUp: Boolean = false) =
-        ShoppingItem(
-            id = name, listId = "l", name = name, quantity = quantity,
-            isPickedUp = pickedUp, createdAt = 0, updatedAt = 0,
-        )
+    private fun item(name: String, quantity: String = "", pickedUp: Boolean = false) = ShoppingItem(
+        id = name,
+        listId = "l",
+        name = name,
+        quantity = quantity,
+        isPickedUp = pickedUp,
+        createdAt = 0,
+        updatedAt = 0,
+    )
 
     @Test
     fun dropsCheckedAndAddsSummary() {

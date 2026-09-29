@@ -16,9 +16,7 @@ import javax.inject.Singleton
 // secrets, and a Room column would mean a schema change and a migration for
 // data that has nothing to do with the user's lists.
 @Singleton
-class TelemetryMarkers @Inject constructor(
-    @ApplicationContext context: Context,
-) {
+class TelemetryMarkers @Inject constructor(@ApplicationContext context: Context) {
 
     private val prefs = context.getSharedPreferences("telemetry_markers", Context.MODE_PRIVATE)
 
@@ -40,8 +38,7 @@ class TelemetryMarkers @Inject constructor(
     // Read without claiming. Needed because some markers are recorded to be
     // asked about later rather than to gate a single event — JoinedList is set
     // when a join succeeds and read on every subsequent edit to that list.
-    fun has(marker: Marker, scope: String?): Boolean =
-        prefs.getBoolean(key(marker, scope), false)
+    fun has(marker: Marker, scope: String?): Boolean = prefs.getBoolean(key(marker, scope), false)
 
     // Record without reporting. Same idea in reverse: JoinedList marks a fact,
     // it does not correspond to an event of its own.

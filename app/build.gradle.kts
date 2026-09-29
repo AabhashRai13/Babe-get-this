@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android.plugin)
     alias(libs.plugins.kover)
+    alias(libs.plugins.baselineprofile)
     // Reads the per-flavor google-services.json and generates the Firebase
     // config resources. Must come before the crashlytics plugin, which depends
     // on what it generates.
@@ -121,26 +122,57 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
             if (releaseStoreFile != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // Lint as a blocking gate, in the same tier as the unit-test and coverage
+    // gates. It had never run on this codebase before, so the findings that
+    // existed at adoption are recorded in lint-baseline.xml rather than fixed
+    // here — the gate protects new code from day one and the backlog stays
+    // enumerated instead of invisible. Shrinking that baseline is tracked in
+    // TODO.md.
+    lint {
+        abortOnError = true
+        // Warnings are errors. The baseline absorbs whatever the first run
+        // produced, so a large starting count is a reason for a larger
+        // baseline, not a reason for a weaker gate.
+        warningsAsErrors = true
+        checkDependencies = true
+        baseline = file("lint-baseline.xml")
+        // Dependency-freshness checks are Renovate's job (see renovate.json).
+        // Leaving them on means every new upstream release breaks the build for
+        // a reason that has nothing to do with the commit that triggered it,
+        // and baselining them means re-baselining on every upgrade. Disabled
+        // here so exactly one system owns "is this dependency current".
+        disable += setOf(
+            "NewerVersionAvailable",
+            "GradleDependency",
+            "AndroidGradlePluginVersion",
+        )
+        // A finding that only appears in a report nobody opens is not a gate.
+        htmlReport = true
+        xmlReport = true
     }
 
     testOptions {
@@ -160,6 +192,7 @@ android {
 // It is a FLOOR against omissions, not evidence the tests are good. A line can
 // be executed without being asserted on; reviewers still have to read the tests.
 // What it does buy is that new logic cannot land untouched by accident.
+@Suppress("ktlint:standard:property-naming") // Deliberately a constant, see above.
 val COVERAGE_THRESHOLD = 100
 
 kover {
@@ -216,11 +249,11 @@ kover {
             // otherwise sweep in — no author wrote these lines.
             excludes {
                 classes(
-                    "*_Factory", "*_Factory\$*",           // Dagger/Hilt generated
-                    "*_HiltModules*", "*Hilt_*",           // Hilt generated
-                    "*_Impl", "*_Impl\$*",                 // Room generated DAOs/DB
-                    "*ComposableSingletons*",              // Compose compiler generated
-                    "*\$\$serializer",                     // kotlinx.serialization generated
+                    "*_Factory", "*_Factory\$*", // Dagger/Hilt generated
+                    "*_HiltModules*", "*Hilt_*", // Hilt generated
+                    "*_Impl", "*_Impl\$*", // Room generated DAOs/DB
+                    "*ComposableSingletons*", // Compose compiler generated
+                    "*\$\$serializer", // kotlinx.serialization generated
 
                     // Untestable on the JVM, not untested — both are covered by
                     // instrumented tests instead, and neither holds logic that a
@@ -276,6 +309,11 @@ kover {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
+    // Installs the baseline profile on first run for devices that do not get it
+    // from Play. Without it the profile ships but is never applied on sideloads
+    // and on older API levels.
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     // Process-wide lifecycle — used to re-lock a locked list only when the whole
     // app is backgrounded, not on in-app back navigation.
@@ -317,7 +355,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation("androidx.test:rules:1.7.0")
+    androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.room.testing)
@@ -379,4 +417,8 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
+
+    // Consumes the profile generated by :baselineprofile and merges it into the
+    // release artifact.
+    baselineProfile(project(":baselineprofile"))
 }

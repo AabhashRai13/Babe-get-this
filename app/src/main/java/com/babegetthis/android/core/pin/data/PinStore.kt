@@ -13,9 +13,7 @@ import javax.inject.Singleton
 // survive logout and account switching. Separate files make that impossible to
 // get wrong by construction.
 @Singleton
-class PinStore @Inject constructor(
-    @ApplicationContext private val context: Context,
-) {
+class PinStore @Inject constructor(@ApplicationContext private val context: Context) {
     companion object {
         private const val PREFS_NAME = "bgt_pin_prefs"
         private const val KEY_PIN_HASH = "pin_hash"

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits"
+  ],
+  "timezone": "Australia/Sydney",
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 5,
+  "labels": ["dependencies"],
+  "enabledManagers": ["gradle", "gradle-wrapper", "github-actions"],
+  "packageRules": [
+    {
+      "description": "Firebase modules are pinned by a BOM. Bumping one without the others produces a mutually incompatible set, so they move together or not at all.",
+      "matchPackagePatterns": ["^com\\.google\\.firebase"],
+      "groupName": "firebase"
+    },
+    {
+      "description": "Same reasoning as Firebase — the Compose BOM pins every compose module.",
+      "matchPackagePatterns": ["^androidx\\.compose"],
+      "groupName": "androidx compose"
+    },
+    {
+      "description": "Supabase ships a BOM and its modules are version-locked to each other and to Ktor.",
+      "matchPackagePatterns": ["^io\\.github\\.jan-tennert\\.supabase", "^io\\.ktor"],
+      "groupName": "supabase and ktor"
+    },
+    {
+      "description": "Kotlin, KSP, and the Compose compiler plugin are version-locked to one another. A Kotlin bump that leaves KSP behind does not build.",
+      "matchPackagePatterns": ["^org\\.jetbrains\\.kotlin", "^com\\.google\\.devtools\\.ksp"],
+      "groupName": "kotlin toolchain"
+    },
+    {
+      "description": "Kotlin is currently pinned at 2.0.21 by Supabase 3.0.x, which in turn pins the Firebase BOM to 33.x. Moving off it is a deliberate, separate piece of work — see TODO.md. This rule exists so the upgrade stays VISIBLE as a standing PR rather than being silently absent; do not close it without recording why.",
+      "matchPackagePatterns": ["^org\\.jetbrains\\.kotlin"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Test-only dependencies can move on their own; grouping them with production upgrades makes both harder to review.",
+      "matchPackagePatterns": ["^androidx\\.test", "^org\\.robolectric", "^io\\.mockk", "^app\\.cash\\.turbine"],
+      "groupName": "test dependencies"
+    }
+  ],
+  "dependencyDashboard": true
+}

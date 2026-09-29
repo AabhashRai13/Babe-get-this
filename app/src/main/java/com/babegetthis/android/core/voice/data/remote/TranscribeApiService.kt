@@ -18,7 +18,5 @@ interface TranscribeApiService {
 
     @Multipart
     @POST("transcribe")
-    suspend fun transcribe(
-        @Part audio: MultipartBody.Part,
-    ): TranscribeResponseDto
+    suspend fun transcribe(@Part audio: MultipartBody.Part): TranscribeResponseDto
 }

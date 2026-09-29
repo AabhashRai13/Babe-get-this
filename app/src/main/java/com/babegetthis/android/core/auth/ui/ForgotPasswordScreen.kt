@@ -240,10 +240,11 @@ fun ForgotPasswordScreen(
                             isError = uiState.passwordError != null,
                             supportingText = uiState.passwordError?.let { { Text(it) } },
                             singleLine = true,
-                            visualTransformation = if (passwordVisible)
+                            visualTransformation = if (passwordVisible) {
                                 VisualTransformation.None
-                            else
-                                PasswordVisualTransformation(),
+                            } else {
+                                PasswordVisualTransformation()
+                            },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),
@@ -280,7 +281,7 @@ fun ForgotPasswordScreen(
                 } else {
                     Text(
                         text = stringResource(
-                            if (uiState.codeSent) R.string.auth_reset_password else R.string.auth_send_code
+                            if (uiState.codeSent) R.string.auth_reset_password else R.string.auth_send_code,
                         ),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,

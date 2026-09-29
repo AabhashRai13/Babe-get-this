@@ -13,7 +13,8 @@ interface ShoppingItemDao {
 
     // Sorted by: shop (nulls last) → category (nulls last) → name
     // This groups items by store first, then by aisle within each store.
-    @Query("""
+    @Query(
+        """
         SELECT * FROM shopping_items
         WHERE listId = :listId AND deletedAt IS NULL
         ORDER BY
@@ -22,7 +23,8 @@ interface ShoppingItemDao {
             CASE WHEN categoryId IS NULL THEN 1 ELSE 0 END,
             categoryId ASC,
             name ASC
-    """)
+    """,
+    )
     fun getItemsByListId(listId: String): Flow<List<ShoppingItemEntity>>
 
     // One-shot read for snapshotting items before a CASCADE delete.
@@ -43,25 +45,24 @@ interface ShoppingItemDao {
     @Query("DELETE FROM shopping_items WHERE id = :itemId")
     suspend fun deleteItem(itemId: String)
 
-    @Query("""
+    @Query(
+        """
         UPDATE shopping_items
         SET isPickedUp = :isPickedUp, updatedAt = :updatedAt, pendingSync = :pendingSync
         WHERE id = :itemId
-    """)
-    suspend fun updatePickedUpStatus(
-        itemId: String,
-        isPickedUp: Boolean,
-        updatedAt: Long,
-        pendingSync: Boolean,
+    """,
     )
+    suspend fun updatePickedUpStatus(itemId: String, isPickedUp: Boolean, updatedAt: Long, pendingSync: Boolean)
 
     // ── Sync primitives (shared lists only) — see ShoppingListDao ───────────
 
-    @Query("""
+    @Query(
+        """
         UPDATE shopping_items
         SET deletedAt = :now, updatedAt = :now, pendingSync = 1
         WHERE id = :itemId
-    """)
+    """,
+    )
     suspend fun softDeleteItem(itemId: String, now: Long)
 
     // Everything not yet pushed — includes tombstoned rows on purpose.

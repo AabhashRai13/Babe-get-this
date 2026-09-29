@@ -19,10 +19,7 @@ enum class TimePeriod {
 // same-month) otherwise mean something different on the 1st of a month than on
 // the 20th, and would go green or red by calendar luck. Defaulted, so the one
 // production caller is unchanged.
-fun getTimePeriod(
-    timestampMillis: Long,
-    nowMillis: Long = System.currentTimeMillis(),
-): TimePeriod {
+fun getTimePeriod(timestampMillis: Long, nowMillis: Long = System.currentTimeMillis()): TimePeriod {
     val now = Calendar.getInstance().apply { timeInMillis = nowMillis }
     val date = Calendar.getInstance().apply { timeInMillis = timestampMillis }
 
@@ -40,7 +37,9 @@ fun getTimePeriod(
     // Same month and year = This Month
     if (now.get(Calendar.YEAR) == date.get(Calendar.YEAR) &&
         now.get(Calendar.MONTH) == date.get(Calendar.MONTH)
-    ) return TimePeriod.THIS_MONTH
+    ) {
+        return TimePeriod.THIS_MONTH
+    }
 
     return TimePeriod.OLDER
 }
@@ -53,7 +52,5 @@ fun TimePeriod.displayName(): String = when (this) {
     TimePeriod.OLDER -> "Older"
 }
 
-private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {
-    return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-            cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
-}
+private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean = cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+    cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)

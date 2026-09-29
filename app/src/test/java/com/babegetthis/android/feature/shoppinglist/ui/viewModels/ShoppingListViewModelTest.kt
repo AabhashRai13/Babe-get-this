@@ -6,6 +6,13 @@ import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.Marker
+import com.babegetthis.android.core.telemetry.TelemetryMarkers
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
+import com.babegetthis.android.core.telemetry.model.CategorySource
+import com.babegetthis.android.core.telemetry.model.InputMethod
+import com.babegetthis.android.core.telemetry.model.JoinFailureReason
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
@@ -16,6 +23,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,14 +38,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import com.babegetthis.android.core.telemetry.AnalyticsRepository
-import com.babegetthis.android.core.telemetry.TelemetryMarkers
-import com.babegetthis.android.core.telemetry.Marker
-import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
-import com.babegetthis.android.core.telemetry.model.CategorySource
-import com.babegetthis.android.core.telemetry.model.InputMethod
-import com.babegetthis.android.core.telemetry.model.JoinFailureReason
-import io.mockk.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShoppingListViewModelTest {
@@ -47,6 +47,7 @@ class ShoppingListViewModelTest {
     private val repository = mockk<ShoppingListRepository>(relaxed = true)
     private val shareRepository = mockk<ShareRepository>(relaxed = true)
     private val analytics = mockk<AnalyticsRepository>(relaxed = true)
+
     // relaxed firstTime() returns false, i.e. "already fired" — once-per-user
     // events stay silent unless a test stubs it true.
     private val markers = mockk<TelemetryMarkers>(relaxed = true)
@@ -68,7 +69,8 @@ class ShoppingListViewModelTest {
     private fun TestScope.viewModel(): ShoppingListViewModel {
         every { repository.getAllLists() } returns listsFlow
         every { authStateManager.authState } returns authState
-        val vm = ShoppingListViewModel(repository, shareRepository, authStateManager, analytics, markers, applicationScope)
+        val vm =
+            ShoppingListViewModel(repository, shareRepository, authStateManager, analytics, markers, applicationScope)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect { } }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.shoppingLists.collect { }
@@ -115,9 +117,9 @@ class ShoppingListViewModelTest {
     fun `uiState splits active from completed`() = runTest {
         val vm = viewModel()
         listsFlow.value = listOf(
-            list("a", itemCount = 2, completedItemCount = 1),   // active
-            list("b", itemCount = 2, completedItemCount = 2),   // completed
-            list("c"),                                          // empty → active
+            list("a", itemCount = 2, completedItemCount = 1), // active
+            list("b", itemCount = 2, completedItemCount = 2), // completed
+            list("c"), // empty → active
         )
 
         val state = vm.uiState.value
@@ -129,9 +131,9 @@ class ShoppingListViewModelTest {
     fun `activeItemsToGet sums outstanding items across active lists only`() = runTest {
         val vm = viewModel()
         listsFlow.value = listOf(
-            list("a", itemCount = 5, completedItemCount = 2),   // 3 outstanding
-            list("b", itemCount = 4, completedItemCount = 1),   // 3 outstanding
-            list("c", itemCount = 2, completedItemCount = 2),   // completed, excluded
+            list("a", itemCount = 5, completedItemCount = 2), // 3 outstanding
+            list("b", itemCount = 4, completedItemCount = 1), // 3 outstanding
+            list("c", itemCount = 2, completedItemCount = 2), // completed, excluded
         )
 
         assertEquals(6, vm.uiState.value.activeItemsToGet)

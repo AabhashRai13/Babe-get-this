@@ -1,10 +1,10 @@
 package com.babegetthis.android.testing
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.data.local.DEFAULT_CATEGORIES
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import com.babegetthis.android.core.pin.data.PinStore
 import dagger.hilt.android.testing.HiltAndroidRule
 import kotlinx.coroutines.runBlocking

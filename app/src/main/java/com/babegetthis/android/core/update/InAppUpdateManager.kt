@@ -24,9 +24,7 @@ private const val URGENT_PRIORITY_THRESHOLD = 4
 private const val UPDATE_REQUEST_CODE = 4802
 
 @Singleton
-class InAppUpdateManager @Inject constructor(
-    @ApplicationContext context: Context,
-) {
+class InAppUpdateManager @Inject constructor(@ApplicationContext context: Context) {
     private val appUpdateManager: AppUpdateManager = AppUpdateManagerFactory.create(context)
 
     // Set only when a flexible download finished while the app was in the

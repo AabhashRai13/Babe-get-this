@@ -69,8 +69,10 @@ class AnalyticsEventMapperTest {
         // ship rather than after the data is already missing.
         everyEvent.forEach { event ->
             val name = AnalyticsEventMapper.map(event).name
-            assertTrue("invalid GA4 event name: '$name' from ${event::class.simpleName}",
-                AnalyticsEventMapper.isValidEventName(name))
+            assertTrue(
+                "invalid GA4 event name: '$name' from ${event::class.simpleName}",
+                AnalyticsEventMapper.isValidEventName(name),
+            )
         }
     }
 

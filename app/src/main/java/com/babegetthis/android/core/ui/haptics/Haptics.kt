@@ -27,7 +27,8 @@ fun rememberHaptic(): (Haptic) -> Unit {
                 Haptic.Light -> haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                 Haptic.Medium,
                 Haptic.Heavy,
-                Haptic.Success -> haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                Haptic.Success,
+                -> haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             }
         }
     }

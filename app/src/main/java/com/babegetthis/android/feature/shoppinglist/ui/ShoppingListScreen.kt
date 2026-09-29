@@ -53,7 +53,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,12 +71,12 @@ import com.babegetthis.android.core.pin.ui.PinPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptPurpose
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
-import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
-import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
+import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
+import com.babegetthis.android.feature.profile.ui.ProfileBottomSheet
 import com.babegetthis.android.feature.shoppinglist.ui.components.CreateListChooserSheet
 import com.babegetthis.android.feature.shoppinglist.ui.components.GreetingSection
 import com.babegetthis.android.feature.shoppinglist.ui.components.ShoppingListCard
@@ -88,6 +87,7 @@ import com.babegetthis.android.feature.shoppinglist.ui.viewModels.ShoppingListVi
 import com.babegetthis.android.ui.theme.DarkListAccentPalette
 import com.babegetthis.android.ui.theme.ListAccentColor
 import com.babegetthis.android.ui.theme.ListAccentPalette
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 private fun getAccentForList(listId: String, isDark: Boolean): ListAccentColor {
@@ -104,7 +104,7 @@ fun ShoppingListScreen(
     onNavigateToLogin: () -> Unit = {},
     onNavigateToRegister: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    viewModel: ShoppingListViewModel = hiltViewModel()
+    viewModel: ShoppingListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val showDialog by viewModel.showCreateDialog.collectAsState()
@@ -122,7 +122,9 @@ fun ShoppingListScreen(
     val userName by authStateManager.userName.collectAsState()
     var showProfileSheet by remember { mutableStateOf(false) }
     // When set, a locked list is pending deletion and awaiting the PIN.
-    var pendingLockedDelete by remember { mutableStateOf<com.babegetthis.android.feature.shoppinglist.model.ShoppingList?>(null) }
+    var pendingLockedDelete by remember {
+        mutableStateOf<com.babegetthis.android.feature.shoppinglist.model.ShoppingList?>(null)
+    }
     val scope = rememberCoroutineScope()
 
     // Create-list flow has two entry-style choices now: Type or Voice.
@@ -229,7 +231,7 @@ fun ShoppingListScreen(
                     )
                 }
             }
-        }
+        },
     ) { padding ->
 
         if (uiState.hasNoLists) {
@@ -238,7 +240,7 @@ fun ShoppingListScreen(
                     .padding(padding)
                     .padding(horizontal = 24.dp)
                     .fillMaxSize(),
-                onCreateList = { showCreateChooser = true }
+                onCreateList = { showCreateChooser = true },
             )
         } else {
             Column(
@@ -257,7 +259,7 @@ fun ShoppingListScreen(
                             label = stringResource(R.string.tab_completed),
                             iconInactive = Icons.Outlined.CheckCircle,
                             iconActive = Icons.Filled.CheckCircle,
-                        )
+                        ),
                     ),
                     selectedIndex = uiState.selectedTab,
                     onTabSelected = { viewModel.setSelectedTab(it) },
@@ -314,8 +316,11 @@ fun ShoppingListScreen(
                                     SwipeableCard(
                                         onSwipeLeft = {
                                             // A locked list can't be deleted without the PIN.
-                                            if (list.isLocked) pendingLockedDelete = list
-                                            else viewModel.deleteList(list.id)
+                                            if (list.isLocked) {
+                                                pendingLockedDelete = list
+                                            } else {
+                                                viewModel.deleteList(list.id)
+                                            }
                                         },
                                     ) {
                                         ShoppingListCard(
@@ -343,7 +348,7 @@ fun ShoppingListScreen(
     if (showDialog) {
         CreateListDialog(
             onDismiss = { viewModel.onDismissCreateDialog() },
-            onCreate = { name -> viewModel.createList(name) }
+            onCreate = { name -> viewModel.createList(name) },
         )
     }
 
@@ -416,7 +421,7 @@ fun ShoppingListScreen(
             currentName = list.name,
             onDismiss = { viewModel.onDismissEditListDialog() },
             onCreate = {},
-            onRename = { newName -> viewModel.editList(list.id, newName) }
+            onRename = { newName -> viewModel.editList(list.id, newName) },
         )
     }
 
@@ -454,6 +459,7 @@ fun ShoppingListScreen(
         )
     }
 }
+
 @Composable
 private fun TimePeriodHeader(period: TimePeriod) {
     Row(
@@ -480,12 +486,7 @@ private fun TimePeriodHeader(period: TimePeriod) {
 // The Home top-bar account control. Its appearance is the visual cue for
 // auth state: an initial-avatar when signed in, a "Sign in" pill when not.
 @Composable
-private fun AccountAction(
-    isLoggedIn: Boolean,
-    userName: String?,
-    onOpenProfile: () -> Unit,
-    onSignIn: () -> Unit,
-) {
+private fun AccountAction(isLoggedIn: Boolean, userName: String?, onOpenProfile: () -> Unit, onSignIn: () -> Unit) {
     if (isLoggedIn) {
         // Circular initial avatar — same language as the Profile sheet avatar.
         val initial = userName?.trim()?.firstOrNull()?.uppercase()
@@ -540,4 +541,3 @@ private fun AccountAction(
         }
     }
 }
-

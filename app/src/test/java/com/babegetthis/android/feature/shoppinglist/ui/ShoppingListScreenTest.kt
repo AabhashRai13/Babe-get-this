@@ -1,17 +1,17 @@
 package com.babegetthis.android.feature.shoppinglist.ui
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -69,14 +69,11 @@ class ShoppingListScreenTest {
         isLocked: Boolean = false,
     ) = TestData.list(id, name, createdAt, createdAt, isLocked, itemCount, completedItemCount)
 
-    private fun render(
-        lists: List<ShoppingList> = emptyList(),
-        loggedIn: Boolean = true,
-    ) {
+    private fun render(lists: List<ShoppingList> = emptyList(), loggedIn: Boolean = true) {
         listsFlow.value = lists
         every { repository.getAllLists() } returns listsFlow
         every { authStateManager.authState } returns MutableStateFlow(
-            if (loggedIn) AuthState.Authenticated("u1") else AuthState.Unauthenticated
+            if (loggedIn) AuthState.Authenticated("u1") else AuthState.Unauthenticated,
         )
         every { authStateManager.userName } returns MutableStateFlow(if (loggedIn) "Aabhash" else null)
         every { authStateManager.userEmail } returns MutableStateFlow(if (loggedIn) "a@b.c" else null)
@@ -144,7 +141,7 @@ class ShoppingListScreenTest {
             lists = listOf(
                 list("a", "Groceries", itemCount = 1),
                 list("b", "Done List", itemCount = 2, completedItemCount = 2),
-            )
+            ),
         )
 
         compose.onNodeWithText("Groceries").assertIsDisplayed()
@@ -157,7 +154,7 @@ class ShoppingListScreenTest {
             lists = listOf(
                 list("a", "Groceries", itemCount = 1),
                 list("b", "Done List", itemCount = 2, completedItemCount = 2),
-            )
+            ),
         )
 
         compose.onNodeWithTag(TestTags.listTab(1)).performClick()
@@ -189,7 +186,7 @@ class ShoppingListScreenTest {
             lists = listOf(
                 list("a", "Today List", createdAt = now),
                 list("b", "Old List", createdAt = now - 90 * day),
-            )
+            ),
         )
 
         compose.onNodeWithText("Today").assertIsDisplayed()

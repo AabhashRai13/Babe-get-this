@@ -1,14 +1,14 @@
 package com.babegetthis.android.core.telemetry.data
 
 import com.babegetthis.android.core.error.AppError
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
 import com.babegetthis.android.core.error.ErrorReportingHook
 import com.babegetthis.android.core.error.safeCall
 import kotlinx.coroutines.test.runTest
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 

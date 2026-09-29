@@ -28,8 +28,12 @@ class ShoppingItemRepositorySharedTest {
 
     private suspend fun seedList(shareCode: String? = "ABC234") = dbRule.listDao.insertList(
         ShoppingListEntity(
-            id = "list-1", name = "Groceries", createdAt = 1L, updatedAt = 2L, shareCode = shareCode,
-        )
+            id = "list-1",
+            name = "Groceries",
+            createdAt = 1L,
+            updatedAt = 2L,
+            shareCode = shareCode,
+        ),
     )
 
     private suspend fun domainItem() = repository.getItemsByListId("list-1").first().single()

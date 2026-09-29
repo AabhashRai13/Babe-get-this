@@ -19,9 +19,7 @@ import org.junit.runner.Description
 // observable without an advanceUntilIdle() after every call. Pass a
 // StandardTestDispatcher when a test needs to control ordering explicitly.
 @OptIn(ExperimentalCoroutinesApi::class)
-class MainDispatcherRule(
-    val dispatcher: TestDispatcher = UnconfinedTestDispatcher(),
-) : TestWatcher() {
+class MainDispatcherRule(val dispatcher: TestDispatcher = UnconfinedTestDispatcher()) : TestWatcher() {
 
     override fun starting(description: Description) {
         Dispatchers.setMain(dispatcher)

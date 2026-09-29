@@ -15,13 +15,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class CategoryRepository @Inject constructor(
-    private val categoryDao: CategoryDao,
-) {
-    fun getAllCategories(): Flow<List<Category>> {
-        return categoryDao.getAllCategories().map { list ->
-            list.map { it.toDomain() }
-        }
+class CategoryRepository @Inject constructor(private val categoryDao: CategoryDao) {
+    fun getAllCategories(): Flow<List<Category>> = categoryDao.getAllCategories().map { list ->
+        list.map { it.toDomain() }
     }
 
     suspend fun addCategory(name: String): Result<String> = safeCall {

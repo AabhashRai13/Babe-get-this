@@ -21,9 +21,9 @@ import com.babegetthis.android.core.telemetry.model.InputMethod
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.CategorySection
+import com.babegetthis.android.feature.shoppingitems.model.ShopSection
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItemsUiState
-import com.babegetthis.android.feature.shoppingitems.model.ShopSection
 import com.babegetthis.android.feature.shoppingitems.share.ShoppingListShareText
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -85,11 +85,15 @@ class ShoppingItemsViewModel @Inject constructor(
     private val _sessionUnlocked = MutableStateFlow(false)
     val sessionUnlocked: StateFlow<Boolean> = _sessionUnlocked.asStateFlow()
 
-    fun onSessionUnlocked() { _sessionUnlocked.value = true }
+    fun onSessionUnlocked() {
+        _sessionUnlocked.value = true
+    }
 
     // Re-lock the session — called on ON_STOP so a backgrounded locked list
     // re-prompts on return. Not ON_PAUSE (that fires for the share sheet).
-    fun lockSession() { _sessionUnlocked.value = false }
+    fun lockSession() {
+        _sessionUnlocked.value = false
+    }
 
     fun setListLocked(locked: Boolean) {
         // Locking always happens while viewing the list, so keep this session
@@ -100,9 +104,7 @@ class ShoppingItemsViewModel @Inject constructor(
     }
 
     // Check if the user is logged in — used to gate the share feature.
-    fun isAuthenticated(): Boolean {
-        return authStateManager.authState.value is AuthState.Authenticated
-    }
+    fun isAuthenticated(): Boolean = authStateManager.authState.value is AuthState.Authenticated
 
     // One database subscription, shared by `items` and `leavingDeletesList`.
     // replay = 1 hands a late collector the current rows without a new query.
@@ -113,7 +115,7 @@ class ShoppingItemsViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
+            initialValue = emptyList(),
         )
 
     // Derived UI state: filter + groupBy run once per upstream emission
@@ -139,17 +141,16 @@ class ShoppingItemsViewModel @Inject constructor(
     // Shops keep first-seen order (unchanged from the old by-shop grouping).
     // Categories are alphabetical (case-insensitive) so the order is the same on
     // every shopping trip; the uncategorized bucket (null categoryName) sorts last.
-    private fun buildActiveSections(active: List<ShoppingItem>): List<ShopSection> =
-        active
-            .groupBy { it.shop?.ifBlank { null } }
-            .map { (shop, shopItems) ->
-                val categories = shopItems
-                    .groupBy { it.categoryName }
-                    .entries
-                    .sortedWith(compareBy(nullsLast(String.CASE_INSENSITIVE_ORDER)) { it.key })
-                    .map { CategorySection(label = it.key, items = it.value) }
-                ShopSection(shopName = shop, categories = categories)
-            }
+    private fun buildActiveSections(active: List<ShoppingItem>): List<ShopSection> = active
+        .groupBy { it.shop?.ifBlank { null } }
+        .map { (shop, shopItems) ->
+            val categories = shopItems
+                .groupBy { it.categoryName }
+                .entries
+                .sortedWith(compareBy(nullsLast(String.CASE_INSENSITIVE_ORDER)) { it.key })
+                .map { CategorySection(label = it.key, items = it.value) }
+            ShopSection(shopName = shop, categories = categories)
+        }
 
     // True when leaving now would delete this list: onCleared removes lists
     // with no items, which came as a surprise, so the screen asks first. Shared
@@ -166,7 +167,7 @@ class ShoppingItemsViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
+            initialValue = emptyList(),
         )
 
     val showAddItemDialog = MutableStateFlow(false)
@@ -264,22 +265,27 @@ class ShoppingItemsViewModel @Inject constructor(
 
     fun addItem(name: String, quantity: String, categoryId: String?, shop: String?, note: String?) {
         viewModelScope.launch {
-            when (val result = itemRepository.addItem(
-                listId = listId,
-                name = name,
-                quantity = quantity,
-                categoryId = categoryId,
-                shop = shop,
-                note = note,
-            )) {
+            when (
+                val result = itemRepository.addItem(
+                    listId = listId,
+                    name = name,
+                    quantity = quantity,
+                    categoryId = categoryId,
+                    shop = shop,
+                    note = note,
+                )
+            ) {
                 is Result.Success -> {
                     showAddItemDialog.value = false
                     // Manual add: whatever category is on it, the user chose it
                     // in the dialog. Nothing was auto-assigned here.
                     trackItemAdded(
                         inputMethod = InputMethod.Manual,
-                        categorySource = if (categoryId == null) CategorySource.None
-                        else CategorySource.User,
+                        categorySource = if (categoryId == null) {
+                            CategorySource.None
+                        } else {
+                            CategorySource.User
+                        },
                     )
                     onListEdited()
                 }
@@ -300,8 +306,7 @@ class ShoppingItemsViewModel @Inject constructor(
         }
     }
 
-    private fun currentUserId(): String? =
-        (authStateManager.authState.value as? AuthState.Authenticated)?.userId
+    private fun currentUserId(): String? = (authStateManager.authState.value as? AuthState.Authenticated)?.userId
 
     // Fires the joiner's-first-edit event, once per list, and only on the
     // device that joined. Owner and joiner devices are indistinguishable once
@@ -324,8 +329,11 @@ class ShoppingItemsViewModel @Inject constructor(
             drafts.forEach { draft ->
                 trackItemAdded(
                     inputMethod = InputMethod.Voice,
-                    categorySource = if (draft.category == null) CategorySource.None
-                    else CategorySource.Auto,
+                    categorySource = if (draft.category == null) {
+                        CategorySource.None
+                    } else {
+                        CategorySource.Auto
+                    },
                 )
                 // One per item rather than one per utterance: the taxonomy
                 // question is per-category, and the correction rate this
@@ -337,14 +345,7 @@ class ShoppingItemsViewModel @Inject constructor(
         return result
     }
 
-    fun editItem(
-        itemId: String,
-        name: String,
-        quantity: String,
-        categoryId: String?,
-        shop: String?,
-        note: String?,
-    ) {
+    fun editItem(itemId: String, name: String, quantity: String, categoryId: String?, shop: String?, note: String?) {
         viewModelScope.launch {
             // Find the current item so we preserve fields like listId, createdAt, isPickedUp
             val currentItem = items.value.find { it.id == itemId } ?: return@launch

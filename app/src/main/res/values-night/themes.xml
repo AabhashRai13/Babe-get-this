@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+       Dark counterpart of Theme.BabeGetThis in values/. Selected by the system
+       when the device is in dark mode, which is how this app gets DayNight
+       behaviour without a DayNight parent — see the note in values/themes.xml
+       for why the parent cannot be used at minSdk 24.
+    -->
+    <style name="Theme.BabeGetThis" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+    </style>
+</resources>

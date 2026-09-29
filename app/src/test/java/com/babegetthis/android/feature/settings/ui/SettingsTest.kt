@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.pin.data.PinRepository
+import com.babegetthis.android.core.telemetry.TelemetryConsent
 import com.babegetthis.android.core.ui.components.SettingsRow
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import com.babegetthis.android.testing.MainDispatcherRule
@@ -14,6 +15,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +27,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import com.babegetthis.android.core.telemetry.TelemetryConsent
-import io.mockk.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -116,7 +116,7 @@ class SettingsViewModelTest {
     @Test
     fun `onPinRemoved survives the viewModel scope being irrelevant`() = runTest {
         coEvery { listRepository.unlockAll() } returns Result.Error(
-            com.babegetthis.android.core.error.AppError.DatabaseError()
+            com.babegetthis.android.core.error.AppError.DatabaseError(),
         )
         val vm = viewModel()
 
@@ -125,7 +125,6 @@ class SettingsViewModelTest {
 
         coVerify { listRepository.unlockAll() }
     }
-
 
     // -- Telemetry consent --
 
@@ -223,7 +222,7 @@ class SettingsScreenTest {
         render(pinExists = false)
 
         compose.onNodeWithText(
-            "Lock individual lists with a 4-digit PIN, stored only on this device"
+            "Lock individual lists with a 4-digit PIN, stored only on this device",
         ).assertIsDisplayed()
     }
 

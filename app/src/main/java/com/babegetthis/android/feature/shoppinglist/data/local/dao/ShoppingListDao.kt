@@ -19,7 +19,8 @@ interface ShoppingListDao {
     // Tombstoned (deletedAt set) lists and items are invisible everywhere in the
     // UI; explicit columns instead of l.* so the sync columns never leak into
     // the projection.
-    @Query("""
+    @Query(
+        """
         SELECT l.id, l.name, l.createdAt, l.updatedAt, l.isLocked,
                COUNT(i.id) AS itemCount,
                SUM(CASE WHEN i.isPickedUp = 1 THEN 1 ELSE 0 END) AS completedItemCount
@@ -28,7 +29,8 @@ interface ShoppingListDao {
         WHERE l.deletedAt IS NULL
         GROUP BY l.id
         ORDER BY l.createdAt DESC
-    """)
+    """,
+    )
     fun getAllListsWithItemCount(): Flow<List<ShoppingListWithItemCount>>
 
     @Query("SELECT * FROM shopping_lists WHERE id = :listId AND deletedAt IS NULL")
@@ -78,11 +80,13 @@ interface ShoppingListDao {
     // never sneak in between "count says 0" and "delete" (which would orphan
     // the new item via the CASCADE). Returns rows deleted: 1 = was empty and
     // deleted, 0 = had items (or didn't exist) and was kept.
-    @Query("""
+    @Query(
+        """
         DELETE FROM shopping_lists
         WHERE id = :listId
           AND NOT EXISTS (SELECT 1 FROM shopping_items WHERE listId = :listId)
-    """)
+    """,
+    )
     suspend fun deleteListIfEmpty(listId: String): Int
 
     // ── Sync primitives (shared lists only; repositories route here when the
@@ -90,11 +94,13 @@ interface ShoppingListDao {
 
     // Soft delete: the tombstone must survive locally so the deletion itself
     // can sync. deletedAt doubles as the row's last-modified time.
-    @Query("""
+    @Query(
+        """
         UPDATE shopping_lists
         SET deletedAt = :now, updatedAt = :now, pendingSync = 1
         WHERE id = :listId
-    """)
+    """,
+    )
     suspend fun softDeleteList(listId: String, now: Long)
 
     // Everything not yet pushed — includes tombstoned rows on purpose.

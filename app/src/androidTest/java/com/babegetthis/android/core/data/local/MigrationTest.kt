@@ -43,11 +43,11 @@ class MigrationTest {
                                 "id TEXT NOT NULL PRIMARY KEY, " +
                                 "name TEXT NOT NULL, " +
                                 "createdAt INTEGER NOT NULL, " +
-                                "updatedAt INTEGER NOT NULL)"
+                                "updatedAt INTEGER NOT NULL)",
                         )
                         db.execSQL(
                             "INSERT INTO shopping_lists (id, name, createdAt, updatedAt) " +
-                                "VALUES ('list-a', 'Groceries', 100, 200)"
+                                "VALUES ('list-a', 'Groceries', 100, 200)",
                         )
                     }
 
@@ -57,7 +57,7 @@ class MigrationTest {
                         newVersion: Int,
                     ) = Unit
                 })
-                .build()
+                .build(),
         )
 
         val db = helper.writableDatabase
@@ -89,7 +89,7 @@ class MigrationTest {
                                 "name TEXT NOT NULL, " +
                                 "createdAt INTEGER NOT NULL, " +
                                 "updatedAt INTEGER NOT NULL, " +
-                                "isLocked INTEGER NOT NULL DEFAULT 0)"
+                                "isLocked INTEGER NOT NULL DEFAULT 0)",
                         )
                         db.execSQL(
                             "CREATE TABLE shopping_items (" +
@@ -102,15 +102,15 @@ class MigrationTest {
                                 "shop TEXT, " +
                                 "note TEXT, " +
                                 "createdAt INTEGER NOT NULL, " +
-                                "updatedAt INTEGER NOT NULL)"
+                                "updatedAt INTEGER NOT NULL)",
                         )
                         db.execSQL(
                             "INSERT INTO shopping_lists (id, name, createdAt, updatedAt, isLocked) " +
-                                "VALUES ('list-a', 'Groceries', 100, 200, 1)"
+                                "VALUES ('list-a', 'Groceries', 100, 200, 1)",
                         )
                         db.execSQL(
                             "INSERT INTO shopping_items (id, listId, name, quantity, createdAt, updatedAt) " +
-                                "VALUES ('item-a', 'list-a', 'Milk', '2', 100, 200)"
+                                "VALUES ('item-a', 'list-a', 'Milk', '2', 100, 200)",
                         )
                     }
 
@@ -120,7 +120,7 @@ class MigrationTest {
                         newVersion: Int,
                     ) = Unit
                 })
-                .build()
+                .build(),
         )
 
         val db = helper.writableDatabase
@@ -129,7 +129,7 @@ class MigrationTest {
         // List survives; new columns default to "local-only, alive, not dirty".
         db.query(
             "SELECT name, isLocked, shareCode, deletedAt, pendingSync " +
-                "FROM shopping_lists WHERE id = 'list-a'"
+                "FROM shopping_lists WHERE id = 'list-a'",
         ).use { c ->
             assertEquals(1, c.count)
             c.moveToFirst()
@@ -141,7 +141,7 @@ class MigrationTest {
         }
         db.query(
             "SELECT name, quantity, deletedAt, pendingSync " +
-                "FROM shopping_items WHERE id = 'item-a'"
+                "FROM shopping_items WHERE id = 'item-a'",
         ).use { c ->
             assertEquals(1, c.count)
             c.moveToFirst()
@@ -169,7 +169,7 @@ class MigrationTest {
                             "CREATE TABLE categories (" +
                                 "id TEXT NOT NULL PRIMARY KEY, " +
                                 "name TEXT NOT NULL, " +
-                                "isDefault INTEGER NOT NULL)"
+                                "isDefault INTEGER NOT NULL)",
                         )
                         db.execSQL(
                             "CREATE TABLE shopping_items (" +
@@ -184,24 +184,24 @@ class MigrationTest {
                                 "createdAt INTEGER NOT NULL, " +
                                 "updatedAt INTEGER NOT NULL, " +
                                 "deletedAt INTEGER, " +
-                                "pendingSync INTEGER NOT NULL DEFAULT 0)"
+                                "pendingSync INTEGER NOT NULL DEFAULT 0)",
                         )
                         db.execSQL(
                             "INSERT INTO categories (id, name, isDefault) " +
-                                "VALUES ('cat-pantry-dry-goods', 'Pantry & Dry Goods', 1)"
+                                "VALUES ('cat-pantry-dry-goods', 'Pantry & Dry Goods', 1)",
                         )
                         db.execSQL(
                             "INSERT INTO categories (id, name, isDefault) " +
-                                "VALUES ('cat-dairy-eggs', 'Dairy & Eggs', 1)"
+                                "VALUES ('cat-dairy-eggs', 'Dairy & Eggs', 1)",
                         )
                         db.execSQL(
                             "INSERT INTO categories (id, name, isDefault) " +
-                                "VALUES ('cat-user-xyz', 'My Custom', 0)"
+                                "VALUES ('cat-user-xyz', 'My Custom', 0)",
                         )
                         db.execSQL(
                             "INSERT INTO shopping_items " +
                                 "(id, listId, name, quantity, categoryId, createdAt, updatedAt) " +
-                                "VALUES ('item-a', 'list-a', 'Rice', '1', 'cat-pantry-dry-goods', 100, 200)"
+                                "VALUES ('item-a', 'list-a', 'Rice', '1', 'cat-pantry-dry-goods', 100, 200)",
                         )
                     }
 
@@ -211,7 +211,7 @@ class MigrationTest {
                         newVersion: Int,
                     ) = Unit
                 })
-                .build()
+                .build(),
         )
 
         val db = helper.writableDatabase

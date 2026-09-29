@@ -16,9 +16,7 @@ import javax.inject.Singleton
 // gated — this app is offline-first and must keep working with no internet.
 
 @Singleton
-class NetworkMonitor @Inject constructor(
-    @ApplicationContext private val context: Context,
-) {
+class NetworkMonitor @Inject constructor(@ApplicationContext private val context: Context) {
     fun isOnline(): Boolean {
         val connectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

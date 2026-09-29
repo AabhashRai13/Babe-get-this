@@ -31,7 +31,9 @@ internal fun Throwable.isNetworkFailure(): Boolean {
             current is ConnectException ||
             current is SocketTimeoutException ||
             current is IOException
-        ) return true
+        ) {
+            return true
+        }
         current = current.cause
     }
     return false

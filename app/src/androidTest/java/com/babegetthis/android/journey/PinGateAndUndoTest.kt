@@ -11,26 +11,30 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.babegetthis.android.MainActivity
-import com.babegetthis.android.core.ui.TestTags
-import dagger.hilt.android.testing.HiltAndroidRule
-import dagger.hilt.android.testing.HiltAndroidTest
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.pin.data.PinStore
+import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.testing.ResetAppStateRule
-import javax.inject.Inject
+import dagger.hilt.android.testing.HiltAndroidRule
+import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import javax.inject.Inject
 
 // The two journeys where a bug loses the user's data or locks them out of it.
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
 class PinGateAndUndoTest {
 
-    @get:Rule(order = 0) val hilt = HiltAndroidRule(this)
+    @get:Rule(order = 0)
+    val hilt = HiltAndroidRule(this)
+
     @Inject lateinit var database: AppDatabase
+
     @Inject lateinit var authStateManager: AuthStateManager
+
     @Inject lateinit var pinStore: PinStore
 
     // Order 1: injects, then wipes state left by the previous test — before the
@@ -38,7 +42,8 @@ class PinGateAndUndoTest {
     @get:Rule(order = 1)
     val reset = ResetAppStateRule(hilt, { database }, { authStateManager }, { pinStore })
 
-    @get:Rule(order = 2) val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 2)
+    val compose = createAndroidComposeRule<MainActivity>()
 
     private fun awaitText(text: String) {
         compose.waitUntil(timeoutMillis = 10_000) {
@@ -52,12 +57,11 @@ class PinGateAndUndoTest {
         }
     }
 
-    private fun present(text: String) =
-        compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
+    private fun present(text: String) = compose.onAllNodes(hasText(text)).fetchSemanticsNodes().isNotEmpty()
 
     private fun createList(name: String) {
         compose.onNodeWithText(
-            if (present("Create your first list")) "Create your first list" else "Create list"
+            if (present("Create your first list")) "Create your first list" else "Create list",
         ).performClick()
         awaitText("Type")
         compose.onNodeWithText("Type").performClick()
@@ -66,8 +70,7 @@ class PinGateAndUndoTest {
         compose.onNodeWithText("Create").performClick()
     }
 
-    private fun back() =
-        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+    private fun back() = compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
 
     // An EMPTY list is deleted when you leave it — ShoppingItemsViewModel.onCleared
     // calls deleteListIfEmpty, deliberately, so abandoned lists don't pile up on

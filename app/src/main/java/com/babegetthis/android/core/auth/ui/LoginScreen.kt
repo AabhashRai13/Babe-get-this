@@ -240,10 +240,11 @@ fun LoginScreen(
                                 }
                             },
                             singleLine = true,
-                            visualTransformation = if (passwordVisible)
+                            visualTransformation = if (passwordVisible) {
                                 VisualTransformation.None
-                            else
-                                PasswordVisualTransformation(),
+                            } else {
+                                PasswordVisualTransformation()
+                            },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),

@@ -7,6 +7,10 @@
 #
 # The .aab is UNSIGNED (the `release` build type has no signingConfig).
 # That's fine for archiving; Play App Signing handles signing at publish time.
+#
+# It IS minified — R8 plus resource shrinking. The R8 mapping file is uploaded
+# to Crashlytics automatically by the Crashlytics Gradle plugin, so release
+# stack traces stay readable.
 
 name: Build AAB
 
@@ -43,6 +47,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
+      # Formatting first, because it is the cheapest gate here — it needs no
+      # compilation and fails in seconds, so a badly formatted branch does not
+      # burn several minutes of test time before saying so.
+      - name: Check formatting
+        run: ./gradlew spotlessCheck
+
+      # Android Lint, with warningsAsErrors. Findings that predate the gate are
+      # in app/lint-baseline.xml; anything new fails here.
+      - name: Run lint
+        run: ./gradlew lintProdDebug
+
       # Quality gate: tests, then coverage. If either fails, no .aab is produced.
       #
       # prodDebug, NOT prodRelease. The Compose tests run on the JVM under
@@ -66,6 +81,12 @@ jobs:
         run: ./gradlew koverVerifyDevDebug
 
       # Build the production-flavor release bundle.
+      #
+      # This is now a MINIFIED bundle — R8 with resource shrinking, roughly half
+      # the size of the unshrunk one. The keep-rules that make that safe live in
+      # app/proguard-rules.pro, and they are exercised by MinifiedSmokeTest in
+      # the instrumented workflow, not here: this runner has no device.
+      #
       # Output: app/build/outputs/bundle/prodRelease/app-prod-release.aab
       - name: Build prod release AAB
         run: ./gradlew bundleProdRelease

@@ -1,0 +1,37 @@
+# ktlint reads its rules from here, so `spotlessApply` and an IDE reformat
+# produce the same result. Without this file the two disagree and every commit
+# carries formatting churn from whichever tool touched it last.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+# intellij_idea, not ktlint_official. This codebase was written and formatted in
+# Android Studio, and the official style would reformat nearly every file for
+# rules (multiline expression wrapping, function signature layout) that carry no
+# correctness benefit. Matching the IDE keeps the adoption diff small and keeps
+# future diffs stable for anyone who reformats from the IDE out of habit.
+ktlint_code_style = intellij_idea
+# Compose composables are PascalCase by convention and the naming rule does not
+# know that.
+ktlint_function_naming_ignore_when_annotated_with = Composable
+max_line_length = 120
+# Disabled, not suppressed per-file. The rule wants a file holding one class to
+# be named after that class, which here would rename DateGrouping.kt (a file of
+# grouping functions plus one small enum) to TimePeriod.kt, and Haptics.kt to
+# Haptic.kt. Both renames make the filename describe the smallest thing in the
+# file rather than what the file is for. Broader naming consistency is tracked
+# in TODO.md as its own piece of work, where it can be decided deliberately.
+ktlint_standard_filename = disabled
+
+[*.{yml,yaml,json,xml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
