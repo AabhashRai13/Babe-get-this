@@ -17,6 +17,13 @@ interface SharedListRemote {
     // server but never persisted locally) — caller recovers via fetchList.
     suspend fun insertList(row: ListRow): Boolean
 
+    // Shares a list that already syncs: sets its code unless it has one (the
+    // server's write-once trigger keeps the first) and returns the code the
+    // server now holds. Null when the row isn't visible to this session.
+    // A targeted UPDATE rather than an upsert of the whole row, so sharing can
+    // never clobber a newer name or deletion from another phone.
+    suspend fun setShareCode(listId: String, code: String): String?
+
     // Upsert is fine for every later push: the row exists, membership exists.
     suspend fun upsertLists(rows: List<ListRow>)
 

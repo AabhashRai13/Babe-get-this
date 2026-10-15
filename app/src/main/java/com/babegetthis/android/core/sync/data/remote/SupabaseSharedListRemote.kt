@@ -35,6 +35,12 @@ class SupabaseSharedListRemote(private val client: SupabaseClient) : SharedListR
         if (duplicate) false else throw e
     }
 
+    override suspend fun setShareCode(listId: String, code: String): String? =
+        client.from("lists").update({ set("share_code", code) }) {
+            select()
+            filter { eq("id", listId) }
+        }.decodeList<ListRow>().firstOrNull()?.shareCode
+
     override suspend fun upsertLists(rows: List<ListRow>) {
         client.from("lists").upsert(rows)
     }

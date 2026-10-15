@@ -143,6 +143,10 @@ interface ShoppingListDao {
     @Query("SELECT * FROM shopping_lists WHERE pendingSync = 1 AND accountId = :accountId")
     suspend fun getPendingAccountLists(accountId: String): List<ShoppingListEntity>
 
+    // Sharing a list that already syncs: the server set the code, record it.
+    @Query("UPDATE shopping_lists SET shareCode = :code WHERE id = :id")
+    suspend fun setShareCode(id: String, code: String)
+
     // The first INSERT landed; every later push of this row is an upsert.
     @Query("UPDATE shopping_lists SET onServer = 1 WHERE id = :id")
     suspend fun markListOnServer(id: String)

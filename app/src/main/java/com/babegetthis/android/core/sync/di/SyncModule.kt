@@ -73,9 +73,8 @@ object SyncModule {
     @Singleton
     fun provideShareRepository(
         listDao: ShoppingListDao,
-        itemDao: ShoppingItemDao,
         remote: SharedListRemote,
         engine: SyncEngine,
         authStateManager: AuthStateManager,
-    ): ShareRepository = ShareRepository(listDao, itemDao, remote, engine, { authStateManager.liveSessionUserId() })
+    ): ShareRepository = ShareRepository(listDao, remote, engine, { authStateManager.liveSessionUserId() })
 }

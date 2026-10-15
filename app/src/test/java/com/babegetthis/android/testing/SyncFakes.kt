@@ -77,6 +77,20 @@ class FakeSharedListRemote : SharedListRemote {
         return itemRows.filter { it.listId in listIds }
     }
 
+    // (listId, code) per share request. serverShareCode simulates another
+    // phone having shared first (the write-once trigger keeps its code);
+    // shareCodeRowMissing simulates a row the session can't see.
+    val shareCodeRequests = mutableListOf<Pair<String, String>>()
+    var serverShareCode: String? = null
+    var shareCodeRowMissing = false
+
+    override suspend fun setShareCode(listId: String, code: String): String? {
+        if (failUpserts) error("network down")
+        shareCodeRequests += listId to code
+        if (shareCodeRowMissing) return null
+        return serverShareCode ?: code
+    }
+
     override suspend fun fetchAllLists(): List<ListRow> {
         if (failFetches) error("network down")
         return listRows
