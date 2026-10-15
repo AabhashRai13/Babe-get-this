@@ -73,6 +73,15 @@
     <string name="shopping_list_edit_title">Rename List</string>
 
     <!-- Auth Screens -->
+    <!-- Lost session and lists moved into the account (docs/technical-decisions/008) -->
+    <string name="session_expired_banner">You\'ve been signed out. Sign in again to keep your lists in sync.</string>
+    <string name="session_expired_sign_in">Sign in</string>
+    <plurals name="adoption_notice">
+        <item quantity="one">Your list is now saved to your account, so it\'s backed up and shows up on any phone you sign in on.</item>
+        <item quantity="other">Your %d lists are now saved to your account, so they\'re backed up and show up on any phone you sign in on.</item>
+    </plurals>
+    <string name="adoption_notice_ok">OK</string>
+    <string name="adoption_notice_privacy">Privacy policy</string>
     <!-- Welcome: first launch, signed out (docs/technical-decisions/008) -->
     <string name="welcome_sign_in">Sign in</string>
     <string name="welcome_sign_in_body">Save your lists to your account, share them, and add items by voice.</string>

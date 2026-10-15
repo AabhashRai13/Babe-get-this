@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.outlined.GroupAdd
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -43,7 +45,9 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +62,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -69,10 +75,12 @@ import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptPurpose
+import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
+import com.babegetthis.android.core.ui.openPrivacyPolicy
 import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.core.util.displayName
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
@@ -119,6 +127,8 @@ fun ShoppingListScreen(
 
     val authState by authStateManager.authState.collectAsState()
     val isLoggedIn = authState is AuthState.Authenticated
+    val isSessionExpired by viewModel.isSessionExpired.collectAsState()
+    val adoptionNotice by viewModel.adoptionNotice.collectAsState()
     val userName by authStateManager.userName.collectAsState()
     var showProfileSheet by remember { mutableStateOf(false) }
     // When set, a locked list is pending deletion and awaiting the PIN.
@@ -232,112 +242,121 @@ fun ShoppingListScreen(
                 }
             }
         },
-    ) { padding ->
-
-        if (uiState.hasNoLists) {
-            ShoppingListEmptyState(
-                modifier = Modifier
-                    .padding(padding)
-                    .padding(horizontal = 24.dp)
-                    .fillMaxSize(),
-                onCreateList = { showCreateChooser = true },
-            )
-        } else {
-            Column(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-            ) {
-                TabPillRow(
-                    tabs = listOf(
-                        TabPill(
-                            label = stringResource(R.string.tab_active),
-                            iconInactive = Icons.Outlined.ShoppingCart,
-                            iconActive = Icons.Filled.ShoppingCart,
-                        ),
-                        TabPill(
-                            label = stringResource(R.string.tab_completed),
-                            iconInactive = Icons.Outlined.CheckCircle,
-                            iconActive = Icons.Filled.CheckCircle,
-                        ),
-                    ),
-                    selectedIndex = uiState.selectedTab,
-                    onTabSelected = { viewModel.setSelectedTab(it) },
-                )
-                AnimatedContent(
-                    targetState = uiState.selectedTab,
-                    transitionSpec = {
-                        val goingRight = targetState > initialState
-                        val anim = tween<IntOffset>(durationMillis = 280)
-                        val fade = tween<Float>(durationMillis = 280)
-                        if (goingRight) {
-                            (slideInHorizontally(anim) { width -> width } + fadeIn(fade)) togetherWith
-                                (slideOutHorizontally(anim) { width -> -width } + fadeOut(fade))
-                        } else {
-                            (slideInHorizontally(anim) { width -> -width } + fadeIn(fade)) togetherWith
-                                (slideOutHorizontally(anim) { width -> width } + fadeOut(fade))
-                        }
+    ) { scaffoldPadding ->
+        // A lost session keeps the lists on screen and editable; the banner asks
+        // for a fresh sign-in so they sync again (docs/technical-decisions/008).
+        // It sits under the top bar and pushes the content down, which is why
+        // the Scaffold padding is applied once here and not by each pane.
+        Column(modifier = Modifier.padding(scaffoldPadding).fillMaxSize()) {
+            if (isSessionExpired) {
+                SessionExpiredBanner(
+                    onSignIn = {
+                        haptic(Haptic.Light)
+                        onNavigateToLogin()
                     },
-                    label = "tab-content",
-                ) { tabIndex ->
-                    val isActiveForPane = tabIndex == 0
-                    val listsForPane =
-                        if (isActiveForPane) uiState.activeLists else uiState.completedLists
-                    val groupedForPane =
-                        if (isActiveForPane) uiState.groupedActive else uiState.groupedCompleted
+                )
+            }
 
-                    if (listsForPane.isEmpty()) {
-                        TabEmptyState(isActiveTab = isActiveForPane)
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
-                        ) {
-                            // Greeting only on Active tab
-                            if (isActiveForPane) {
-                                item(key = "greeting") {
-                                    GreetingSection(
-                                        listCount = uiState.activeLists.size,
-                                        itemsToGet = uiState.activeItemsToGet,
-                                        userName = userName,
-                                    )
-                                }
+            if (uiState.hasNoLists) {
+                ShoppingListEmptyState(
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .fillMaxSize(),
+                    onCreateList = { showCreateChooser = true },
+                )
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    TabPillRow(
+                        tabs = listOf(
+                            TabPill(
+                                label = stringResource(R.string.tab_active),
+                                iconInactive = Icons.Outlined.ShoppingCart,
+                                iconActive = Icons.Filled.ShoppingCart,
+                            ),
+                            TabPill(
+                                label = stringResource(R.string.tab_completed),
+                                iconInactive = Icons.Outlined.CheckCircle,
+                                iconActive = Icons.Filled.CheckCircle,
+                            ),
+                        ),
+                        selectedIndex = uiState.selectedTab,
+                        onTabSelected = { viewModel.setSelectedTab(it) },
+                    )
+                    AnimatedContent(
+                        targetState = uiState.selectedTab,
+                        transitionSpec = {
+                            val goingRight = targetState > initialState
+                            val anim = tween<IntOffset>(durationMillis = 280)
+                            val fade = tween<Float>(durationMillis = 280)
+                            if (goingRight) {
+                                (slideInHorizontally(anim) { width -> width } + fadeIn(fade)) togetherWith
+                                    (slideOutHorizontally(anim) { width -> -width } + fadeOut(fade))
+                            } else {
+                                (slideInHorizontally(anim) { width -> -width } + fadeIn(fade)) togetherWith
+                                    (slideOutHorizontally(anim) { width -> width } + fadeOut(fade))
                             }
+                        },
+                        label = "tab-content",
+                    ) { tabIndex ->
+                        val isActiveForPane = tabIndex == 0
+                        val listsForPane =
+                            if (isActiveForPane) uiState.activeLists else uiState.completedLists
+                        val groupedForPane =
+                            if (isActiveForPane) uiState.groupedActive else uiState.groupedCompleted
 
-                            groupedForPane.forEach { (period, periodLists) ->
-                                item(key = "header-$period-$tabIndex") {
-                                    TimePeriodHeader(period = period)
-                                }
-
-                                itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
-                                    val accent = getAccentForList(list.id, isDark)
-
-                                    SwipeableCard(
-                                        onSwipeLeft = {
-                                            // A locked list can't be deleted without the PIN.
-                                            if (list.isLocked) {
-                                                pendingLockedDelete = list
-                                            } else {
-                                                viewModel.deleteList(list.id)
-                                            }
-                                        },
-                                    ) {
-                                        ShoppingListCard(
-                                            list = list,
-                                            accent = accent,
-                                            isCompletedTab = !isActiveForPane,
-                                            onClick = { onNavigateToList(list.id, list.name) },
-                                            onLongPress = { viewModel.onEditListClick(list) },
+                        if (listsForPane.isEmpty()) {
+                            TabEmptyState(isActiveTab = isActiveForPane)
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp),
+                            ) {
+                                // Greeting only on Active tab
+                                if (isActiveForPane) {
+                                    item(key = "greeting") {
+                                        GreetingSection(
+                                            listCount = uiState.activeLists.size,
+                                            itemsToGet = uiState.activeItemsToGet,
+                                            userName = userName,
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
 
-                                item { Spacer(modifier = Modifier.height(4.dp)) }
-                            }
+                                groupedForPane.forEach { (period, periodLists) ->
+                                    item(key = "header-$period-$tabIndex") {
+                                        TimePeriodHeader(period = period)
+                                    }
 
-                            item { Spacer(modifier = Modifier.height(88.dp)) }
+                                    itemsIndexed(periodLists, key = { _, list -> list.id }) { _, list ->
+                                        val accent = getAccentForList(list.id, isDark)
+
+                                        SwipeableCard(
+                                            onSwipeLeft = {
+                                                // A locked list can't be deleted without the PIN.
+                                                if (list.isLocked) {
+                                                    pendingLockedDelete = list
+                                                } else {
+                                                    viewModel.deleteList(list.id)
+                                                }
+                                            },
+                                        ) {
+                                            ShoppingListCard(
+                                                list = list,
+                                                accent = accent,
+                                                isCompletedTab = !isActiveForPane,
+                                                onClick = { onNavigateToList(list.id, list.name) },
+                                                onLongPress = { viewModel.onEditListClick(list) },
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+
+                                    item { Spacer(modifier = Modifier.height(4.dp)) }
+                                }
+
+                                item { Spacer(modifier = Modifier.height(88.dp)) }
+                            }
                         }
                     }
                 }
@@ -449,6 +468,30 @@ fun ShoppingListScreen(
         )
     }
 
+    // Guest lists that just moved into the account: say so once
+    // (docs/technical-decisions/008).
+    if (adoptionNotice > 0) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissAdoptionNotice() },
+            text = {
+                Text(pluralStringResource(R.plurals.adoption_notice, adoptionNotice, adoptionNotice))
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissAdoptionNotice() }) {
+                    Text(stringResource(R.string.adoption_notice_ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    viewModel.dismissAdoptionNotice()
+                    openPrivacyPolicy(context)
+                }) {
+                    Text(stringResource(R.string.adoption_notice_privacy))
+                }
+            },
+        )
+    }
+
     // Profile bottom sheet — only rendered when the user taps the profile icon
     if (showProfileSheet && isLoggedIn) {
         ProfileBottomSheet(
@@ -538,6 +581,31 @@ private fun AccountAction(isLoggedIn: Boolean, userName: String?, onOpenProfile:
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary,
             )
+        }
+    }
+}
+
+@Composable
+private fun SessionExpiredBanner(onSignIn: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(TestTags.SESSION_EXPIRED_BANNER),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.session_expired_banner),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onSignIn) {
+                Text(stringResource(R.string.session_expired_sign_in))
+            }
         }
     }
 }

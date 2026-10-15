@@ -17,6 +17,7 @@ import com.babegetthis.android.core.util.TimePeriod
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
+import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.MainDispatcherRule
 import com.babegetthis.android.testing.TestData
 import io.mockk.coEvery
@@ -54,6 +55,7 @@ class ShoppingListViewModelTest {
     private val authStateManager = mockk<AuthStateManager>(relaxed = true)
     private val authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
     private val listsFlow = MutableStateFlow<List<ShoppingList>>(emptyList())
+    private val ownership = FakeListOwnershipStore()
 
     // Separate from the main dispatcher on purpose. undoDeleteList must run on
     // the application scope, and holding this one back is how we prove it does —
@@ -70,7 +72,15 @@ class ShoppingListViewModelTest {
         every { repository.getAllLists() } returns listsFlow
         every { authStateManager.authState } returns authState
         val vm =
-            ShoppingListViewModel(repository, shareRepository, authStateManager, analytics, markers, applicationScope)
+            ShoppingListViewModel(
+                repository,
+                shareRepository,
+                authStateManager,
+                ownership,
+                analytics,
+                markers,
+                applicationScope,
+            )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect { } }
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             vm.shoppingLists.collect { }
@@ -628,5 +638,34 @@ class ShoppingListViewModelTest {
             analytics.track(AnalyticsEvent.ShareJoinFailed(JoinFailureReason.InvalidCode))
         }
         verify(exactly = 0) { markers.mark(Marker.JoinedList, any()) }
+    }
+
+    // --- signed out by a lost session, and lists moved into the account ----
+    // (docs/technical-decisions/008)
+
+    @Test
+    fun `isSessionExpired follows the auth state`() = runTest {
+        val vm = viewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.isSessionExpired.collect { } }
+
+        authState.value = AuthState.Authenticated("u1")
+        assertFalse(vm.isSessionExpired.value)
+
+        authState.value = AuthState.SessionExpired("u1")
+        assertTrue(vm.isSessionExpired.value)
+
+        authState.value = AuthState.Unauthenticated
+        assertFalse(vm.isSessionExpired.value)
+    }
+
+    @Test
+    fun `the adoption notice shows the claimed count until dismissed`() = runTest {
+        ownership.setAdoptionNotice(3)
+        val vm = viewModel()
+
+        assertEquals(3, vm.adoptionNotice.value)
+
+        vm.dismissAdoptionNotice()
+        assertEquals(0, vm.adoptionNotice.value)
     }
 }
