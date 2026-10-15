@@ -55,10 +55,26 @@ class FakeSharedListRemote : SharedListRemote {
         return listRows.filter { it.id == listId }
     }
 
+    val itemFetchListIds = mutableListOf<String>()
+
     override suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow> {
         if (failFetches) error("network down")
+        itemFetchListIds += listId
         lastItemSince = sinceIso
         return itemRows.filter { it.listId == listId }
+    }
+
+    // Each account-wide item request's list ids, in order. failOnItemBatch
+    // (1-based) makes that one request fail, to test partial passes.
+    val itemBatches = mutableListOf<List<String>>()
+    var failOnItemBatch = -1
+
+    override suspend fun fetchItemsForLists(listIds: List<String>, sinceIso: String?): List<ItemRow> {
+        if (failFetches) error("network down")
+        itemBatches += listIds
+        if (itemBatches.size == failOnItemBatch) error("network down")
+        lastItemSince = sinceIso
+        return itemRows.filter { it.listId in listIds }
     }
 
     override suspend fun fetchAllLists(): List<ListRow> {

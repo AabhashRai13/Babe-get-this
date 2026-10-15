@@ -29,6 +29,10 @@ interface SharedListRemote {
 
     suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow>
 
+    // Account-wide item catch-up: items of these lists changed since
+    // sinceIso (null = everything). The caller keeps listIds short.
+    suspend fun fetchItemsForLists(listIds: List<String>, sinceIso: String?): List<ItemRow>
+
     // Discovery: every list row the current session may see — RLS scopes it
     // to the account's memberships. Signed out → empty.
     suspend fun fetchAllLists(): List<ListRow>

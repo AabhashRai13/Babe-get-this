@@ -76,7 +76,7 @@ class SyncTrigger(
             // Results intentionally dropped: failures stay queued (pendingSync
             // flags / sync points untouched) and the next kick retries.
             engine.push()
-            engine.catchUpAllShared()
+            engine.catchUpAccount()
         }
     }
 }

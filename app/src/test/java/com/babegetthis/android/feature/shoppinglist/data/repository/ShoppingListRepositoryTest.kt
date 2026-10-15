@@ -67,6 +67,16 @@ class ShoppingListRepositoryTest {
     }
 
     @Test
+    fun `isAccountList tells account lists from guest lists`() = runTest {
+        seed("guest")
+        seed("mine", accountId = "u1")
+
+        assertFalse(repository.isAccountList("guest"))
+        assertTrue(repository.isAccountList("mine"))
+        assertFalse(repository.isAccountList("missing"))
+    }
+
+    @Test
     fun `a guest's new list has no owner and is not queued`() = runTest {
         val id = repository.createList("Groceries").data()
 

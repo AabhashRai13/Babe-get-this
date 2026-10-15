@@ -54,6 +54,10 @@ class ShoppingListRepository @Inject constructor(
     // Every write to a list that has an owner goes through sync, shared or not.
     private suspend fun isSynced(listId: String): Boolean = shoppingListDao.getListRaw(listId)?.accountId != null
 
+    // An account list — the items screen catches it up once when opened, since
+    // the account's other phones may have changed it.
+    suspend fun isAccountList(listId: String): Boolean = isSynced(listId)
+
     fun getListById(listId: String): Flow<ShoppingList?> = shoppingListDao.getListById(listId).map { it?.toDomain() }
 
     // Live share state of a list — null while it's local-only (and again if it

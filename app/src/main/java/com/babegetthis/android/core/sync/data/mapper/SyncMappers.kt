@@ -36,17 +36,22 @@ fun ShoppingItemEntity.toRow(): ItemRow = ItemRow(
 // carries the SERVER clock in millis — that's what later LWW comparisons run
 // against. `local` is the row currently in Room (any state, may be null):
 // device-local concerns (createdAt ordering, the PIN lock) survive from it.
-fun ListRow.toEntity(local: ShoppingListEntity?): ShoppingListEntity {
+// A list row from the server is the signed-in account's and is on the server
+// by definition; a list this device had locked before sign-out evicted it
+// comes back locked (`lockedIds`, docs/technical-decisions/008).
+fun ListRow.toEntity(local: ShoppingListEntity?, accountId: String, lockedIds: Set<String>): ShoppingListEntity {
     val serverMs = requireNotNull(updatedAt) { "server rows always carry updated_at" }.isoToMillis()
     return ShoppingListEntity(
         id = id,
         name = name,
         createdAt = local?.createdAt ?: serverMs,
         updatedAt = serverMs,
-        isLocked = local?.isLocked ?: false, // per-device, never synced
+        isLocked = local?.isLocked ?: (id in lockedIds), // per-device, never synced
         shareCode = shareCode,
         deletedAt = deletedAt?.isoToMillis(),
         pendingSync = false,
+        accountId = accountId,
+        onServer = true,
     )
 }
 

@@ -376,25 +376,6 @@ class SyncEngineTest {
         assertEquals(after, dbRule.itemDao.getItemRaw("item-1"))
     }
 
-    // --- catchUpAllShared ---------------------------------------------------
-
-    @Test
-    fun `catchUpAllShared discovers server lists this device has never seen`() = runTest {
-        // Nothing local at all — a fresh sign-in on a new device.
-        remote.listRows = listOf(listRow(id = "discovered-1"))
-        remote.itemRows = listOf(itemRow(id = "item-9", listId = "discovered-1"))
-
-        val result = engine.catchUpAllShared()
-
-        assertTrue(result is Result.Success)
-        assertEquals("Groceries", dbRule.listDao.getListRaw("discovered-1")!!.name)
-        assertEquals(
-            "items ride in via the per-list catch-up",
-            "Milk",
-            dbRule.itemDao.getItemRaw("item-9")!!.name,
-        )
-    }
-
     @Test
     fun `fullCatchUp drops the high-water mark and pulls from scratch`() = runTest {
         syncPoints.set("list-1", t12) // already current — plain catchUp would no-op
@@ -437,18 +418,5 @@ class SyncEngineTest {
         engine.evictSharedReplicas()
 
         assertNull(dbRule.listDao.getListRaw("shared-1"))
-    }
-
-    @Test
-    fun `catchUpAllShared visits every live shared list and nothing else`() = runTest {
-        dbRule.listDao.insertList(listEntity(id = "shared-1"))
-        dbRule.listDao.insertList(listEntity(id = "shared-2"))
-        dbRule.listDao.insertList(listEntity(id = "local-1", shareCode = null))
-        dbRule.listDao.insertList(listEntity(id = "dead-1", deletedAt = 9_000L))
-
-        val result = engine.catchUpAllShared()
-
-        assertTrue(result is Result.Success)
-        assertEquals(setOf("shared-1", "shared-2"), remote.fetchedListIds.toSet())
     }
 }

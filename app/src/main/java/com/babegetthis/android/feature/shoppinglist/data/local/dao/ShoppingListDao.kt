@@ -157,8 +157,13 @@ interface ShoppingListDao {
     @Query("SELECT * FROM shopping_lists WHERE id = :listId")
     suspend fun getListRaw(listId: String): ShoppingListEntity?
 
-    @Query("SELECT id FROM shopping_lists WHERE shareCode IS NOT NULL AND deletedAt IS NULL")
-    suspend fun getSharedListIds(): List<String>
+    // The account's live lists — what account-wide catch-up already knows.
+    @Query("SELECT id FROM shopping_lists WHERE accountId = :accountId AND deletedAt IS NULL")
+    suspend fun getAccountListIds(accountId: String): List<String>
+
+    // Give an ownerless replica to the account the server just vouched for.
+    @Query("UPDATE shopping_lists SET accountId = :accountId, onServer = 1 WHERE id = :id AND accountId IS NULL")
+    suspend fun claimList(id: String, accountId: String)
 
     // Telemetry-only read — see ShoppingItemDao.countPendingSync for why this
     // is a COUNT rather than the size of getPendingAccountLists().

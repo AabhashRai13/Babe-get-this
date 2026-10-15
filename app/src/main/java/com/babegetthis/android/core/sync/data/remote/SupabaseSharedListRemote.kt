@@ -57,6 +57,14 @@ class SupabaseSharedListRemote(private val client: SupabaseClient) : SharedListR
         }
     }.decodeList<ItemRow>()
 
+    override suspend fun fetchItemsForLists(listIds: List<String>, sinceIso: String?): List<ItemRow> =
+        client.from("items").select {
+            filter {
+                isIn("list_id", listIds)
+                if (sinceIso != null) gte("updated_at", sinceIso)
+            }
+        }.decodeList<ItemRow>()
+
     override suspend fun fetchAllLists(): List<ListRow> = client.from("lists").select().decodeList<ListRow>()
 
     override suspend fun joinListByCode(code: String): String? = try {

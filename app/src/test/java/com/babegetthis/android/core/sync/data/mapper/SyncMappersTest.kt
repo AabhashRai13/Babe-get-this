@@ -98,13 +98,33 @@ class SyncMappersTest {
             name = "Groceries",
             shareCode = "ABC123",
             updatedAt = iso,
-        ).toEntity(local = null)
+        ).toEntity(local = null, accountId = "user-1", lockedIds = emptySet())
 
         assertEquals(ms, entity.updatedAt)
         assertEquals("no local row → server time becomes createdAt", ms, entity.createdAt)
         assertFalse(entity.isLocked)
         assertFalse(entity.pendingSync)
         assertEquals("ABC123", entity.shareCode)
+    }
+
+    // Whatever the server sends is the signed-in account's list, and it is
+    // on the server by definition (docs/technical-decisions/008).
+    @Test
+    fun `a server row becomes an owned, on-server entity`() {
+        val entity = ListRow(id = "list-1", name = "Groceries", updatedAt = iso)
+            .toEntity(local = null, accountId = "user-1", lockedIds = emptySet())
+
+        assertEquals("user-1", entity.accountId)
+        assertTrue(entity.onServer)
+        assertEquals(null, entity.shareCode)
+    }
+
+    @Test
+    fun `a returning list is re-locked if this device had locked it`() {
+        val row = ListRow(id = "list-1", name = "Groceries", updatedAt = iso)
+
+        assertTrue(row.toEntity(local = null, accountId = "user-1", lockedIds = setOf("list-1")).isLocked)
+        assertFalse(row.toEntity(local = null, accountId = "user-1", lockedIds = setOf("other")).isLocked)
     }
 
     @Test
@@ -114,7 +134,7 @@ class SyncMappersTest {
             name = "Renamed",
             shareCode = "ABC123",
             updatedAt = iso,
-        ).toEntity(local = listEntity())
+        ).toEntity(local = listEntity(), accountId = "user-1", lockedIds = emptySet())
 
         assertEquals("Renamed", entity.name)
         assertEquals("createdAt preserved", 1L, entity.createdAt)
@@ -144,7 +164,7 @@ class SyncMappersTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             ListRow(id = "l", name = "n", shareCode = "c", updatedAt = null)
-                .toEntity(local = null)
+                .toEntity(local = null, accountId = "user-1", lockedIds = emptySet())
         }
     }
 }

@@ -108,15 +108,17 @@ class SyncEngine(
         AuthState.Loading -> false
     }
 
-    // Fetch everything changed since the last sync point and land it in Room.
-    // This is the ONE apply path: realtime events don't carry data anywhere —
-    // they just trigger this. Idempotent by construction, so gte-refetch of
-    // the newest known row is harmless.
+    // Fetch everything changed in one list since its sync point and land it in
+    // Room. Used for an open list (and on every realtime event of a shared
+    // one): realtime events don't carry data anywhere — they just trigger
+    // this. Idempotent by construction, so gte-refetch of the newest known row
+    // is harmless. No live session → nothing to ask.
     suspend fun catchUp(listId: String): Result<Unit> = safeCall {
+        val userId = currentUserId() ?: return@safeCall
         val since = syncPoints.get(listId)
         val listRows = remote.fetchList(listId, since)
         val itemRows = remote.fetchItems(listId, since)
-        apply(listRows, itemRows)
+        apply(userId, listRows, itemRows)
         // Advance the high-water mark only AFTER a full successful apply — a
         // failure above leaves it untouched and the next catch-up refetches.
         val newest = (listRows.mapNotNull { it.updatedAt } + itemRows.mapNotNull { it.updatedAt })
@@ -127,10 +129,6 @@ class SyncEngine(
         crashReporter.breadcrumb("sync: applied ${'$'}{listRows.size} lists, ${'$'}{itemRows.size} items")
     }
 
-    // Discovery-first: the server's RLS-scoped view IS the account's list set
-    // (see docs/technical-decisions/004). A fresh sign-in — or a brand-new
-    // device — materialises its shared replicas right here; signed out, the
-    // fetch comes back empty and this degrades to a no-op.
     // Full re-pull of one list: drop the high-water mark, then catch up from
     // scratch. join() uses this so re-joining REFRESHES the replica (spec:
     // "joining twice is idempotent — the existing replica is refreshed") —
@@ -142,16 +140,35 @@ class SyncEngine(
         return catchUp(listId)
     }
 
-    suspend fun catchUpAllShared(): Result<Unit> = safeCall {
+    // The whole account in a handful of requests — every account list syncs
+    // now, so two requests per list on every app open would not scale
+    // (docs/technical-decisions/008).
+    //
+    // Discovery-first: the server's RLS-scoped view IS the account's list set.
+    // It fetches every list row, not "changed since": joining a list adds a
+    // membership row without touching the list's updated_at, so a since-filter
+    // would never discover it. Lists new to this phone get their full item
+    // history; the rest get the items changed since ONE account-wide sync
+    // point, in batches that keep the request URL short. The point moves only
+    // after every batch landed, so a failed pass is simply redone.
+    suspend fun catchUpAccount(): Result<Unit> = safeCall {
+        val userId = currentUserId() ?: return@safeCall
+        val known = listDao.getAccountListIds(userId).toSet()
         val discovered = remote.fetchAllLists()
-        apply(discovered, emptyList())
-        // Union with locally-known shared lists so a temporary server hiccup
-        // (empty discovery) still refreshes what we already have.
-        // Per-list failures are Result-wrapped and deliberately not
-        // propagated: one unreachable list must not block the others, and the
-        // next kick retries everything anyway.
-        (discovered.map { it.id } + listDao.getSharedListIds()).distinct()
-            .forEach { catchUp(it) }
+        apply(userId, discovered, emptyList())
+        discovered.filter { it.id !in known && it.deletedAt == null }
+            .forEach { apply(userId, emptyList(), remote.fetchItems(it.id, sinceIso = null)) }
+
+        val since = syncPoints.get(ACCOUNT_SYNC_POINT)
+        var newest: String? = null
+        known.toList().chunked(ITEM_BATCH_SIZE).forEach { batch ->
+            val rows = remote.fetchItemsForLists(batch, since)
+            apply(userId, emptyList(), rows)
+            newest = (listOfNotNull(newest) + rows.mapNotNull { it.updatedAt }).maxOrNull()
+        }
+        newest?.let { syncPoints.set(ACCOUNT_SYNC_POINT, it) }
+        // Counts only, like every other sync breadcrumb.
+        crashReporter.breadcrumb("sync: account catch-up over ${known.size} lists, ${discovered.size} discovered")
     }
 
     // Explicit sign-out (and account deletion) ONLY — never session loss:
@@ -168,11 +185,17 @@ class SyncEngine(
         crashReporter.breadcrumb("sync: evicted shared replicas")
     }
 
-    private suspend fun apply(listRows: List<ListRow>, itemRows: List<ItemRow>) {
+    private suspend fun apply(userId: String, listRows: List<ListRow>, itemRows: List<ItemRow>) {
+        val lockedIds = ownership.lockedListIds()
         for (row in listRows) {
             val local = listDao.getListRaw(row.id)
+            // A replica with no owner (its session was lost before lists had
+            // owners) is claimed the moment the server returns it for this
+            // account — that answer is the proof of membership. Even when the
+            // local row is dirty and the incoming data loses below.
+            if (local != null && local.accountId == null) listDao.claimList(row.id, userId)
             if (shouldSkip(local?.pendingSync, local?.updatedAt, row.updatedAt)) continue
-            val entity = row.toEntity(local)
+            val entity = row.toEntity(local, accountId = userId, lockedIds = lockedIds)
             // UPDATE, not insert-REPLACE, when the row already exists: REPLACE is
             // DELETE + INSERT in SQLite, which fires shopping_items' ON DELETE
             // CASCADE and hard-deletes every item of the list. A single renamed
@@ -200,5 +223,15 @@ class SyncEngine(
         if (incomingIso == null) return true // defensive: server rows always carry it
         if (localDirty == null || localUpdatedAt == null) return false // no local row → apply
         return localDirty || incomingIso.isoToMillis() < localUpdatedAt
+    }
+
+    companion object {
+        // Key of the account-wide high-water mark in SyncPointStore. Every other
+        // key is a list id (a UUID), so this can't collide.
+        const val ACCOUNT_SYNC_POINT = "account"
+
+        // List ids per account-wide item request: keeps the URL well inside
+        // PostgREST's limits (50 UUIDs ≈ 1.9 KB).
+        private const val ITEM_BATCH_SIZE = 50
     }
 }
