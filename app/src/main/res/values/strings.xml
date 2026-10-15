@@ -73,6 +73,11 @@
     <string name="shopping_list_edit_title">Rename List</string>
 
     <!-- Auth Screens -->
+    <!-- Welcome: first launch, signed out (docs/technical-decisions/008) -->
+    <string name="welcome_sign_in">Sign in</string>
+    <string name="welcome_sign_in_body">Save your lists to your account, share them, and add items by voice.</string>
+    <string name="welcome_continue_as_guest">Continue as guest</string>
+    <string name="welcome_guest_body">Your lists stay on this phone only.</string>
     <string name="auth_welcome">Welcome to</string>
     <string name="auth_login_subtitle">Sign in to sync your lists with your partner</string>
     <string name="auth_register_subtitle">Create an account to start sharing lists</string>

@@ -20,6 +20,7 @@ import com.babegetthis.android.core.auth.ui.RegisterScreen
 import com.babegetthis.android.feature.settings.ui.SettingsScreen
 import com.babegetthis.android.feature.shoppingitems.ui.ShoppingItemsScreen
 import com.babegetthis.android.feature.shoppinglist.ui.ShoppingListScreen
+import com.babegetthis.android.feature.welcome.ui.WelcomeScreen
 
 object Routes {
     const val LOGIN = "login"
@@ -28,22 +29,39 @@ object Routes {
     const val SHOPPING_LIST = "shopping_list"
     const val SHOPPING_ITEMS = "shopping_items/{listId}/{listName}"
     const val SETTINGS = "settings"
+    const val WELCOME = "welcome"
 
     fun shoppingItems(listId: String, listName: String): String = "shopping_items/$listId/$listName"
 }
 
-// No login wall — the app always starts at the shopping list screen.
-// Auth is optional: users can create lists and items fully offline.
-// Login/register are reachable on demand (e.g., when tapping Share).
-// After login, popBackStack() returns the user to where they were.
+// No login wall. A signed-out user who hasn't chosen yet starts on Welcome
+// ("Sign in" / "Continue as guest" — docs/technical-decisions/008); everyone
+// else starts at the shopping list screen. Guests create lists fully offline.
+// Login/register are also reachable on demand (e.g., when tapping Share), and
+// after login the user returns to where they were.
 // This is like GoRouter in Flutter, but without a redirect guard.
 
 @Composable
-fun BgtNavGraph(authStateManager: AuthStateManager, navController: NavHostController = rememberNavController()) {
+fun BgtNavGraph(
+    authStateManager: AuthStateManager,
+    navController: NavHostController = rememberNavController(),
+    startAtWelcome: Boolean = false,
+) {
     NavHost(
         navController = navController,
-        startDestination = Routes.SHOPPING_LIST,
+        startDestination = if (startAtWelcome) Routes.WELCOME else Routes.SHOPPING_LIST,
     ) {
+        composable(Routes.WELCOME) {
+            WelcomeScreen(
+                onSignIn = { navController.navigate(Routes.LOGIN) },
+                onContinueAsGuest = {
+                    navController.navigate(Routes.SHOPPING_LIST) {
+                        popUpTo(Routes.WELCOME) { inclusive = true }
+                    }
+                },
+            )
+        }
+
         // -- Main app screens (no auth required) --
         composable(Routes.SHOPPING_LIST) {
             ShoppingListScreen(
@@ -128,14 +146,10 @@ fun BgtNavGraph(authStateManager: AuthStateManager, navController: NavHostContro
                 onNavigateToForgotPassword = {
                     navController.navigate(Routes.FORGOT_PASSWORD)
                 },
-                // Close/back and success both return to the app. Anchored to the
-                // start destination so it works no matter how auth was entered.
-                onNavigateBack = {
-                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
-                },
-                onLoginSuccess = {
-                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
-                },
+                // Close/back returns to wherever auth was opened from; success
+                // lands on the lists. See closeAuth / leaveAuth below.
+                onNavigateBack = { navController.closeAuth() },
+                onLoginSuccess = { navController.leaveAuth() },
             )
         }
 
@@ -144,9 +158,7 @@ fun BgtNavGraph(authStateManager: AuthStateManager, navController: NavHostContro
                 // Back returns to Login (it's stacked on top of it).
                 onNavigateBack = { navController.popBackStack() },
                 // A successful reset signs the user in — leave auth entirely.
-                onResetSuccess = {
-                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
-                },
+                onResetSuccess = { navController.leaveAuth() },
             )
         }
 
@@ -158,15 +170,28 @@ fun BgtNavGraph(authStateManager: AuthStateManager, navController: NavHostContro
                         popUpTo(Routes.REGISTER) { inclusive = true }
                     }
                 },
-                // Close/back and success both return to the app. Anchored to the
-                // start destination so it works no matter how auth was entered.
-                onNavigateBack = {
-                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
-                },
-                onRegisterSuccess = {
-                    navController.popBackStack(Routes.SHOPPING_LIST, inclusive = false)
-                },
+                // Close/back returns to wherever auth was opened from; success
+                // lands on the lists. See closeAuth / leaveAuth below.
+                onNavigateBack = { navController.closeAuth() },
+                onRegisterSuccess = { navController.leaveAuth() },
             )
         }
+    }
+}
+
+// Auth can be opened from the lists (Share, voice, the profile button) or from
+// Welcome, where the lists screen is not on the back stack at all — so a plain
+// popBackStack(SHOPPING_LIST) would do nothing and strand the user on Login.
+
+// Close/back: return to the lists if they're underneath, else to whatever
+// opened auth (Welcome).
+private fun NavHostController.closeAuth() {
+    if (!popBackStack(Routes.SHOPPING_LIST, inclusive = false)) popBackStack()
+}
+
+// Signed in: land on the lists, removing Welcome if that's where auth started.
+private fun NavHostController.leaveAuth() {
+    if (!popBackStack(Routes.SHOPPING_LIST, inclusive = false)) {
+        navigate(Routes.SHOPPING_LIST) { popUpTo(Routes.WELCOME) { inclusive = true } }
     }
 }

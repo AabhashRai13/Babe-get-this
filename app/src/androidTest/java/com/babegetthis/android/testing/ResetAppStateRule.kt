@@ -31,6 +31,8 @@ class ResetAppStateRule(
     private val database: () -> AppDatabase,
     private val authStateManager: () -> AuthStateManager,
     private val pinStore: () -> PinStore,
+    // Journeys start on the lists screen unless they are about Welcome itself.
+    private val welcomeDone: Boolean = true,
 ) : ExternalResource() {
 
     override fun before() {
@@ -42,6 +44,15 @@ class ResetAppStateRule(
         authStateManager().logout()
         pinStore().clearAll()
         clearTelemetryPrefs()
+        setWelcomeDone()
+    }
+
+    // A fresh test install would otherwise open on the Welcome screen
+    // (WelcomeRepository): its first-launch flag lives in its own prefs file.
+    private fun setWelcomeDone() {
+        ApplicationProvider.getApplicationContext<Context>()
+            .getSharedPreferences("welcome", Context.MODE_PRIVATE)
+            .edit().putBoolean("welcome_done", welcomeDone).commit()
     }
 
     // TelemetryMarkers records once-per-user and once-per-list facts in plain

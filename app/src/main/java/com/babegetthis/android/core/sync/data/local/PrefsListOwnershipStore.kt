@@ -1,6 +1,7 @@
 package com.babegetthis.android.core.sync.data.local
 
 import android.content.Context
+import androidx.core.content.edit
 import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,25 +17,25 @@ class PrefsListOwnershipStore(context: Context) : ListOwnershipStore {
     override val adoptionNotice: StateFlow<Int> = notice.asStateFlow()
 
     override fun setAdoptionNotice(count: Int) {
-        prefs.edit().putInt(KEY_ADOPTION_NOTICE, count).apply()
+        prefs.edit { putInt(KEY_ADOPTION_NOTICE, count) }
         notice.value = count
     }
 
     override fun isAccountListsMigrated(): Boolean = prefs.getBoolean(KEY_MIGRATED, false)
 
     override fun markAccountListsMigrated() {
-        prefs.edit().putBoolean(KEY_MIGRATED, true).apply()
+        prefs.edit { putBoolean(KEY_MIGRATED, true) }
     }
 
     override fun lockedListIds(): Set<String> = prefs.getStringSet(KEY_LOCKED, emptySet()).orEmpty().toSet()
 
     override fun rememberLock(listId: String, locked: Boolean) {
         val ids = lockedListIds().let { if (locked) it + listId else it - listId }
-        prefs.edit().putStringSet(KEY_LOCKED, ids).apply()
+        prefs.edit { putStringSet(KEY_LOCKED, ids) }
     }
 
     override fun forgetAllLocks() {
-        prefs.edit().remove(KEY_LOCKED).apply()
+        prefs.edit { remove(KEY_LOCKED) }
     }
 
     private companion object {

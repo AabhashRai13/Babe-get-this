@@ -86,6 +86,11 @@ sealed interface AnalyticsEvent {
     // Question: does an install become a user, and how fast?
     // The "first" events fire once per user, guarded by a persisted marker.
 
+    // The first-launch Welcome screen (docs/technical-decisions/008).
+    // Question: what share of new installs try the app as a guest versus
+    // signing in? Guests keep lists on one phone; accounts sync and share.
+    data class WelcomeChoiceMade(val choice: WelcomeChoice) : AnalyticsEvent
+
     data object AccountRegistered : AnalyticsEvent
 
     data object AccountLoggedIn : AnalyticsEvent
@@ -164,6 +169,12 @@ enum class VoiceFailureReason(val value: String) {
             else -> Unknown
         }
     }
+}
+
+// Which button a new install picked on the Welcome screen.
+enum class WelcomeChoice(val value: String) {
+    Guest("guest"),
+    SignIn("sign_in"),
 }
 
 // Why joining a shared list failed. Mirrors what ShareRepository.join can

@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.onboarding.data.repository.WelcomeRepository
 import com.babegetthis.android.core.telemetry.TelemetryContext
 import com.babegetthis.android.core.telemetry.model.Screen
 import com.babegetthis.android.core.update.InAppUpdateManager
@@ -40,6 +41,8 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var telemetryContext: TelemetryContext
 
+    @Inject lateinit var welcomeRepository: WelcomeRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super.onCreate, deliberately: this is what swaps the launch
         // theme (Theme.BabeGetThis.Starting) for the app theme. Called any later
@@ -50,6 +53,7 @@ class MainActivity : ComponentActivity() {
 
         // Check if user has a saved token — this determines the start screen
         authStateManager.initialize()
+        val startAtWelcome = welcomeRepository.shouldShowWelcome(authStateManager.authState.value)
 
         setContent {
             BabeGetThisTheme {
@@ -74,6 +78,7 @@ class MainActivity : ComponentActivity() {
                     BgtNavGraph(
                         authStateManager = authStateManager,
                         navController = navController,
+                        startAtWelcome = startAtWelcome,
                     )
 
                     val snackbarHostState = remember { SnackbarHostState() }
