@@ -99,6 +99,15 @@ code, and typed items reach parity with voice.
 
 ## v2 roadmap
 
+- [ ] **Got This** — a per-person record of what you've already bought, built
+  from the items you tick and the lists you finish. Two parts: "you already
+  bought this" when re-adding something bought recently (how recently depends
+  on the item — bananas go off, cleaning products don't), and "you're probably
+  running out of eggs" for things you buy regularly. Per person, not per shared
+  list — list members aren't necessarily one household
+  (docs/technical-decisions/008, D5). Needs account-owned lists (done, 008) and
+  "picked up by" on shared-list items (docs/tradeoff/001). Replaces the
+  "Store room" idea below.
 - [ ] Shareable real time list — built on `feat/real_time_list_sharing`; follow-ups:
   - [ ] **Explainer dialog for shared-list eviction** — a small visual/dialog telling the
     user "shared lists are only accessible while you're logged in — this protects your

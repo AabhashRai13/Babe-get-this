@@ -1,10 +1,14 @@
 # Privacy Policy
 
+<!-- Revised 2026-10-15 for account-owned lists (docs/technical-decisions/008).
+     Publish together with the app release that ships them, and set the
+     effective date below to that release date. -->
+
 Effective date: August 18, 2026
 
 This Privacy Policy describes how Babe, Get This ("the app", "we", "us") collects, uses, and protects your information when you use our Android application and the website babegetthis.com.
 
-The short version: lists you keep to yourself stay on your device and are never uploaded. When you share a list using a share code, that list (and its items) is stored on our server so the people you share with can see and edit it. Sharing is the only thing that uploads a list — if you never share, nothing about your lists leaves your phone. No ads and no data sales. We do use Google's analytics and crash reporting to see which features get used and to find bugs — it never receives your list contents, item names, or recordings, and you can turn both off in Settings.
+The short version: lists you make as a guest, without signing in, stay on your device and are never uploaded. When you're signed in, your lists are saved to your account on our server, so they're backed up, work on any phone you sign in on, and can be shared with others using a share code — a copy also stays on your phone so the app works offline. No ads and no data sales. We do use Google's analytics and crash reporting to see which features get used and to find bugs — it never receives your list contents, item names, or recordings, and you can turn both off in Settings.
 
 ## 1. Information We Collect
 
@@ -23,9 +27,10 @@ The short version: lists you keep to yourself stay on your device and are never 
 
 * Feedback you send — if you submit feedback through the app or email us, we receive the message you write (and your email address if you contact us by email). We use it only to improve the app and respond to you.
 
-**Shared lists**
+**Your lists (when signed in)**
 
-* When you share a list, we store on our server: the list name, and each item's name, quantity, category, shop, note, and checked/unchecked state. We also store who created the list and who has joined it (linked to accounts). We do not record who added, edited, or checked off each item — there is no per-edit history.
+* When you're signed in, we store each of your lists on our server: the list name, and each item's name, quantity, category, shop, note, and checked/unchecked state, plus which account created it. When you share a list, we also store who has joined it (linked to accounts). We do not record who added, edited, or checked off each item — there is no per-edit history.
+* Lists you make as a guest, without signing in, are never uploaded. If you later sign in on that phone, they move into your account and are stored as above — the app tells you when that happens.
 
 **Voice recordings**
 
@@ -49,7 +54,7 @@ The short version: lists you keep to yourself stay on your device and are never 
 
 ## 2. What We Do NOT Collect
 
-* Lists you never share — these stay entirely on your device.
+* Lists you make as a guest — these stay entirely on your device.
 * No advertising identifiers, and no ads of any kind.
 * No advertising or tracking SDKs, and no cross-app or cross-site tracking.
 * No analytics on what is in your lists — see "Usage analytics and crash reports" above for exactly what is collected.
@@ -71,7 +76,7 @@ The short version: lists you keep to yourself stay on your device and are never 
 
 We use a small number of infrastructure providers to run the app. They process data on our behalf and are not permitted to use it for their own purposes:
 
-* Supabase — accounts, and storage/sync of shared lists. See the Supabase Privacy Policy: https://supabase.com/privacy
+* Supabase — accounts, and storage/sync of signed-in users' lists. See the Supabase Privacy Policy: https://supabase.com/privacy
 * Railway — hosts our backend and the voice endpoint. See the Railway Privacy Policy: https://railway.com/legal/privacy
 * Groq — transcribes voice recordings to text. See the Groq Privacy Policy: https://groq.com/privacy-policy
 * Anthropic — turns the transcript into a list of items. See the Anthropic Privacy Policy: https://www.anthropic.com/legal/privacy
@@ -79,7 +84,7 @@ We use a small number of infrastructure providers to run the app. They process d
 
 ## 5. Data Storage and Security
 
-* Lists you don't share are stored only locally on your device — we have no copy of them. Shared lists are stored on our server.
+* Lists you make as a guest are stored only on your device — we have no copy of them. When you're signed in, your lists are stored on our server so they sync across your devices, with a copy on your phone so the app works offline. Signing out removes your account's lists from that phone; they stay in your account.
 * All communication between the app and our servers is encrypted in transit using HTTPS/TLS.
 * Access to production data is restricted, and passwords are stored using industry-standard hashing.
 * No method of transmission or storage is 100% secure, but we work to protect your information using reasonable technical and organizational measures.
@@ -95,15 +100,15 @@ Anyone who has a list's share code can view and edit that list. Treat the code l
 * Waitlist emails are deleted within 30 days of the launch email being sent, or sooner if you ask us to remove you.
 * Voice recordings are processed transiently for transcription and are not retained as a voice archive.
 * Usage analytics are retained by Google Analytics for 14 months and then deleted automatically. Crash reports are retained for approximately 90 days.
-* Shared lists are kept on our server while at least one member still has the list. Deleted items and lists are marked deleted but their rows are retained — this is how the deletion reaches other members' devices.
-* When you delete your account, your account record is permanently deleted from our systems within 30 days, except where a longer retention period is required by law. A list you shared stays available to the other members who joined it, but is no longer linked to you. Local lists are removed when you uninstall the app or clear its data.
+* Your lists are kept on our server while your account exists — and a shared list, while at least one member still has it. Deleted items and lists are marked deleted but their rows are retained — this is how the deletion reaches your other devices and other members.
+* When you delete your account, your account record and the lists no one else has joined are permanently deleted from our systems within 30 days, except where a longer retention period is required by law. A list you shared stays available to the other members who joined it, but is no longer linked to you. Your lists are also removed from your phone when you delete your account. Guest lists are removed when you uninstall the app or clear its data.
 * Because analytics and crash records are tied to a random identifier rather than to your name or email, deleting your account does not retroactively erase past records — but from that point the identifier no longer corresponds to any account. If you want those past records deleted as well, email us and we will do it.
 
 ## 7. Your Rights and Choices
 
 Depending on where you live, you may have rights to access, correct, export, or delete your personal data, and to object to or restrict certain processing. You can exercise these rights at any time:
 
-* Access or correction — your lists (local and shared) are directly visible and editable in the app. For account data, email us.
+* Access or correction — your lists (guest, account and shared) are directly visible and editable in the app. For account data, email us.
 * Deletion — see our account deletion page at https://babegetthis.com/delete-account.html for step-by-step instructions.
 * Analytics and crash reporting — turn either off at any time in the app under Settings > Privacy. No account needed, and it takes effect immediately.
 * Anything else — email us at contactus@babegetthis.com and we will respond within 30 days.
