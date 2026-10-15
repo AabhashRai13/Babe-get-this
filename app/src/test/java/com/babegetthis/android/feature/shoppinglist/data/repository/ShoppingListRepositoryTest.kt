@@ -1,9 +1,11 @@
 package com.babegetthis.android.feature.shoppinglist.data.repository
 
+import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
+import com.babegetthis.android.testing.authStateFor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -22,8 +24,90 @@ class ShoppingListRepositoryTest {
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
     private var kicks = 0
-    private val repository by lazy {
-        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao) { kicks++ }
+
+    // Everything below the ownership section runs as a guest, which is how
+    // these tests behaved before lists had owners.
+    private val repository by lazy { repositoryAs(authStateFor(null)) }
+
+    private fun repositoryAs(auth: AuthStateManager) =
+        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao, auth) { kicks++ }
+
+    private suspend fun seed(id: String, accountId: String? = null, shareCode: String? = null) =
+        dbRule.listDao.insertList(TestData.listEntity(id = id).copy(accountId = accountId, shareCode = shareCode))
+
+    // --- ownership: who sees which lists (docs/technical-decisions/008) ---
+
+    @Test
+    fun `guests see only guest lists`() = runTest {
+        seed("guest")
+        seed("mine", accountId = "u1")
+        // A shared replica whose owner was lost before ownership existed.
+        seed("orphan", shareCode = "ABC234")
+
+        assertEquals(listOf("guest"), repository.getAllLists().first().map { it.id })
+    }
+
+    @Test
+    fun `a signed-in user sees only their account's lists`() = runTest {
+        seed("guest")
+        seed("mine", accountId = "u1")
+        seed("theirs", accountId = "u2")
+
+        assertEquals(listOf("mine"), repositoryAs(authStateFor("u1")).getAllLists().first().map { it.id })
+    }
+
+    @Test
+    fun `an expired session still sees the account's lists`() = runTest {
+        seed("guest")
+        seed("mine", accountId = "u1")
+
+        val lists = repositoryAs(authStateFor("u1", expired = true)).getAllLists().first()
+
+        assertEquals(listOf("mine"), lists.map { it.id })
+    }
+
+    @Test
+    fun `a guest's new list has no owner and is not queued`() = runTest {
+        val id = repository.createList("Groceries").data()
+
+        val row = dbRule.listDao.getListRaw(id)!!
+        assertNull(row.accountId)
+        assertFalse(row.pendingSync)
+        assertEquals(0, kicks)
+    }
+
+    @Test
+    fun `a signed-in user's new list is owned and queued`() = runTest {
+        val id = repositoryAs(authStateFor("u1")).createList("Groceries").data()
+
+        val row = dbRule.listDao.getListRaw(id)!!
+        assertEquals("u1", row.accountId)
+        assertTrue(row.pendingSync)
+        assertEquals(1, kicks)
+    }
+
+    // In a store with no signal and a dead token: the list must still belong to
+    // the account and wait in the outbox for the next sign-in.
+    @Test
+    fun `a voice list made while expired is owned and queued with its items`() = runTest {
+        val repo = repositoryAs(authStateFor("u1", expired = true))
+
+        val id = repo.createListWithItems("Shop", listOf(TestData.draft(name = "Milk"))).data()
+
+        val row = dbRule.listDao.getListRaw(id)!!
+        assertEquals("u1", row.accountId)
+        assertTrue(row.pendingSync)
+        assertTrue(dbRule.itemDao.getItemsByListIdOnce(id).single().pendingSync)
+        assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `a guest's voice list and its items are not queued`() = runTest {
+        val id = repository.createListWithItems("Shop", listOf(TestData.draft(name = "Milk"))).data()
+
+        assertNull(dbRule.listDao.getListRaw(id)!!.accountId)
+        assertFalse(dbRule.itemDao.getItemsByListIdOnce(id).single().pendingSync)
+        assertEquals(0, kicks)
     }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data

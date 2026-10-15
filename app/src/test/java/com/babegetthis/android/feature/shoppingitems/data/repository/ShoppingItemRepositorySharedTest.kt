@@ -26,13 +26,16 @@ class ShoppingItemRepositorySharedTest {
         ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao) { kicks++ }
     }
 
-    private suspend fun seedList(shareCode: String? = "ABC234") = dbRule.listDao.insertList(
+    // Defaults to a shared list of account u1. Sync is decided by the owner
+    // now, not the share code (docs/technical-decisions/008).
+    private suspend fun seedList(shareCode: String? = "ABC234", accountId: String? = "u1") = dbRule.listDao.insertList(
         ShoppingListEntity(
             id = "list-1",
             name = "Groceries",
             createdAt = 1L,
             updatedAt = 2L,
             shareCode = shareCode,
+            accountId = accountId,
         ),
     )
 
@@ -49,8 +52,18 @@ class ShoppingItemRepositorySharedTest {
     }
 
     @Test
-    fun `adding to a local-only list stays clean and quiet`() = runTest {
+    fun `adding to an unshared account list marks the item dirty and kicks`() = runTest {
         seedList(shareCode = null)
+
+        repository.addItem("list-1", name = "Milk", quantity = "1")
+
+        assertEquals("Milk", dbRule.itemDao.getPendingSyncItems().single().name)
+        assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `adding to a local-only list stays clean and quiet`() = runTest {
+        seedList(shareCode = null, accountId = null)
 
         repository.addItem("list-1", name = "Milk", quantity = "1")
 
@@ -90,7 +103,7 @@ class ShoppingItemRepositorySharedTest {
 
     @Test
     fun `ticking a local-only item stays clean and quiet`() = runTest {
-        seedList(shareCode = null)
+        seedList(shareCode = null, accountId = null)
         repository.addItem("list-1", name = "Milk", quantity = "1")
         val id = dbRule.itemDao.getItemsByListIdOnce("list-1").single().id
 
@@ -125,7 +138,7 @@ class ShoppingItemRepositorySharedTest {
 
     @Test
     fun `deleting a local-only item still hard-deletes`() = runTest {
-        seedList(shareCode = null)
+        seedList(shareCode = null, accountId = null)
         repository.addItem("list-1", name = "Milk", quantity = "1")
         val id = dbRule.itemDao.getItemsByListIdOnce("list-1").single().id
 

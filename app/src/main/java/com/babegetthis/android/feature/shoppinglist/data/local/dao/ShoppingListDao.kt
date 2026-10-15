@@ -13,12 +13,15 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ShoppingListDao {
 
-    // Returns all lists with their item counts and completion counts.
+    // Lists with their item counts and completion counts, one query per owner.
     // Both counts are calculated live by counting rows in shopping_items.
     // A list is "completed" when itemCount > 0 and completedItemCount == itemCount.
     // Tombstoned (deletedAt set) lists and items are invisible everywhere in the
     // UI; explicit columns instead of l.* so the sync columns never leak into
     // the projection.
+    //
+    // A device shows exactly one owner's lists (docs/technical-decisions/008):
+    // the signed-in (or session-expired) account's, or the guest lists.
     @Query(
         """
         SELECT l.id, l.name, l.createdAt, l.updatedAt, l.isLocked,
@@ -26,12 +29,29 @@ interface ShoppingListDao {
                SUM(CASE WHEN i.isPickedUp = 1 THEN 1 ELSE 0 END) AS completedItemCount
         FROM shopping_lists l
         LEFT JOIN shopping_items i ON l.id = i.listId AND i.deletedAt IS NULL
-        WHERE l.deletedAt IS NULL
+        WHERE l.deletedAt IS NULL AND l.accountId = :accountId
         GROUP BY l.id
         ORDER BY l.createdAt DESC
     """,
     )
-    fun getAllListsWithItemCount(): Flow<List<ShoppingListWithItemCount>>
+    fun getAccountListsWithItemCount(accountId: String): Flow<List<ShoppingListWithItemCount>>
+
+    // Guest lists only. A shared replica with no owner (its session was lost
+    // before lists had owners) is excluded: it isn't the guest's, and it is
+    // claimed by the account once the server confirms membership.
+    @Query(
+        """
+        SELECT l.id, l.name, l.createdAt, l.updatedAt, l.isLocked,
+               COUNT(i.id) AS itemCount,
+               SUM(CASE WHEN i.isPickedUp = 1 THEN 1 ELSE 0 END) AS completedItemCount
+        FROM shopping_lists l
+        LEFT JOIN shopping_items i ON l.id = i.listId AND i.deletedAt IS NULL
+        WHERE l.deletedAt IS NULL AND l.accountId IS NULL AND l.shareCode IS NULL
+        GROUP BY l.id
+        ORDER BY l.createdAt DESC
+    """,
+    )
+    fun getGuestListsWithItemCount(): Flow<List<ShoppingListWithItemCount>>
 
     @Query("SELECT * FROM shopping_lists WHERE id = :listId AND deletedAt IS NULL")
     fun getListById(listId: String): Flow<ShoppingListEntity?>
@@ -50,7 +70,7 @@ interface ShoppingListDao {
     suspend fun unlockAll()
 
     // Counted in SQL. The repository used to collect the full
-    // getAllListsWithItemCount() flow — a LEFT JOIN and GROUP BY over every list
+    // list-with-counts flow — a LEFT JOIN and GROUP BY over every list
     // and every item — and count in Kotlin, to produce one integer that Settings
     // asks for on every open.
     @Query("SELECT COUNT(*) FROM shopping_lists WHERE isLocked = 1")
@@ -89,8 +109,22 @@ interface ShoppingListDao {
     )
     suspend fun deleteListIfEmpty(listId: String): Int
 
-    // ── Sync primitives (shared lists only; repositories route here when the
-    //    list has a shareCode) ──────────────────────────────────────────────
+    // ── Sync primitives (account lists only; repositories route here when the
+    //    list has an owner) ─────────────────────────────────────────────────
+
+    // Tombstone variant of deleteListIfEmpty for account lists: the deletion has
+    // to reach the account's other phones. Same single-statement guard, counting
+    // live items only — a tombstoned item is already gone for the user.
+    @Query(
+        """
+        UPDATE shopping_lists
+        SET deletedAt = :now, updatedAt = :now, pendingSync = 1
+        WHERE id = :listId
+          AND deletedAt IS NULL
+          AND NOT EXISTS (SELECT 1 FROM shopping_items WHERE listId = :listId AND deletedAt IS NULL)
+    """,
+    )
+    suspend fun softDeleteListIfEmpty(listId: String, now: Long): Int
 
     // Soft delete: the tombstone must survive locally so the deletion itself
     // can sync. deletedAt doubles as the row's last-modified time.

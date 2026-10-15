@@ -4,6 +4,7 @@ import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
+import com.babegetthis.android.testing.authStateFor
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -19,7 +20,7 @@ class DeleteListIfEmptyTest {
     private val listDao = mockk<ShoppingListDao>(relaxed = true)
     private val itemDao = mockk<ShoppingItemDao>(relaxed = true)
     private val categoryDao = mockk<CategoryDao>(relaxed = true)
-    private val repository = ShoppingListRepository(listDao, itemDao, categoryDao) {}
+    private val repository = ShoppingListRepository(listDao, itemDao, categoryDao, authStateFor(null)) {}
 
     @Test
     fun `returns true when the empty list was deleted`() = runTest {
