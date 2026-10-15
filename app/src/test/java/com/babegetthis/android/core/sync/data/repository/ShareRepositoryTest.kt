@@ -6,6 +6,7 @@ import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
+import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
@@ -27,9 +28,10 @@ class ShareRepositoryTest {
 
     private val remote = FakeSharedListRemote()
     private val syncPoints = FakeSyncPointStore()
+    private val ownership = FakeListOwnershipStore()
     private var userId: String? = "user-1"
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, { userId }, mockk(relaxed = true))
+        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, { userId }, mockk(relaxed = true))
     }
     private val repository by lazy {
         ShareRepository(dbRule.listDao, dbRule.itemDao, remote, engine, { userId }, Random(seed = 7))

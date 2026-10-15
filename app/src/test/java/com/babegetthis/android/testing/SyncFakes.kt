@@ -3,9 +3,12 @@ package com.babegetthis.android.testing
 import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
+import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 // Shared by SyncEngineTest and ShareRepositoryTest — one knobbed fake instead
 // of two private near-copies.
@@ -85,5 +88,28 @@ class FakeSyncPointStore : SyncPointStore {
     }
     override fun clear() {
         points.clear()
+    }
+}
+
+class FakeListOwnershipStore : ListOwnershipStore {
+    private val notice = MutableStateFlow(0)
+    override val adoptionNotice: StateFlow<Int> = notice
+    override fun setAdoptionNotice(count: Int) {
+        notice.value = count
+    }
+
+    var migrated = false
+    override fun isAccountListsMigrated(): Boolean = migrated
+    override fun markAccountListsMigrated() {
+        migrated = true
+    }
+
+    private val locks = mutableSetOf<String>()
+    override fun lockedListIds(): Set<String> = locks.toSet()
+    override fun rememberLock(listId: String, locked: Boolean) {
+        if (locked) locks += listId else locks -= listId
+    }
+    override fun forgetAllLocks() {
+        locks.clear()
     }
 }

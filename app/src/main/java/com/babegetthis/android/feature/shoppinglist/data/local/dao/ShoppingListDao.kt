@@ -165,6 +165,47 @@ interface ShoppingListDao {
     @Query("SELECT COUNT(*) FROM shopping_lists WHERE pendingSync = 1")
     suspend fun countPendingSync(): Int
 
+    // ── Claim on sign-in (docs/technical-decisions/008) ────────────────────
+
+    @Query("SELECT id FROM shopping_lists WHERE accountId IS NOT NULL AND accountId != :userId")
+    suspend fun getOtherAccountListIds(userId: String): List<String>
+
+    @Query("DELETE FROM shopping_lists WHERE accountId IS NOT NULL AND accountId != :userId")
+    suspend fun deleteOtherAccountLists(userId: String)
+
+    // Must run BEFORE claimGuestLists: afterwards the subquery matches nothing.
+    @Query(
+        """
+        UPDATE shopping_items SET pendingSync = 1
+        WHERE deletedAt IS NULL
+          AND listId IN (SELECT id FROM shopping_lists WHERE accountId IS NULL AND shareCode IS NULL)
+    """,
+    )
+    suspend fun markGuestListItemsPending()
+
+    @Query(
+        "UPDATE shopping_lists SET accountId = :userId, pendingSync = 1 WHERE accountId IS NULL AND shareCode IS NULL",
+    )
+    suspend fun claimGuestLists(userId: String): Int
+
+    @Query("UPDATE shopping_lists SET accountId = :userId WHERE accountId IS NULL AND shareCode IS NOT NULL")
+    suspend fun claimOwnerlessSharedLists(userId: String)
+
+    // Everything a sign-in does to the device's lists, as one transaction so a
+    // crash can't leave half the guest lists claimed and their items unqueued.
+    // Returns how many guest lists moved into the account. Another account's
+    // replicas are dropped (the server holds them); guest lists and their live
+    // items are queued for upload; ownerless shared replicas are taken only when
+    // the caller knows they predate ownership (the first claim after the update).
+    @Transaction
+    suspend fun claimDeviceLists(userId: String, includeOwnerlessShared: Boolean): Int {
+        deleteOtherAccountLists(userId)
+        markGuestListItemsPending()
+        val claimed = claimGuestLists(userId)
+        if (includeOwnerlessShared) claimOwnerlessSharedLists(userId)
+        return claimed
+    }
+
     // Shared-replica eviction on explicit sign-out (technical decision 004).
     // Hard delete on purpose — eviction, not a deletion to sync; CASCADE
     // clears the items. Local-only lists (shareCode NULL) are untouched.

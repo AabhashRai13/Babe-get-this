@@ -1,5 +1,6 @@
 package com.babegetthis.android.core.sync.data.repository
 
+import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.core.sync.data.mapper.isoToMillis
@@ -26,6 +27,7 @@ class SyncEngine(
     private val itemDao: ShoppingItemDao,
     private val remote: SharedListRemote,
     private val syncPoints: SyncPointStore,
+    private val ownership: ListOwnershipStore,
     private val currentUserId: () -> String?,
     private val crashReporter: CrashReporter,
 ) {
@@ -63,6 +65,47 @@ class SyncEngine(
             // that is not recoverable from the report afterwards.
             crashReporter.breadcrumb("sync: pushed ${'$'}{lists.size} lists, ${'$'}{items.size} items")
         }
+    }
+
+    // Give the device's lists to the account that just signed in (or whose
+    // session expired — the owner is still known). Local only, so it works
+    // offline: an already-signed-in user opening the update in a store must see
+    // their lists at once (docs/technical-decisions/008). Returns how many guest
+    // lists moved in, and adds them to the notice the lists screen shows.
+    suspend fun claimDeviceLists(userId: String): Result<Int> = safeCall {
+        listDao.getOtherAccountListIds(userId).forEach { syncPoints.remove(it) }
+        // The first claim after the update also takes the existing shared
+        // replicas: they predate owners, and they belong to whoever is signed in
+        // right now. Later, an ownerless replica can only be a stray from a lost
+        // session, and waits for the server to vouch for it (apply()).
+        val firstClaim = !ownership.isAccountListsMigrated()
+        val claimed = listDao.claimDeviceLists(userId, includeOwnerlessShared = firstClaim)
+        ownership.markAccountListsMigrated()
+        if (claimed > 0) ownership.setAdoptionNotice(ownership.adoptionNotice.value + claimed)
+        // Count only. Which lists moved is the user's business.
+        crashReporter.breadcrumb("sync: claimed $claimed lists")
+        claimed
+    }
+
+    // What a sign-in state means for this device's lists. Returns true when
+    // there is a live session to sync with — the caller kicks a sync.
+    suspend fun onAuthState(state: AuthState): Boolean = when (state) {
+        is AuthState.Authenticated -> {
+            claimDeviceLists(state.userId)
+            true
+        }
+        is AuthState.SessionExpired -> {
+            claimDeviceLists(state.userId)
+            false
+        }
+        AuthState.Unauthenticated -> {
+            // A signed-out first launch after the update: nothing to claim, and
+            // any shared replica left on the device is a stray — never take it
+            // wholesale at a later sign-in.
+            ownership.markAccountListsMigrated()
+            false
+        }
+        AuthState.Loading -> false
     }
 
     // Fetch everything changed since the last sync point and land it in Room.

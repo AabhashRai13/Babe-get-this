@@ -4,9 +4,11 @@ import android.content.Context
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.SyncTrigger
+import com.babegetthis.android.core.sync.data.local.PrefsListOwnershipStore
 import com.babegetthis.android.core.sync.data.local.PrefsSyncPointStore
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.sync.data.remote.SupabaseSharedListRemote
+import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
@@ -35,11 +37,17 @@ object SyncModule {
 
     @Provides
     @Singleton
+    fun provideListOwnershipStore(@ApplicationContext context: Context): ListOwnershipStore =
+        PrefsListOwnershipStore(context)
+
+    @Provides
+    @Singleton
     fun provideSyncEngine(
         listDao: ShoppingListDao,
         itemDao: ShoppingItemDao,
         remote: SharedListRemote,
         syncPoints: SyncPointStore,
+        ownership: ListOwnershipStore,
         authStateManager: AuthStateManager,
         crashReporter: CrashReporter,
     ): SyncEngine = SyncEngine(
@@ -47,6 +55,7 @@ object SyncModule {
         itemDao,
         remote,
         syncPoints,
+        ownership,
         { authStateManager.liveSessionUserId() },
         crashReporter,
     )
