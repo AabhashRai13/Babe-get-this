@@ -81,4 +81,16 @@ class WelcomeJourneyTest {
         awaitText("No lists yet")
         compose.onNodeWithText("Continue as guest").assertDoesNotExist()
     }
+
+    // Signing out takes the account's lists off the phone: a fresh start.
+    @Test
+    fun signingOutReturnsToWelcome() {
+        signInFromWelcomeLandsOnLists()
+
+        compose.onNodeWithText("A").performClick() // the avatar: "aabhash"
+        awaitText("Log out")
+        compose.onNodeWithText("Log out").performClick()
+
+        awaitText("Continue as guest")
+    }
 }

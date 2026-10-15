@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.runningFold
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,6 +35,18 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
         .distinctUntilChanged()
 
     fun dataOwnerId(): String? = _authState.value.ownerId()
+
+    // Emits each time an account is signed out — explicitly or by deleting it
+    // — which takes the account's lists off the phone, so the app goes back to
+    // Welcome. A lost session keeps the lists and does not count.
+    val signOuts: Flow<Unit> = authState
+        .filter { it !is AuthState.Loading }
+        .runningFold<AuthState, Pair<AuthState?, AuthState?>>(null to null) { (_, previous), current ->
+            previous to
+                current
+        }
+        .filter { (previous, current) -> previous?.ownerId() != null && current is AuthState.Unauthenticated }
+        .map { }
 
     // Server work needs a live session, not just a known user: after a lost
     // session the user id is still stored, but a push or share would only

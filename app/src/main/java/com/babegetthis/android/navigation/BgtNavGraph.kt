@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -47,6 +48,17 @@ fun BgtNavGraph(
     navController: NavHostController = rememberNavController(),
     startAtWelcome: Boolean = false,
 ) {
+    // Signing out or deleting the account takes the account's lists off the
+    // phone (docs/technical-decisions/008), so it is a fresh start: Welcome,
+    // with nothing to go back to. A lost session keeps the lists and stays put.
+    LaunchedEffect(navController) {
+        authStateManager.signOuts.collect {
+            navController.navigate(Routes.WELCOME) {
+                popUpTo(navController.graph.id) { inclusive = true }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = if (startAtWelcome) Routes.WELCOME else Routes.SHOPPING_LIST,

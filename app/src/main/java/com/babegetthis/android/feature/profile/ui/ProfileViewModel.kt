@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.onboarding.data.repository.WelcomeRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -26,6 +27,8 @@ data class ProfileUiState(
     val isSaving: Boolean = false,
     val isLoggingOut: Boolean = false,
     val isDeletingAccount: Boolean = false,
+    // Some changes never reached the server; signing out now would lose them.
+    val showUnsyncedSignOutWarning: Boolean = false,
 ) {
     // True when the user has typed a different name than what's saved
     val hasNameChanged: Boolean
@@ -37,6 +40,7 @@ class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val authStateManager: AuthStateManager,
     private val syncEngine: SyncEngine,
+    private val welcome: WelcomeRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -103,22 +107,23 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // Permanent server-side deletion. Local lists are untouched — they only
-    // live on the device. On success the repository clears auth state, which
-    // flips the app back to logged-out, same as logout.
+    // Permanent server-side deletion. The account's lists leave the phone with
+    // it (docs/technical-decisions/008). On success the repository clears auth
+    // state, which flips the app back to logged-out and onto Welcome, same as
+    // logout.
     fun deleteAccount() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeletingAccount = true)
 
-            // Shared replicas leave with the account (technical decision 004).
             // Before, not after: the final best-effort push inside needs the
             // session that deleteAccount is about to destroy. If deletion then
-            // fails, discovery on the next sync kick restores the replicas.
-            syncEngine.evictSharedReplicas()
+            // fails, discovery on the next sync kick restores the lists.
+            syncEngine.evictAccountLists()
 
             when (val result = authRepository.deleteAccount()) {
                 is Result.Success -> {
                     _uiState.value = _uiState.value.copy(isDeletingAccount = false)
+                    welcome.reset()
                     _toastEvent.emit("Your account has been deleted")
                 }
                 is Result.Error -> {
@@ -129,25 +134,48 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    // Signing out takes every account list off the phone. Push first; if
+    // anything still hasn't reached the server (offline), ask before throwing
+    // it away — with every list an account list, that is no longer the rare
+    // case decision 004 accepted losing silently.
     fun logout() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoggingOut = true)
+            syncEngine.push()
+            if (syncEngine.hasUnsyncedChanges()) {
+                _uiState.value = _uiState.value.copy(isLoggingOut = false, showUnsyncedSignOutWarning = true)
+            } else {
+                completeSignOut()
+            }
+        }
+    }
 
-            // Shared replicas leave with the account (technical decision 004).
-            // This is the EXPLICIT sign-out path only — session loss in
-            // BabeGetThisApp never evicts. Runs before logout so the final
-            // push still has a session; if logout then fails, the next sync
-            // kick's discovery restores the replicas.
-            syncEngine.evictSharedReplicas()
+    fun confirmSignOutAnyway() {
+        _uiState.value = _uiState.value.copy(showUnsyncedSignOutWarning = false, isLoggingOut = true)
+        viewModelScope.launch { completeSignOut() }
+    }
 
-            when (val result = authRepository.logout()) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(isLoggingOut = false)
-                }
-                is Result.Error -> {
-                    _uiState.value = _uiState.value.copy(isLoggingOut = false)
-                    _toastEvent.emit(result.error.message)
-                }
+    fun dismissUnsyncedSignOutWarning() {
+        _uiState.value = _uiState.value.copy(showUnsyncedSignOutWarning = false)
+    }
+
+    private suspend fun completeSignOut() {
+        // The EXPLICIT sign-out path only — session loss in BabeGetThisApp
+        // never evicts. Runs before logout so the final push still has a
+        // session; if logout then fails, the next sync kick's discovery
+        // restores the lists.
+        syncEngine.evictAccountLists()
+
+        when (val result = authRepository.logout()) {
+            is Result.Success -> {
+                _uiState.value = _uiState.value.copy(isLoggingOut = false)
+                // The next launch starts on Welcome too; navigation reacts to
+                // AuthStateManager.signOuts for this one.
+                welcome.reset()
+            }
+            is Result.Error -> {
+                _uiState.value = _uiState.value.copy(isLoggingOut = false)
+                _toastEvent.emit(result.error.message)
             }
         }
     }

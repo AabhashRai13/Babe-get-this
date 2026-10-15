@@ -325,6 +325,37 @@ class AuthStateManagerTest {
         }
     }
 
+    // Signing out (or deleting the account) takes the account's lists off the
+    // phone, so the app returns to Welcome. A lost session keeps them, so it
+    // must not count.
+    @Test
+    fun `signOuts emits when an account signs out, not when its session expires`() = runTest {
+        val manager = AuthStateManager(inMemoryTokenManager())
+        manager.initialize()
+        manager.signOuts.test {
+            manager.login("t", "u1", "Aabhash", "a@b.c")
+            manager.expireSession()
+            expectNoEvents()
+
+            manager.logout()
+            assertEquals(Unit, awaitItem())
+
+            manager.login("t", "u1", "Aabhash", "a@b.c")
+            manager.logout()
+            assertEquals(Unit, awaitItem())
+        }
+    }
+
+    @Test
+    fun `signOuts stays quiet for a guest`() = runTest {
+        val manager = AuthStateManager(inMemoryTokenManager())
+        manager.signOuts.test {
+            manager.initialize()
+            manager.logout()
+            expectNoEvents()
+        }
+    }
+
     @Test
     fun `updateName is visible to a later read`() {
         val tokens = inMemoryTokenManager()

@@ -6,11 +6,13 @@ import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.model.User
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.onboarding.data.repository.WelcomeRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +34,7 @@ class ProfileViewModelTest {
     private lateinit var authRepository: AuthRepository
     private lateinit var authStateManager: AuthStateManager
     private lateinit var syncEngine: com.babegetthis.android.core.sync.data.repository.SyncEngine
+    private lateinit var welcome: WelcomeRepository
 
     @Before
     fun setUp() {
@@ -39,6 +42,7 @@ class ProfileViewModelTest {
         authRepository = mockk(relaxed = true)
         authStateManager = mockk(relaxed = true)
         syncEngine = mockk(relaxed = true)
+        welcome = mockk(relaxed = true)
         every { authStateManager.userName } returns MutableStateFlow(null)
         every { authStateManager.userEmail } returns MutableStateFlow(null)
     }
@@ -48,7 +52,7 @@ class ProfileViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun buildViewModel() = ProfileViewModel(authRepository, authStateManager, syncEngine)
+    private fun buildViewModel() = ProfileViewModel(authRepository, authStateManager, syncEngine, welcome)
 
     // The shared fixture above seeds a null name/email (logged out), which the
     // existing tests depend on. Name-editing tests need somebody signed in, so
@@ -60,6 +64,7 @@ class ProfileViewModelTest {
             every { userEmail } returns MutableStateFlow("a@b.c")
         },
         syncEngine,
+        welcome,
     )
 
     @Test
@@ -266,29 +271,120 @@ class ProfileViewModelTest {
         assertFalse(vm.uiState.value.isLoggingOut)
     }
 
-    // --- shared-replica eviction (technical decision 004) ---
+    // --- account-list eviction (docs/technical-decisions/008) ---
 
     @Test
-    fun `logout evicts shared replicas BEFORE the session is destroyed`() = runTest {
+    fun `logout evicts the account's lists BEFORE the session is destroyed`() = runTest {
         val vm = buildViewModel()
 
         vm.logout()
 
         coVerifyOrder {
-            syncEngine.evictSharedReplicas() // final push still has a session
+            syncEngine.push()
+            syncEngine.evictAccountLists() // final push still has a session
             authRepository.logout()
         }
     }
 
     @Test
-    fun `deleteAccount evicts shared replicas BEFORE the account is destroyed`() = runTest {
+    fun `deleteAccount evicts the account's lists BEFORE the account is destroyed`() = runTest {
         val vm = buildViewModel()
 
         vm.deleteAccount()
 
         coVerifyOrder {
-            syncEngine.evictSharedReplicas()
+            syncEngine.evictAccountLists()
             authRepository.deleteAccount()
         }
+    }
+
+    // --- signing out with changes that never reached the server ---
+    //
+    // Every list is an account list now, so an offline sign-out is no longer
+    // the rare case decision 004 accepted silently losing edits for.
+
+    @Test
+    fun `signing out with everything synced also resets Welcome`() = runTest {
+        coEvery { authRepository.logout() } returns Result.Success(Unit)
+        val vm = buildViewModel()
+
+        vm.logout()
+
+        verify { welcome.reset() }
+        assertFalse(vm.uiState.value.showUnsyncedSignOutWarning)
+    }
+
+    @Test
+    fun `signing out with unsynced changes shows the warning and does nothing else`() = runTest {
+        coEvery { syncEngine.hasUnsyncedChanges() } returns true
+        val vm = buildViewModel()
+
+        vm.logout()
+
+        assertTrue(vm.uiState.value.showUnsyncedSignOutWarning)
+        assertFalse(vm.uiState.value.isLoggingOut)
+        coVerify(exactly = 0) { syncEngine.evictAccountLists() }
+        coVerify(exactly = 0) { authRepository.logout() }
+        verify(exactly = 0) { welcome.reset() }
+    }
+
+    @Test
+    fun `sign out anyway completes the sign-out`() = runTest {
+        coEvery { syncEngine.hasUnsyncedChanges() } returns true
+        coEvery { authRepository.logout() } returns Result.Success(Unit)
+        val vm = buildViewModel()
+        vm.logout()
+
+        vm.confirmSignOutAnyway()
+
+        assertFalse(vm.uiState.value.showUnsyncedSignOutWarning)
+        coVerifyOrder {
+            syncEngine.evictAccountLists()
+            authRepository.logout()
+        }
+        verify { welcome.reset() }
+        assertFalse(vm.uiState.value.isLoggingOut)
+    }
+
+    @Test
+    fun `dismissing the warning keeps the user signed in`() = runTest {
+        coEvery { syncEngine.hasUnsyncedChanges() } returns true
+        val vm = buildViewModel()
+        vm.logout()
+
+        vm.dismissUnsyncedSignOutWarning()
+
+        assertFalse(vm.uiState.value.showUnsyncedSignOutWarning)
+        coVerify(exactly = 0) { authRepository.logout() }
+    }
+
+    @Test
+    fun `a failed sign-out leaves Welcome alone`() = runTest {
+        coEvery { authRepository.logout() } returns Result.Error(AppError.UnknownError())
+        val vm = buildViewModel()
+
+        vm.logout()
+
+        verify(exactly = 0) { welcome.reset() }
+    }
+
+    @Test
+    fun `deleting the account resets Welcome`() = runTest {
+        coEvery { authRepository.deleteAccount() } returns Result.Success(Unit)
+        val vm = buildViewModel()
+
+        vm.deleteAccount()
+
+        verify { welcome.reset() }
+    }
+
+    @Test
+    fun `a failed deletion leaves Welcome alone`() = runTest {
+        coEvery { authRepository.deleteAccount() } returns Result.Error(AppError.UnknownError())
+        val vm = buildViewModel()
+
+        vm.deleteAccount()
+
+        verify(exactly = 0) { welcome.reset() }
     }
 }

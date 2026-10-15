@@ -389,34 +389,55 @@ class SyncEngineTest {
         assertEquals("mark re-established from what came back", t10, syncPoints.get("list-1"))
     }
 
+    // Explicit sign-out and account deletion take every account list off the
+    // phone (docs/technical-decisions/008); guest lists are the device's.
     @Test
-    fun `evictSharedReplicas removes shared lists only, after a final push`() = runTest {
+    fun `eviction removes account lists and orphaned replicas but keeps guest lists`() = runTest {
         dbRule.listDao.insertList(listEntity(id = "shared-1"))
         dbRule.itemDao.insertItem(itemEntity(id = "i1", listId = "shared-1", pendingSync = true))
-        dbRule.listDao.insertList(listEntity(id = "local-1", shareCode = null))
+        dbRule.listDao.insertList(listEntity(id = "solo-1", shareCode = null))
+        dbRule.listDao.insertList(listEntity(id = "orphan-1", accountId = null))
+        dbRule.listDao.insertList(listEntity(id = "guest-1", shareCode = null, accountId = null, onServer = false))
         syncPoints.set("shared-1", t10)
 
-        val result = engine.evictSharedReplicas()
+        val result = engine.evictAccountLists()
 
         assertTrue(result is Result.Success)
-        assertEquals(
-            "queued edit pushed before eviction",
-            listOf("i1"),
-            remote.upsertedItems.map { it.id },
-        )
-        assertNull("shared replica gone", dbRule.listDao.getListRaw("shared-1"))
+        assertEquals("queued edit pushed before eviction", listOf("i1"), remote.upsertedItems.map { it.id })
+        assertNull(dbRule.listDao.getListRaw("shared-1"))
         assertNull("its items gone via CASCADE", dbRule.itemDao.getItemRaw("i1"))
-        assertNotNull("local-only list untouched", dbRule.listDao.getListRaw("local-1"))
+        assertNull(dbRule.listDao.getListRaw("solo-1"))
+        assertNull(dbRule.listDao.getListRaw("orphan-1"))
+        assertNotNull("guest list untouched", dbRule.listDao.getListRaw("guest-1"))
         assertTrue("sync points wiped", syncPoints.points.isEmpty())
     }
 
     @Test
-    fun `evictSharedReplicas still evicts when the final push cannot run`() = runTest {
+    fun `eviction still happens when the final push cannot run`() = runTest {
         userId = null // signed-out-ish: push no-ops, eviction must proceed
         dbRule.listDao.insertList(listEntity(id = "shared-1"))
 
-        engine.evictSharedReplicas()
+        engine.evictAccountLists()
 
         assertNull(dbRule.listDao.getListRaw("shared-1"))
+    }
+
+    @Test
+    fun `unsynced changes are reported until they are pushed`() = runTest {
+        dbRule.listDao.insertList(listEntity())
+        assertFalse(engine.hasUnsyncedChanges())
+
+        dbRule.itemDao.insertItem(itemEntity(pendingSync = true))
+        assertTrue(engine.hasUnsyncedChanges())
+
+        engine.push()
+        assertFalse(engine.hasUnsyncedChanges())
+    }
+
+    @Test
+    fun `a queued list edit counts as unsynced`() = runTest {
+        dbRule.listDao.insertList(listEntity(pendingSync = true))
+
+        assertTrue(engine.hasUnsyncedChanges())
     }
 }

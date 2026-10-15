@@ -215,11 +215,11 @@ interface ShoppingListDao {
         return claimed
     }
 
-    // Shared-replica eviction on explicit sign-out (technical decision 004).
-    // Hard delete on purpose — eviction, not a deletion to sync; CASCADE
-    // clears the items. Local-only lists (shareCode NULL) are untouched.
-    @Query("DELETE FROM shopping_lists WHERE shareCode IS NOT NULL")
-    suspend fun deleteSharedLists()
+    // Account-list eviction on explicit sign-out (docs/technical-decisions/008).
+    // Hard delete on purpose — eviction, not a deletion to sync; CASCADE clears
+    // the items. Ownerless shared replicas go too; guest lists are untouched.
+    @Query("DELETE FROM shopping_lists WHERE accountId IS NOT NULL OR shareCode IS NOT NULL")
+    suspend fun deleteAccountLists()
 }
 
 // Room can map query results to this class automatically.

@@ -109,6 +109,13 @@ class ListLifecycleTest {
         // used from both sides.
         compose.onNode(hasText("Add") and !hasTestTag(TestTags.ADD_ITEM_FAB)).performClick()
 
+        // Wait for the dialog to close BEFORE looking for the name: while it is
+        // open, its own text field matches the name, so the helper used to return
+        // early — and the next addItem then saw the stale "Add first item" prompt,
+        // tapped it as it disappeared, and waited 10s for a dialog that never came.
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodes(hasText("Add Item")).fetchSemanticsNodes().isEmpty()
+        }
         awaitText(name)
     }
 

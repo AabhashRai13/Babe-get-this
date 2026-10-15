@@ -255,12 +255,8 @@ fun ProfileBottomSheet(
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete account?") },
-            text = {
-                Text(
-                    "This permanently deletes your account and can't be undone. " +
-                        "Your lists are stored on this device and won't be affected.",
-                )
-            },
+            // The account's lists leave the phone with it (docs/technical-decisions/008).
+            text = { Text(stringResource(R.string.delete_account_body)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -274,6 +270,24 @@ fun ProfileBottomSheet(
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
                     Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (uiState.showUnsyncedSignOutWarning) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissUnsyncedSignOutWarning() },
+            title = { Text(stringResource(R.string.sign_out_unsynced_title)) },
+            text = { Text(stringResource(R.string.sign_out_unsynced_body)) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmSignOutAnyway() }) {
+                    Text(stringResource(R.string.sign_out_unsynced_confirm), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissUnsyncedSignOutWarning() }) {
+                    Text(stringResource(R.string.cancel))
                 }
             },
         )

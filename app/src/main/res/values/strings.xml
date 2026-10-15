@@ -108,6 +108,11 @@
     <string name="profile_name">Name</string>
     <string name="profile_no_email">No email</string>
     <string name="profile_logout">Log out</string>
+    <!-- Signing out with changes that never reached the server (docs/technical-decisions/008) -->
+    <string name="sign_out_unsynced_title">Sign out?</string>
+    <string name="sign_out_unsynced_body">Some changes haven\'t been saved to your account yet. If you sign out now, they\'ll be lost.</string>
+    <string name="sign_out_unsynced_confirm">Sign out anyway</string>
+    <string name="delete_account_body">This permanently deletes your account and can\'t be undone. Your lists are removed from this phone; lists you shared stay with the people you shared them with.</string>
 
     <!-- Settings -->
     <string name="settings">Settings</string>

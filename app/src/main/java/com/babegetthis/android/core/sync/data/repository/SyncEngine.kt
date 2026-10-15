@@ -172,18 +172,22 @@ class SyncEngine(
     }
 
     // Explicit sign-out (and account deletion) ONLY — never session loss:
-    // shared lists are account data (docs/technical-decisions/004), so they
-    // leave with the account. Local-only lists are untouched. Best-effort
-    // final push first, so a signed-in device's queued edits aren't lost;
-    // its failure (offline sign-out) is the accepted rare² data-loss case.
-    suspend fun evictSharedReplicas(): Result<Unit> = safeCall {
+    // account lists, shared or not, leave with the account
+    // (docs/technical-decisions/008). Guest lists are the device's and stay.
+    // Best-effort final push first, so queued edits aren't lost; when it can't
+    // run (offline), ProfileViewModel has already warned and the user chose.
+    suspend fun evictAccountLists(): Result<Unit> = safeCall {
         push()
         // Hard local delete, not tombstones: this is eviction, not a deletion
         // to sync. CASCADE clears the items.
-        listDao.deleteSharedLists()
+        listDao.deleteAccountLists()
         syncPoints.clear()
-        crashReporter.breadcrumb("sync: evicted shared replicas")
+        crashReporter.breadcrumb("sync: evicted account lists")
     }
+
+    // Anything still waiting to reach the server. Counts every pending row on
+    // the device: eviction deletes all of them, so all of them would be lost.
+    suspend fun hasUnsyncedChanges(): Boolean = listDao.countPendingSync() + itemDao.countPendingSync() > 0
 
     private suspend fun apply(userId: String, listRows: List<ListRow>, itemRows: List<ItemRow>) {
         val lockedIds = ownership.lockedListIds()
