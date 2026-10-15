@@ -7,6 +7,7 @@ import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.core.sync.SyncKicker
+import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
@@ -31,6 +32,7 @@ class ShoppingListRepository @Inject constructor(
     private val shoppingItemDao: ShoppingItemDao,
     private val categoryDao: CategoryDao,
     private val authStateManager: AuthStateManager,
+    private val ownership: ListOwnershipStore,
     private val syncKicker: SyncKicker,
 ) {
     // Flows don't need Result wrapping — Room handles errors internally
@@ -169,14 +171,19 @@ class ShoppingListRepository @Inject constructor(
     private fun listNotFoundException(listId: String) =
         AppErrorException(AppError.NotFoundError("That list no longer exists."))
 
+    // The lock is per-device and never syncs, so signing out (which evicts an
+    // account list) would lose it. Remembering the id re-locks the list when it
+    // comes back (docs/technical-decisions/008).
     suspend fun setLocked(listId: String, locked: Boolean): Result<Unit> = safeCall {
         shoppingListDao.setLocked(listId, locked)
+        ownership.rememberLock(listId, locked)
     }
 
     // Unlock every list — called after the device PIN is removed so no list is
     // left gated by a PIN that no longer exists.
     suspend fun unlockAll(): Result<Unit> = safeCall {
         shoppingListDao.unlockAll()
+        ownership.forgetAllLocks()
     }
 
     // How many lists are currently locked — Settings shows this before PIN

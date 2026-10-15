@@ -3,6 +3,7 @@ package com.babegetthis.android.feature.shoppinglist.data.repository
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
@@ -24,13 +25,14 @@ class ShoppingListRepositoryTest {
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
     private var kicks = 0
+    private val ownership = FakeListOwnershipStore()
 
     // Everything below the ownership section runs as a guest, which is how
     // these tests behaved before lists had owners.
     private val repository by lazy { repositoryAs(authStateFor(null)) }
 
     private fun repositoryAs(auth: AuthStateManager) =
-        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao, auth) { kicks++ }
+        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao, auth, ownership) { kicks++ }
 
     private suspend fun seed(id: String, accountId: String? = null, shareCode: String? = null) =
         dbRule.listDao.insertList(TestData.listEntity(id = id).copy(accountId = accountId, shareCode = shareCode))
@@ -64,6 +66,31 @@ class ShoppingListRepositoryTest {
         val lists = repositoryAs(authStateFor("u1", expired = true)).getAllLists().first()
 
         assertEquals(listOf("mine"), lists.map { it.id })
+    }
+
+    // The lock is per-device and never syncs, so sign-out eviction would lose
+    // it; the remembered id re-locks the list when it comes back.
+    @Test
+    fun `locking a list remembers it for when the list comes back`() = runTest {
+        seed("l1")
+
+        repository.setLocked("l1", true)
+        assertEquals(setOf("l1"), ownership.lockedListIds())
+
+        repository.setLocked("l1", false)
+        assertTrue(ownership.lockedListIds().isEmpty())
+    }
+
+    @Test
+    fun `removing the PIN forgets every remembered lock`() = runTest {
+        seed("l1")
+        seed("l2")
+        repository.setLocked("l1", true)
+        repository.setLocked("l2", true)
+
+        repository.unlockAll()
+
+        assertTrue(ownership.lockedListIds().isEmpty())
     }
 
     @Test

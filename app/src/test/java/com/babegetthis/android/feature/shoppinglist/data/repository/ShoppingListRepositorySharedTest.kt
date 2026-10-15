@@ -3,6 +3,7 @@ package com.babegetthis.android.feature.shoppinglist.data.repository
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
+import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
@@ -28,7 +29,15 @@ class ShoppingListRepositorySharedTest {
 
     private var kicks = 0
     private val repository by lazy {
-        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao, authStateFor("u1")) { kicks++ }
+        ShoppingListRepository(
+            dbRule.listDao,
+            dbRule.itemDao,
+            dbRule.categoryDao,
+            authStateFor("u1"),
+            FakeListOwnershipStore(),
+        ) {
+            kicks++
+        }
     }
 
     private fun sharedList(id: String = "list-1") = ShoppingListEntity(
