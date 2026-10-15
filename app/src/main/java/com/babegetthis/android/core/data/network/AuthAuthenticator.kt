@@ -11,7 +11,7 @@ import javax.inject.Inject
 // This is different from an Interceptor: interceptors run on EVERY request,
 // authenticators only run when authentication fails.
 //
-// For now: on 401 we just log the user out (clear token, redirect to login).
+// For now: on 401 we expire the session (drop the token, keep the account).
 // Later when the backend supports refresh tokens, this is where we'd attempt a token refresh
 // before giving up.
 
@@ -21,7 +21,9 @@ class AuthAuthenticator @Inject constructor(private val authStateManager: AuthSt
         // If we already tried re-authenticating and still got 401, give up
         // (returning null tells OkHttp to stop retrying)
         if (response.request.header("Authorization") != null) {
-            authStateManager.logout()
+            // Expire, don't sign out: the account's lists stay on screen
+            // (docs/technical-decisions/008).
+            authStateManager.expireSession()
             return null
         }
 

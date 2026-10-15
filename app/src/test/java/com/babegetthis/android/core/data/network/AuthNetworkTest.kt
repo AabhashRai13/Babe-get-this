@@ -97,9 +97,10 @@ class AuthNetworkTest {
     // --- AuthAuthenticator ---
 
     // OkHttp consults the authenticator on a 401. Returning null tells it to stop
-    // rather than retry, and the session is cleared so navigation redirects.
+    // rather than retry. The session expires but the account is kept, so its
+    // lists stay on screen (docs/technical-decisions/008).
     @Test
-    fun `a 401 on an authenticated request logs the user out`() {
+    fun `a 401 on an authenticated request expires the session but keeps the account`() {
         val tokens = inMemoryTokenManager()
         tokens.saveToken("abc123")
         tokens.saveUserId("u1")
@@ -114,7 +115,8 @@ class AuthNetworkTest {
 
         client.newCall(Request.Builder().url(url()).build()).execute().close()
 
-        assertEquals(AuthState.Unauthenticated, authStateManager.authState.value)
+        assertEquals(AuthState.SessionExpired("u1"), authStateManager.authState.value)
+        assertNull(tokens.getToken())
     }
 
     // Only one attempt: returning null means OkHttp does not loop.
@@ -149,6 +151,7 @@ class AuthNetworkTest {
         client.newCall(Request.Builder().url(url()).build()).execute().close()
 
         verify(exactly = 0) { authStateManager.logout() }
+        verify(exactly = 0) { authStateManager.expireSession() }
     }
 
     @Test
@@ -165,11 +168,12 @@ class AuthNetworkTest {
         client.newCall(Request.Builder().url(url()).build()).execute().close()
 
         verify(exactly = 0) { authStateManager.logout() }
+        verify(exactly = 0) { authStateManager.expireSession() }
     }
 
     // A 500 is a server problem, not an auth problem — the session must survive.
     @Test
-    fun `a 500 does not log the user out`() {
+    fun `a 500 neither signs the user out nor expires the session`() {
         val tokens = inMemoryTokenManager()
         tokens.saveToken("abc123")
         val authStateManager = mockk<AuthStateManager>(relaxed = true)
@@ -182,5 +186,6 @@ class AuthNetworkTest {
         client.newCall(Request.Builder().url(url()).build()).execute().close()
 
         verify(exactly = 0) { authStateManager.logout() }
+        verify(exactly = 0) { authStateManager.expireSession() }
     }
 }

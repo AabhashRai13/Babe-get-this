@@ -91,6 +91,7 @@ fun inMemoryTokenManager(): com.babegetthis.android.core.auth.data.TokenManager 
     every { manager.saveUserName(any()) } answers { userName = firstArg() }
     every { manager.getUserEmail() } answers { userEmail }
     every { manager.saveUserEmail(any()) } answers { userEmail = firstArg() }
+    every { manager.clearToken() } answers { token = null }
     every { manager.clear() } answers {
         token = null
         userId = null

@@ -69,14 +69,15 @@ class BabeGetThisApp : Application() {
                     // Supabase has definitively lost the session (refresh token
                     // expired/revoked). Mirror it locally — otherwise TokenManager
                     // keeps serving a dead token and the user finds out mid-action
-                    // via a 401 ("records audio, then session expired"). Harmless
-                    // for logged-out users: logout() on empty prefs is a no-op.
-                    // Deliberately does NOT evict shared-list replicas: data
-                    // never leaves the device over a technicality. Only the
-                    // explicit sign-out in ProfileViewModel evicts (see
-                    // docs/technical-decisions/004).
+                    // via a 401 ("records audio, then session expired").
+                    // expireSession, not logout: the account's lists stay on
+                    // screen and editable until the user signs in again — data
+                    // never disappears over a technicality. Only the explicit
+                    // sign-out in ProfileViewModel removes them (see
+                    // docs/technical-decisions/008). A no-op for signed-out
+                    // users, and for the explicit sign-out that also lands here.
                     is SessionStatus.NotAuthenticated -> {
-                        authStateManager.logout()
+                        authStateManager.expireSession()
                         telemetryContext.onUserChanged(null)
                     }
                     // RefreshFailure (offline/flaky network) is deliberately NOT a
