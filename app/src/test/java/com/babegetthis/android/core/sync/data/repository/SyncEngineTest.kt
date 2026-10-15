@@ -47,6 +47,8 @@ class SyncEngineTest {
         updatedAt: Long = 1_000L,
         pendingSync: Boolean = false,
         deletedAt: Long? = null,
+        accountId: String? = "user-1",
+        onServer: Boolean = true,
     ) = ShoppingListEntity(
         id = id,
         name = "Groceries",
@@ -56,6 +58,8 @@ class SyncEngineTest {
         shareCode = shareCode,
         deletedAt = deletedAt,
         pendingSync = pendingSync,
+        accountId = accountId,
+        onServer = onServer,
     )
 
     private fun itemEntity(
@@ -110,6 +114,7 @@ class SyncEngineTest {
 
         assertTrue(result is Result.Success)
         assertEquals(listOf("list-1"), remote.upsertedLists.map { it.id })
+        assertTrue("already on the server: upsert, not insert", remote.insertedLists.isEmpty())
         assertEquals(listOf("item-1"), remote.upsertedItems.map { it.id })
         assertFalse(dbRule.listDao.getListRaw("list-1")!!.pendingSync)
         assertFalse(dbRule.itemDao.getItemRaw("item-1")!!.pendingSync)
@@ -127,12 +132,73 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `push ignores dirty local-only lists`() = runTest {
-        dbRule.listDao.insertList(listEntity(shareCode = null, pendingSync = true))
+    fun `guest lists are never pushed`() = runTest {
+        dbRule.listDao.insertList(listEntity(shareCode = null, accountId = null, onServer = false, pendingSync = true))
+        dbRule.itemDao.insertItem(itemEntity(pendingSync = true))
+
+        engine.push()
+
+        assertTrue(remote.insertedLists.isEmpty())
+        assertTrue(remote.upsertedLists.isEmpty())
+        assertTrue(remote.upsertedItems.isEmpty())
+    }
+
+    // --- push: every account list, shared or not (docs/technical-decisions/008)
+
+    @Test
+    fun `a list not yet on the server is inserted, then marked onServer`() = runTest {
+        dbRule.listDao.insertList(listEntity(shareCode = null, onServer = false, pendingSync = true))
+        dbRule.itemDao.insertItem(itemEntity(pendingSync = true))
+
+        val result = engine.push()
+
+        assertTrue(result is Result.Success)
+        assertEquals(listOf("list-1"), remote.insertedLists.map { it.id })
+        assertEquals(null, remote.insertedLists.single().shareCode)
+        assertTrue("a brand-new row can't be upserted (RLS)", remote.upsertedLists.isEmpty())
+        val row = dbRule.listDao.getListRaw("list-1")!!
+        assertTrue(row.onServer)
+        assertFalse(row.pendingSync)
+        assertEquals(listOf("item-1"), remote.upsertedItems.map { it.id })
+    }
+
+    @Test
+    fun `an insert that finds the row already there still counts as on the server`() = runTest {
+        // A previous push reached the server but the app died before recording it.
+        dbRule.listDao.insertList(listEntity(shareCode = null, onServer = false, pendingSync = true))
+        remote.listAlreadyExists = true
+
+        val result = engine.push()
+
+        assertTrue(result is Result.Success)
+        val row = dbRule.listDao.getListRaw("list-1")!!
+        assertTrue(row.onServer)
+        assertFalse(row.pendingSync)
+    }
+
+    @Test
+    fun `a failed insert leaves the list off the server and queued`() = runTest {
+        dbRule.listDao.insertList(listEntity(shareCode = null, onServer = false, pendingSync = true))
+        remote.failUpserts = true
+
+        val result = engine.push()
+
+        assertTrue(result is Result.Error)
+        val row = dbRule.listDao.getListRaw("list-1")!!
+        assertFalse(row.onServer)
+        assertTrue(row.pendingSync)
+    }
+
+    @Test
+    fun `another account's pending lists and items are not pushed`() = runTest {
+        dbRule.listDao.insertList(listEntity(id = "theirs", accountId = "user-2", pendingSync = true))
+        dbRule.itemDao.insertItem(itemEntity(id = "their-item", listId = "theirs", pendingSync = true))
 
         engine.push()
 
         assertTrue(remote.upsertedLists.isEmpty())
+        assertTrue(remote.upsertedItems.isEmpty())
+        assertTrue(dbRule.listDao.getListRaw("theirs")!!.pendingSync)
     }
 
     @Test

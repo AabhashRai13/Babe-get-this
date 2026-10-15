@@ -15,7 +15,7 @@ fun Long.millisToIso(): String = Instant.fromEpochMilliseconds(this).toString()
 fun ShoppingListEntity.toRow(createdBy: String): ListRow = ListRow(
     id = id,
     name = name,
-    shareCode = requireNotNull(shareCode) { "only shared lists are pushed" },
+    shareCode = shareCode,
     createdBy = createdBy,
     deletedAt = deletedAt?.millisToIso(),
 )

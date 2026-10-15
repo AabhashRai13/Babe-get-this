@@ -35,6 +35,11 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
 
     fun dataOwnerId(): String? = _authState.value.ownerId()
 
+    // Server work needs a live session, not just a known user: after a lost
+    // session the user id is still stored, but a push or share would only
+    // 401. Sync and share wait for a fresh sign-in.
+    fun liveSessionUserId(): String? = (_authState.value as? AuthState.Authenticated)?.userId
+
     private fun AuthState.ownerId(): String? = when (this) {
         is AuthState.Authenticated -> userId
         is AuthState.SessionExpired -> userId

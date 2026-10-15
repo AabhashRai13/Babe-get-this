@@ -15,7 +15,8 @@ import kotlinx.serialization.Serializable
 data class ListRow(
     val id: String,
     val name: String,
-    @SerialName("share_code") val shareCode: String,
+    // Null for an account list that isn't shared (docs/technical-decisions/008).
+    @SerialName("share_code") val shareCode: String? = null,
     @SerialName("created_by") val createdBy: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("deleted_at") val deletedAt: String? = null,

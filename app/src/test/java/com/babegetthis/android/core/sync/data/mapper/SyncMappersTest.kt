@@ -60,10 +60,13 @@ class SyncMappersTest {
     }
 
     @Test
-    fun `list toRow refuses a local-only list`() {
-        assertThrows(IllegalArgumentException::class.java) {
-            listEntity(shareCode = null).toRow(createdBy = "user-9")
-        }
+    fun `an unshared list maps to a row with a null share code`() {
+        // Every account list syncs now; only shared ones carry a code
+        // (docs/technical-decisions/008).
+        val row = listEntity(shareCode = null).toRow(createdBy = "user-9")
+
+        assertEquals(null, row.shareCode)
+        assertEquals("user-9", row.createdBy)
     }
 
     @Test

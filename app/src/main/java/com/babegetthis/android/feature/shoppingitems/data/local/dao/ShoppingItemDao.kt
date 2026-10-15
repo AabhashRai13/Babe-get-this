@@ -69,6 +69,18 @@ interface ShoppingItemDao {
     @Query("SELECT * FROM shopping_items WHERE pendingSync = 1")
     suspend fun getPendingSyncItems(): List<ShoppingItemEntity>
 
+    // The push's read: one account's pending items. The upsert is one batch, so
+    // a single row the server rejects (another account's, after a lost
+    // session) would otherwise fail every push, forever.
+    @Query(
+        """
+        SELECT i.* FROM shopping_items i
+        JOIN shopping_lists l ON l.id = i.listId
+        WHERE i.pendingSync = 1 AND l.accountId = :accountId
+    """,
+    )
+    suspend fun getPendingSyncItemsForAccount(accountId: String): List<ShoppingItemEntity>
+
     // Guarded clear — see ShoppingListDao.markListSynced.
     @Query("UPDATE shopping_items SET pendingSync = 0 WHERE id = :id AND updatedAt = :updatedAt")
     suspend fun markItemSynced(id: String, updatedAt: Long)

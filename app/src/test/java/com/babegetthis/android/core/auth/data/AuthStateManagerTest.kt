@@ -290,6 +290,21 @@ class AuthStateManagerTest {
         assertEquals("u1", manager.dataOwnerId())
     }
 
+    // Server work (push, share) needs a live token, not just a known user —
+    // after a lost session a push would only 401.
+    @Test
+    fun `liveSessionUserId is the user id only while the session is live`() {
+        val manager = AuthStateManager(inMemoryTokenManager())
+        manager.initialize()
+        assertNull(manager.liveSessionUserId())
+
+        manager.login("t", "u1", "Aabhash", "a@b.c")
+        assertEquals("u1", manager.liveSessionUserId())
+
+        manager.expireSession()
+        assertNull(manager.liveSessionUserId())
+    }
+
     @Test
     fun `dataOwner skips Loading and emits only when the owner changes`() = runTest {
         val manager = AuthStateManager(inMemoryTokenManager())

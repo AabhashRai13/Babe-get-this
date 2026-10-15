@@ -30,21 +30,30 @@ class SyncEngine(
     private val crashReporter: CrashReporter,
 ) {
 
-    // Upsert everything pendingSync. Lists strictly before items: the server's
-    // creator-membership trigger on `lists` is what makes the item RLS checks
-    // pass (see the SQL migration's client contract note). Signed out → no-op;
-    // the queue just waits.
+    // Push everything pendingSync that belongs to the signed-in account —
+    // every account list, shared or not (docs/technical-decisions/008). Lists
+    // strictly before items: the server's creator-membership trigger on `lists`
+    // is what makes the item RLS checks pass (see the SQL migration's client
+    // contract note). No live session → no-op; the queue just waits.
     suspend fun push(): Result<Unit> = safeCall {
         val userId = currentUserId()
         if (userId != null) {
-            val lists = listDao.getPendingSyncLists().filter { it.shareCode != null }
-            if (lists.isNotEmpty()) {
-                remote.upsertLists(lists.map { it.toRow(createdBy = userId) })
-                // Guarded per-row clear: a row edited again mid-push keeps its
-                // flag (updatedAt no longer matches) and re-pushes next kick.
-                lists.forEach { listDao.markListSynced(it.id, it.updatedAt) }
+            val lists = listDao.getPendingAccountLists(userId)
+            val (existing, brandNew) = lists.partition { it.onServer }
+            // A brand-new row must be a plain INSERT — an upsert of it fails RLS
+            // (SharedListRemote.insertList). "Already there" (false) means an
+            // earlier push landed before the app could record it: still done.
+            brandNew.forEach { list ->
+                remote.insertList(list.toRow(createdBy = userId))
+                listDao.markListOnServer(list.id)
             }
-            val items = itemDao.getPendingSyncItems()
+            if (existing.isNotEmpty()) {
+                remote.upsertLists(existing.map { it.toRow(createdBy = userId) })
+            }
+            // Guarded per-row clear: a row edited again mid-push keeps its
+            // flag (updatedAt no longer matches) and re-pushes next kick.
+            lists.forEach { listDao.markListSynced(it.id, it.updatedAt) }
+            val items = itemDao.getPendingSyncItemsForAccount(userId)
             if (items.isNotEmpty()) {
                 remote.upsertItems(items.map { it.toRow() })
                 items.forEach { itemDao.markItemSynced(it.id, it.updatedAt) }

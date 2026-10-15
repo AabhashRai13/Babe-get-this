@@ -137,9 +137,15 @@ interface ShoppingListDao {
     )
     suspend fun softDeleteList(listId: String, now: Long)
 
-    // Everything not yet pushed — includes tombstoned rows on purpose.
-    @Query("SELECT * FROM shopping_lists WHERE pendingSync = 1")
-    suspend fun getPendingSyncLists(): List<ShoppingListEntity>
+    // One account's rows not yet pushed — includes tombstoned rows on purpose.
+    // Scoped to the account so another account's leftovers (possible after a
+    // lost session) never ride along under the wrong session.
+    @Query("SELECT * FROM shopping_lists WHERE pendingSync = 1 AND accountId = :accountId")
+    suspend fun getPendingAccountLists(accountId: String): List<ShoppingListEntity>
+
+    // The first INSERT landed; every later push of this row is an upsert.
+    @Query("UPDATE shopping_lists SET onServer = 1 WHERE id = :id")
+    suspend fun markListOnServer(id: String)
 
     // Guarded clear: only if the row wasn't edited again mid-push (updatedAt
     // still matches the pushed snapshot). Otherwise the newer edit would be
@@ -155,7 +161,7 @@ interface ShoppingListDao {
     suspend fun getSharedListIds(): List<String>
 
     // Telemetry-only read — see ShoppingItemDao.countPendingSync for why this
-    // is a COUNT rather than the size of getPendingSyncLists().
+    // is a COUNT rather than the size of getPendingAccountLists().
     @Query("SELECT COUNT(*) FROM shopping_lists WHERE pendingSync = 1")
     suspend fun countPendingSync(): Int
 
