@@ -6,7 +6,10 @@ import kotlinx.coroutines.flow.Flow
 
 // Thin seam over Supabase so SyncEngine is testable with a fake. No logic
 // belongs here — anything with a branch goes in the engine, under the
-// coverage gate.
+// coverage gate. The one exception is paging: PostgREST caps every response
+// (Supabase's default max_rows is 1000) and silently cuts the rest, so every
+// multi-row read here returns the COMPLETE result, however many requests that
+// takes. Callers never see a page.
 interface SharedListRemote {
 
     // Plain INSERT for the FIRST share of a list — deliberately not upsert:
@@ -36,9 +39,10 @@ interface SharedListRemote {
 
     suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow>
 
-    // Account-wide item catch-up: items of these lists changed since
-    // sinceIso (null = everything). The caller keeps listIds short.
-    suspend fun fetchItemsForLists(listIds: List<String>, sinceIso: String?): List<ItemRow>
+    // Account-wide item catch-up: every item the current session may see
+    // (RLS scopes it to the account's lists, like fetchAllLists) changed since
+    // sinceIso (null = everything).
+    suspend fun fetchAccountItems(sinceIso: String?): List<ItemRow>
 
     // Discovery: every list row the current session may see — RLS scopes it
     // to the account's memberships. Signed out → empty.

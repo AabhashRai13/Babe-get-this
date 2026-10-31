@@ -43,7 +43,7 @@ class ResetAppStateRule(
         runBlocking { database().categoryDao().insertAll(DEFAULT_CATEGORIES) }
         authStateManager().logout()
         pinStore().clearAll()
-        clearTelemetryPrefs()
+        clearPrefs()
         setWelcomeDone()
     }
 
@@ -55,20 +55,27 @@ class ResetAppStateRule(
             .edit().putBoolean("welcome_done", welcomeDone).commit()
     }
 
-    // TelemetryMarkers records once-per-user and once-per-list facts in plain
-    // SharedPreferences, which outlive the in-memory database and every other
-    // thing wiped above. Left alone, the FIRST test in the process to add an
-    // item claims the activation marker and every later test sees "already
-    // fired" — so a suite that passes alone fails in company, which is exactly
-    // the flakiness this rule exists to stop.
+    // Plain SharedPreferences outlive the in-memory database and everything
+    // else wiped above, and each of these files makes a later test start where
+    // an earlier one left off — a suite that passes alone fails in company,
+    // which is exactly the flakiness this rule exists to stop:
     //
-    // Cleared through the file rather than a clear() on TelemetryMarkers: the
-    // app has no production reason to wipe them (activation markers are scoped
-    // by user id, so a new account already gets fresh ones), and adding API
-    // purely for tests is how production classes grow test-shaped holes.
-    private fun clearTelemetryPrefs() {
+    //   telemetry_markers / telemetry_consent — once-per-user and once-per-list
+    //     facts; the FIRST test to add an item claims the activation marker and
+    //     every later test sees "already fired".
+    //   list_ownership — the adoption notice (a journey that signs in with
+    //     guest lists leaves it > 0, so the next test opens behind the dialog),
+    //     remembered locks that re-lock lists in later tests, the first-run
+    //     flag (only the first test in the process would take the first-claim
+    //     path) and the unverified claims.
+    //   sync_points — high-water marks, so every test catches up from scratch.
+    //
+    // Cleared through the files rather than clear() methods on the stores: the
+    // app has no production reason to wipe them, and adding API purely for
+    // tests is how production classes grow test-shaped holes.
+    private fun clearPrefs() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        listOf("telemetry_markers", "telemetry_consent").forEach { name ->
+        listOf("telemetry_markers", "telemetry_consent", "list_ownership", "sync_points").forEach { name ->
             context.getSharedPreferences(name, Context.MODE_PRIVATE)
                 .edit().clear().commit()
         }

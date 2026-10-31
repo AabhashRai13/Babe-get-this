@@ -8,6 +8,7 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
+import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
@@ -34,6 +35,7 @@ class ShoppingListRepository @Inject constructor(
     private val authStateManager: AuthStateManager,
     private val ownership: ListOwnershipStore,
     private val syncKicker: SyncKicker,
+    private val syncEngine: SyncEngine,
 ) {
     // Flows don't need Result wrapping — Room handles errors internally
     // and the Flow just stops emitting. We wrap write operations only.
@@ -44,21 +46,13 @@ class ShoppingListRepository @Inject constructor(
     // screen's lists without anyone asking.
     @OptIn(ExperimentalCoroutinesApi::class)
     fun getAllLists(): Flow<List<ShoppingList>> = authStateManager.dataOwner
-        .flatMapLatest { owner ->
-            if (owner == null) {
-                shoppingListDao.getGuestListsWithItemCount()
-            } else {
-                shoppingListDao.getAccountListsWithItemCount(owner)
-            }
-        }
+        .flatMapLatest { owner -> shoppingListDao.getListsWithItemCount(owner) }
         .map { list -> list.map { it.toDomain() } }
 
-    // Every write to a list that has an owner goes through sync, shared or not.
-    private suspend fun isSynced(listId: String): Boolean = shoppingListDao.getListRaw(listId)?.accountId != null
-
-    // An account list — the items screen catches it up once when opened, since
+    // Every write to a list that has an owner goes through sync, shared or not
+    // — and the items screen catches an account list up once when opened, since
     // the account's other phones may have changed it.
-    suspend fun isAccountList(listId: String): Boolean = isSynced(listId)
+    suspend fun isAccountList(listId: String): Boolean = shoppingListDao.getListRaw(listId)?.accountId != null
 
     fun getListById(listId: String): Flow<ShoppingList?> = shoppingListDao.getListById(listId).map { it?.toDomain() }
 
@@ -147,7 +141,7 @@ class ShoppingListRepository @Inject constructor(
     // the voice VM can transition to Done, mirroring createListWithItems.
     suspend fun addItemsToList(listId: String, drafts: List<ItemDraft>): Result<String> = safeCall {
         val now = System.currentTimeMillis()
-        val synced = isSynced(listId)
+        val synced = isAccountList(listId)
         val itemEntities = draftsToItems(listId, drafts, now)
             .map { if (synced) it.copy(pendingSync = true) else it }
         if (itemEntities.isNotEmpty()) {
@@ -215,10 +209,14 @@ class ShoppingListRepository @Inject constructor(
     // so the caller can hold them for undo and re-insert if needed.
     // Account lists soft-delete instead: the tombstone must survive (and sync)
     // for the deletion to reach other members and the account's other phones,
-    // and the item rows stay in Room hidden behind the tombstoned list.
+    // and the item rows stay in Room hidden behind the tombstoned list. Even
+    // one that hasn't reached the server yet — a push may be uploading it right
+    // now, and only the push, which is serialised with that upload, can tell
+    // whether the tombstone has to follow it or the row can simply go
+    // (SyncEngine.push drops it without uploading).
     suspend fun deleteListAndCaptureItems(listId: String): Result<List<ShoppingItemEntity>> = safeCall {
         val items = shoppingItemDao.getItemsByListIdOnce(listId)
-        if (isSynced(listId)) {
+        if (isAccountList(listId)) {
             shoppingListDao.softDeleteList(listId, now = System.currentTimeMillis())
             syncKicker.pushSoon()
         } else {
@@ -233,20 +231,33 @@ class ShoppingListRepository @Inject constructor(
     // one mid-flight — is never deleted by mistake.
     // Returns true if the list was empty and got deleted.
     suspend fun deleteListIfEmpty(listId: String): Result<Boolean> = safeCall {
-        val raw = shoppingListDao.getListRaw(listId)
+        val raw = shoppingListDao.getListRaw(listId) ?: return@safeCall false
         when {
             // Never auto-delete a shared list: "empty" on this phone says nothing
             // about what the partner is doing with it right now.
-            raw?.shareCode != null -> false
+            raw.shareCode != null -> false
+            raw.accountId == null -> shoppingListDao.deleteListIfEmpty(listId) > 0
             // An unshared account list is only this user's, so it can go — as a
-            // tombstone, so the account's other phones lose it too.
-            raw?.accountId != null -> {
-                val deleted = shoppingListDao.softDeleteListIfEmpty(listId, now = System.currentTimeMillis()) > 0
-                if (deleted) syncKicker.pushSoon()
-                deleted
+            // tombstone, so the account's other phones lose it too. One that
+            // never reached the server has no other phones to tell, and the push
+            // drops its tombstone instead of uploading it (SyncEngine.push).
+            !raw.onServer -> softDeleteIfEmpty(listId)
+            // On the server, so the account's other phones may have added to it
+            // while this one wasn't looking — "empty here" is only half the
+            // story, and the deletion would reach them with no undo. Ask the
+            // server first; with no session or no signal the list stays.
+            else -> {
+                if (authStateManager.liveSessionUserId() == null) return@safeCall false
+                if (syncEngine.catchUp(listId) is Result.Error) return@safeCall false
+                softDeleteIfEmpty(listId)
             }
-            else -> shoppingListDao.deleteListIfEmpty(listId) > 0
         }
+    }
+
+    private suspend fun softDeleteIfEmpty(listId: String): Boolean {
+        val deleted = shoppingListDao.softDeleteListIfEmpty(listId, now = System.currentTimeMillis()) > 0
+        if (deleted) syncKicker.pushSoon()
+        return deleted
     }
 
     // Re-insert a previously deleted list along with its items (for undo).
@@ -266,9 +277,18 @@ class ShoppingListRepository @Inject constructor(
             )
             syncKicker.pushSoon()
         } else {
-            // One transaction — a half-completed restore would put the list back
+            // The row is gone: a guest list, or an account list the push already
+            // dropped because it never reached the server (SyncEngine.push). It
+            // comes back as a list of whoever owns the device's lists now, as a
+            // new list would — the domain model carries no owner. One
+            // transaction — a half-completed restore would put the list back
             // empty and drop exactly the items the undo cache exists to protect.
-            shoppingListDao.insertListWithItems(list.toEntity(), items)
+            val owner = authStateManager.dataOwnerId()
+            shoppingListDao.insertListWithItems(
+                list.toEntity().copy(accountId = owner, pendingSync = owner != null),
+                if (owner == null) items else items.map { it.copy(pendingSync = true) },
+            )
+            if (owner != null) syncKicker.pushSoon()
         }
     }
 }

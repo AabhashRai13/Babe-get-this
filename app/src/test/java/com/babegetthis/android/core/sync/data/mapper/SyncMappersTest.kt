@@ -126,6 +126,18 @@ class SyncMappersTest {
         assertEquals(1_767_225_600_000L, entity.createdAt)
     }
 
+    // created_at is write-once on the server and set by whichever new-version
+    // phone pushed first — on a list from before migration 003 that may be a
+    // joiner, whose date is only when it first pulled the list. A row already
+    // on this phone keeps its own date rather than jumping to that one.
+    @Test
+    fun `a list already here keeps its own creation date over the server's`() {
+        val entity = ListRow(id = "list-1", name = "n", createdAt = "2026-01-01T00:00:00Z", updatedAt = iso)
+            .toEntity(local = listEntity(), accountId = "user-1", lockedIds = emptySet())
+
+        assertEquals(1L, entity.createdAt)
+    }
+
     // Whatever the server sends is the signed-in account's list, and it is
     // on the server by definition (docs/technical-decisions/008).
     @Test

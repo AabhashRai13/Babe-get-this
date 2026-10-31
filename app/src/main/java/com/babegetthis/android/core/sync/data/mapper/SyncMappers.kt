@@ -45,10 +45,13 @@ fun ListRow.toEntity(local: ShoppingListEntity?, accountId: String, lockedIds: S
     return ShoppingListEntity(
         id = id,
         name = name,
-        // The list's own creation date when the server has it, so a list that
-        // comes back after sign-out (or onto another phone) keeps its place on
-        // the lists screen. Older rows fall back as before.
-        createdAt = createdAt?.isoToMillis() ?: local?.createdAt ?: serverMs,
+        // This phone's own record of when the list was made wins, then the
+        // server's, so a list that comes back after sign-out (or onto another
+        // phone) keeps its place on the lists screen. The server's value is
+        // whatever new-version phone pushed first — on a list from before
+        // migration 003 that may be a joiner, whose date is only when it first
+        // pulled the list; a row already here never jumps to that date.
+        createdAt = local?.createdAt ?: createdAt?.isoToMillis() ?: serverMs,
         updatedAt = serverMs,
         isLocked = local?.isLocked ?: (id in lockedIds), // per-device, never synced
         shareCode = shareCode,

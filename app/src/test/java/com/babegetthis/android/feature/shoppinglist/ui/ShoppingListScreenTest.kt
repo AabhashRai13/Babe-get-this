@@ -347,6 +347,26 @@ class ShoppingListScreenTest {
         assertTrue(navigatedToLogin)
     }
 
+    // The profile sheet is the only way to sign out, and signing out is the
+    // only way the account's lists ever leave the phone: the account control
+    // must survive a lost session, or those lists are stuck there for good.
+    @Test
+    fun `an expired session keeps the account control so the user can still sign out`() {
+        render(loggedIn = false, authState = AuthState.SessionExpired("u1"))
+
+        compose.onNodeWithContentDescription("Account").assertExists()
+        compose.onNode(hasText("Sign in") and hasAnyAncestor(hasTestTag(TestTags.SESSION_EXPIRED_BANNER)))
+            .assertExists()
+    }
+
+    @Test
+    fun `a guest gets the sign-in pill, not an account control`() {
+        render(loggedIn = false)
+
+        compose.onNodeWithContentDescription("Account").assertDoesNotExist()
+        compose.onNodeWithText("Sign in").assertExists()
+    }
+
     @Test
     fun `the adoption dialog shows the count and OK dismisses it`() {
         ownership.setAdoptionNotice(3)

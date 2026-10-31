@@ -47,7 +47,7 @@ class ShoppingItemRepositorySharedTest {
 
         repository.addItem("list-1", name = "Milk", quantity = "1")
 
-        assertTrue(dbRule.itemDao.getPendingSyncItems().single().name == "Milk")
+        assertTrue(dbRule.itemDao.getPendingSyncItemsForAccount("u1").single().name == "Milk")
         assertEquals(1, kicks)
     }
 
@@ -57,7 +57,7 @@ class ShoppingItemRepositorySharedTest {
 
         repository.addItem("list-1", name = "Milk", quantity = "1")
 
-        assertEquals("Milk", dbRule.itemDao.getPendingSyncItems().single().name)
+        assertEquals("Milk", dbRule.itemDao.getPendingSyncItemsForAccount("u1").single().name)
         assertEquals(1, kicks)
     }
 
@@ -67,7 +67,7 @@ class ShoppingItemRepositorySharedTest {
 
         repository.addItem("list-1", name = "Milk", quantity = "1")
 
-        assertTrue(dbRule.itemDao.getPendingSyncItems().isEmpty())
+        assertTrue(dbRule.itemDao.getPendingSyncItemsForAccount("u1").isEmpty())
         assertEquals(0, kicks)
     }
 
@@ -76,11 +76,13 @@ class ShoppingItemRepositorySharedTest {
         seedList()
         repository.addItem("list-1", name = "Milk", quantity = "1")
         kicks = 0
-        dbRule.itemDao.getPendingSyncItems().forEach { dbRule.itemDao.markItemSynced(it.id, it.updatedAt) }
+        dbRule.itemDao.getPendingSyncItemsForAccount("u1").forEach {
+            dbRule.itemDao.markItemSynced(it.id, it.updatedAt)
+        }
 
         repository.updateItem(domainItem().copy(name = "Oat milk"))
 
-        val row = dbRule.itemDao.getPendingSyncItems().single()
+        val row = dbRule.itemDao.getPendingSyncItemsForAccount("u1").single()
         assertEquals("Oat milk", row.name)
         assertEquals(1, kicks)
     }
@@ -91,7 +93,9 @@ class ShoppingItemRepositorySharedTest {
         repository.addItem("list-1", name = "Milk", quantity = "1")
         val id = dbRule.itemDao.getItemsByListIdOnce("list-1").single().id
         kicks = 0
-        dbRule.itemDao.getPendingSyncItems().forEach { dbRule.itemDao.markItemSynced(it.id, it.updatedAt) }
+        dbRule.itemDao.getPendingSyncItemsForAccount("u1").forEach {
+            dbRule.itemDao.markItemSynced(it.id, it.updatedAt)
+        }
 
         repository.togglePickedUp(id, isPickedUp = true)
 

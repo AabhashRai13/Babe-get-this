@@ -62,6 +62,15 @@ adb install -r -d app/build/outputs/apk/androidTest/dev/debug/app-dev-debug-andr
 
 `-r` keeps existing app data, `-d` permits the older version.
 
+**`The component was not created. Check that you have added the HiltAndroidRule`**
+as a crash before any test runs — the app was in the foreground on the emulator
+when the test build was installed over it, and Android relaunched its activity
+under the Hilt test application. Force-stop it first:
+
+```bash
+adb shell am force-stop com.babegetthis.android.dev
+```
+
 **`NoSuchMethodException: InputManager.getInstance`** — Espresso is older than the
 emulator's Android version. Bump `espressoCore` in `gradle/libs.versions.toml`.
 

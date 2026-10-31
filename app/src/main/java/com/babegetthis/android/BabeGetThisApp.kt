@@ -75,7 +75,9 @@ class BabeGetThisApp : Application() {
                     // never disappears over a technicality. Only the explicit
                     // sign-out in ProfileViewModel removes them (see
                     // docs/technical-decisions/008). A no-op for signed-out
-                    // users, and for the explicit sign-out that also lands here.
+                    // users, and for the explicit sign-out that also lands here
+                    // — SupabaseAuthRepository clears our own state BEFORE the
+                    // Supabase session, so no user id is left to expire.
                     is SessionStatus.NotAuthenticated -> {
                         authStateManager.expireSession()
                         telemetryContext.onUserChanged(null)

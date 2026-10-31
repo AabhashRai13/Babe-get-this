@@ -7,6 +7,7 @@ import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
+import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -35,9 +36,11 @@ class ShoppingListRepositorySharedTest {
             dbRule.categoryDao,
             authStateFor("u1"),
             FakeListOwnershipStore(),
-        ) {
-            kicks++
-        }
+            { kicks++ },
+            // Never reached here: the lists these tests auto-delete haven't been
+            // on the server (ShoppingListRepositoryTest covers the ones that have).
+            mockk(relaxed = true),
+        )
     }
 
     private fun sharedList(id: String = "list-1") = ShoppingListEntity(

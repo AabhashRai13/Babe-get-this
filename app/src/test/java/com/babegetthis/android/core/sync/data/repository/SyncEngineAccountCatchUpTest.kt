@@ -22,8 +22,8 @@ import org.robolectric.RobolectricTestRunner
 
 // Account-wide catch-up (docs/technical-decisions/008): once every account
 // list syncs, two requests per list on every app open doesn't scale. One
-// discovery request, a full pull only for lists new to this phone, and the
-// rest in batches since one account-wide sync point.
+// discovery request, one account-wide item request since one sync point, and
+// a full pull only for lists new to this phone.
 @RunWith(RobolectricTestRunner::class)
 class SyncEngineAccountCatchUpTest {
 
@@ -97,14 +97,15 @@ class SyncEngineAccountCatchUpTest {
         engine.catchUpAccount()
 
         assertTrue("no full pull for a list already here", remote.itemFetchListIds.isEmpty())
-        assertEquals(listOf(listOf("known")), remote.itemBatches)
-        assertEquals(t10, remote.lastItemSince)
+        assertEquals(listOf(t10), remote.accountItemSinces)
         assertNotNull(dbRule.itemDao.getItemRaw("fresh"))
         assertEquals(t11, syncPoints.get(SyncEngine.ACCOUNT_SYNC_POINT))
     }
 
+    // One request however many lists: the server scopes it to the account the
+    // same way discovery is scoped, so no list ids travel in the URL.
     @Test
-    fun `51 known lists are fetched in two batches`() = runTest {
+    fun `known lists are caught up in a single account-wide request`() = runTest {
         val ids = (0..50).map { "list-%02d".format(it) }
         ids.forEach { seedAccountList(it) }
         remote.listRows = ids.map { listRow(it) }
@@ -112,38 +113,115 @@ class SyncEngineAccountCatchUpTest {
 
         engine.catchUpAccount()
 
-        assertEquals(listOf(50, 1), remote.itemBatches.map { it.size })
+        assertEquals(1, remote.accountItemSinces.size)
         assertNotNull(dbRule.itemDao.getItemRaw("first"))
         assertNotNull(dbRule.itemDao.getItemRaw("last"))
     }
 
     @Test
-    fun `the sync point does not move when a batch fails`() = runTest {
-        val ids = (0..50).map { "list-%02d".format(it) }
-        ids.forEach { seedAccountList(it) }
+    fun `the sync point does not move when the account request fails`() = runTest {
+        seedAccountList("known")
         syncPoints.set(SyncEngine.ACCOUNT_SYNC_POINT, t10)
-        remote.listRows = ids.map { listRow(it) }
-        remote.itemRows = listOf(itemRow("first", "list-00", updatedAt = t11))
-        remote.failOnItemBatch = 2
+        remote.listRows = listOf(listRow("known", updatedAt = t12))
+        remote.failAccountItems = true
 
         val result = engine.catchUpAccount()
 
         assertTrue(result is Result.Error)
+        assertEquals("retried from the same point", t10, syncPoints.get(SyncEngine.ACCOUNT_SYNC_POINT))
+    }
+
+    // Nothing to catch up on yet, and the account-wide request would return
+    // every item of every list only for the full pulls to fetch them again.
+    @Test
+    fun `no account-wide item request is made before any list is known`() = runTest {
+        remote.listRows = listOf(listRow("new", updatedAt = t11))
+        remote.itemRows = listOf(itemRow("a", "new"))
+
+        engine.catchUpAccount()
+
+        assertTrue(remote.accountItemSinces.isEmpty())
+        assertNotNull(dbRule.itemDao.getItemRaw("a"))
         assertEquals(
-            "the failed batch is retried from the same point",
-            t10,
+            "the list rows read first of all still move the point",
+            t11,
             syncPoints.get(SyncEngine.ACCOUNT_SYNC_POINT),
         )
     }
 
+    // Known lists first: a change to a new list right after its full pull is
+    // then newer than anything the sync point was built from, so the next pass
+    // fetches it. Read the other way round, a batch read after the pull could
+    // carry the point past that change, and the account pass would skip it for
+    // good.
     @Test
-    fun `tombstoned lists found by discovery do not pull their items`() = runTest {
+    fun `the account-wide request is read before any full pull`() = runTest {
+        seedAccountList("known")
+        remote.listRows = listOf(listRow("known"), listRow("new"))
+
+        engine.catchUpAccount()
+
+        assertEquals(listOf("account", "items:new"), remote.itemReads)
+    }
+
+    @Test
+    fun `the sync point moves on a pass with no item changes`() = runTest {
+        seedAccountList("known")
+        syncPoints.set(SyncEngine.ACCOUNT_SYNC_POINT, t10)
+        remote.listRows = listOf(listRow("known", updatedAt = t12))
+
+        engine.catchUpAccount()
+
+        assertEquals(t12, syncPoints.get(SyncEngine.ACCOUNT_SYNC_POINT))
+    }
+
+    @Test
+    fun `tombstoned lists found by discovery are neither stored nor pulled`() = runTest {
         remote.listRows = listOf(listRow("deleted", deletedAt = t10))
         remote.itemRows = listOf(itemRow("x", "deleted"))
 
         engine.catchUpAccount()
 
         assertTrue(remote.itemFetchListIds.isEmpty())
+        assertNull(
+            "a deletion of a list this phone never had is nothing to store",
+            dbRule.listDao.getListRaw("deleted"),
+        )
+    }
+
+    @Test
+    fun `a known list's tombstone is applied`() = runTest {
+        seedAccountList("known")
+        remote.listRows = listOf(listRow("known", updatedAt = t12, deletedAt = t12))
+
+        engine.catchUpAccount()
+
+        assertNotNull(dbRule.listDao.getListRaw("known")!!.deletedAt)
+    }
+
+    // A request without a session gets an empty answer too (RLS filters, it
+    // doesn't fail), and a kick can run before the stored session has loaded:
+    // that answer must not throw every first-run claim away.
+    @Test
+    fun `an empty discovery keeps the first-run claims`() = runTest {
+        dbRule.listDao.insertList(
+            ShoppingListEntity(
+                id = "claimed",
+                name = "Claimed",
+                createdAt = 1L,
+                updatedAt = 2L,
+                shareCode = "ABC123",
+                accountId = "user-1",
+                onServer = true,
+            ),
+        )
+        ownership.setUnverifiedListIds(setOf("claimed"))
+        remote.listRows = emptyList()
+
+        engine.catchUpAccount()
+
+        assertEquals("user-1", dbRule.listDao.getListRaw("claimed")!!.accountId)
+        assertEquals(setOf("claimed"), ownership.unverifiedListIds())
     }
 
     // A shared replica whose owner was lost before lists had owners: the server

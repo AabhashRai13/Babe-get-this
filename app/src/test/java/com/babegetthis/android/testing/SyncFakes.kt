@@ -5,6 +5,7 @@ import com.babegetthis.android.core.sync.data.model.ListRow
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,27 +58,31 @@ class FakeSharedListRemote : SharedListRemote {
 
     val itemFetchListIds = mutableListOf<String>()
 
+    // Every item read of an account catch-up, in the order it was made:
+    // "account" for the account-wide request, "items:<listId>" for a full pull.
+    val itemReads = mutableListOf<String>()
+
     // Fail the full item pull of this one list (a dropped request mid-pass).
     var failItemFetchFor: String? = null
 
     override suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow> {
         if (failFetches || listId == failItemFetchFor) error("network down")
         itemFetchListIds += listId
+        itemReads += "items:$listId"
         lastItemSince = sinceIso
         return itemRows.filter { it.listId == listId }
     }
 
-    // Each account-wide item request's list ids, in order. failOnItemBatch
-    // (1-based) makes that one request fail, to test partial passes.
-    val itemBatches = mutableListOf<List<String>>()
-    var failOnItemBatch = -1
+    // The since of each account-wide item request, in order. Rows are filtered
+    // by it the way the server's gte would.
+    val accountItemSinces = mutableListOf<String?>()
+    var failAccountItems = false
 
-    override suspend fun fetchItemsForLists(listIds: List<String>, sinceIso: String?): List<ItemRow> {
-        if (failFetches) error("network down")
-        itemBatches += listIds
-        if (itemBatches.size == failOnItemBatch) error("network down")
-        lastItemSince = sinceIso
-        return itemRows.filter { it.listId in listIds }
+    override suspend fun fetchAccountItems(sinceIso: String?): List<ItemRow> {
+        if (failFetches || failAccountItems) error("network down")
+        accountItemSinces += sinceIso
+        itemReads += "account"
+        return itemRows.filter { sinceIso == null || (it.updatedAt ?: "") >= sinceIso }
     }
 
     // (listId, code) per share request. serverShareCode simulates another
@@ -94,8 +99,15 @@ class FakeSharedListRemote : SharedListRemote {
         return serverShareCode ?: code
     }
 
+    // Completed when discovery is entered; a gate it then waits on. Lets a
+    // test hold a catch-up mid-request while something else tries to run.
+    val fetchAllEntered = CompletableDeferred<Unit>()
+    var fetchAllGate: CompletableDeferred<Unit>? = null
+
     override suspend fun fetchAllLists(): List<ListRow> {
         if (failFetches) error("network down")
+        fetchAllEntered.complete(Unit)
+        fetchAllGate?.await()
         return listRows
     }
 

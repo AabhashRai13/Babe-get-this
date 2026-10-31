@@ -13,15 +13,18 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ShoppingListDao {
 
-    // Lists with their item counts and completion counts, one query per owner.
-    // Both counts are calculated live by counting rows in shopping_items.
-    // A list is "completed" when itemCount > 0 and completedItemCount == itemCount.
+    // One owner's lists with their item counts and completion counts. Both
+    // counts are calculated live by counting rows in shopping_items. A list is
+    // "completed" when itemCount > 0 and completedItemCount == itemCount.
     // Tombstoned (deletedAt set) lists and items are invisible everywhere in the
     // UI; explicit columns instead of l.* so the sync columns never leak into
     // the projection.
     //
     // A device shows exactly one owner's lists (docs/technical-decisions/008):
-    // the signed-in (or session-expired) account's, or the guest lists.
+    // the signed-in (or session-expired) account's, or — accountId null — the
+    // guest lists. A shared replica with no owner (its session was lost before
+    // lists had owners) is not a guest list: it is excluded until the account
+    // claims it once the server confirms membership.
     @Query(
         """
         SELECT l.id, l.name, l.createdAt, l.updatedAt, l.isLocked,
@@ -29,29 +32,14 @@ interface ShoppingListDao {
                SUM(CASE WHEN i.isPickedUp = 1 THEN 1 ELSE 0 END) AS completedItemCount
         FROM shopping_lists l
         LEFT JOIN shopping_items i ON l.id = i.listId AND i.deletedAt IS NULL
-        WHERE l.deletedAt IS NULL AND l.accountId = :accountId
+        WHERE l.deletedAt IS NULL
+          AND ((:accountId IS NULL AND l.accountId IS NULL AND l.shareCode IS NULL)
+               OR l.accountId = :accountId)
         GROUP BY l.id
         ORDER BY l.createdAt DESC
     """,
     )
-    fun getAccountListsWithItemCount(accountId: String): Flow<List<ShoppingListWithItemCount>>
-
-    // Guest lists only. A shared replica with no owner (its session was lost
-    // before lists had owners) is excluded: it isn't the guest's, and it is
-    // claimed by the account once the server confirms membership.
-    @Query(
-        """
-        SELECT l.id, l.name, l.createdAt, l.updatedAt, l.isLocked,
-               COUNT(i.id) AS itemCount,
-               SUM(CASE WHEN i.isPickedUp = 1 THEN 1 ELSE 0 END) AS completedItemCount
-        FROM shopping_lists l
-        LEFT JOIN shopping_items i ON l.id = i.listId AND i.deletedAt IS NULL
-        WHERE l.deletedAt IS NULL AND l.accountId IS NULL AND l.shareCode IS NULL
-        GROUP BY l.id
-        ORDER BY l.createdAt DESC
-    """,
-    )
-    fun getGuestListsWithItemCount(): Flow<List<ShoppingListWithItemCount>>
+    fun getListsWithItemCount(accountId: String?): Flow<List<ShoppingListWithItemCount>>
 
     @Query("SELECT * FROM shopping_lists WHERE id = :listId AND deletedAt IS NULL")
     fun getListById(listId: String): Flow<ShoppingListEntity?>
@@ -145,6 +133,18 @@ interface ShoppingListDao {
     // lost session) never ride along under the wrong session.
     @Query("SELECT * FROM shopping_lists WHERE pendingSync = 1 AND accountId = :accountId")
     suspend fun getPendingAccountLists(accountId: String): List<ShoppingListEntity>
+
+    // What the push above would send, counted — the sign-out warning asks on
+    // every sign-out, and a row push can never send must not keep it showing.
+    @Query("SELECT COUNT(*) FROM shopping_lists WHERE pendingSync = 1 AND accountId = :accountId")
+    suspend fun countPendingAccountLists(accountId: String): Int
+
+    // Lists deleted before they ever reached the server: nobody else can have
+    // them, so there is no tombstone to deliver and the row can simply go
+    // (CASCADE takes the items). Called by the push, which is the one place
+    // serialised with the INSERT such a row might otherwise have been racing.
+    @Query("DELETE FROM shopping_lists WHERE onServer = 0 AND deletedAt IS NOT NULL")
+    suspend fun deleteNeverSentDeletedLists()
 
     // Sharing a list that already syncs: the server set the code, record it.
     @Query("UPDATE shopping_lists SET shareCode = :code WHERE id = :id")

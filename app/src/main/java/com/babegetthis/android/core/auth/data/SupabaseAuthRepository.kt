@@ -72,8 +72,13 @@ class SupabaseAuthRepository @Inject constructor(
         // which would abort logout entirely and leave the user stuck signed in.
         // Logout must always succeed locally.
         //
-        clearSupabaseSession()
+        // Our own state first: clearing the Supabase session fires its
+        // NotAuthenticated status, which BabeGetThisApp mirrors as a LOST
+        // session — a no-op only once the user id is already gone. The other
+        // way round the app passed through SessionExpired on every sign-out:
+        // the banner flashed and a sync kick re-claimed lists just evicted.
         authStateManager.logout()
+        clearSupabaseSession()
         return Result.Success(Unit)
     }
 
@@ -118,9 +123,9 @@ class SupabaseAuthRepository @Inject constructor(
             ?: error("You must be signed in to delete your account.")
         supabaseClient.postgrest.rpc("delete_user")
         // The user row is gone, so the server can't cleanly end the session —
-        // just clear everything locally, same as logout().
-        clearSupabaseSession()
+        // just clear everything locally, in the same order as logout().
         authStateManager.logout()
+        clearSupabaseSession()
     }
 
     // -- Helpers --

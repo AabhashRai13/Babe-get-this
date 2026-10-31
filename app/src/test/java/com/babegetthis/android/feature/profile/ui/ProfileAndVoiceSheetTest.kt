@@ -19,8 +19,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -50,7 +52,17 @@ class ProfileAndVoiceSheetTest {
             every { userName } returns MutableStateFlow(name)
             every { userEmail } returns MutableStateFlow(email)
         }
-        val vm = ProfileViewModel(authRepository, authStateManager, syncEngine, mockk(relaxed = true))
+        coEvery { syncEngine.evictAccountLists(any()) } coAnswers {
+            firstArg<suspend () -> Unit>().invoke()
+            Result.Success(Unit)
+        }
+        val vm = ProfileViewModel(
+            authRepository,
+            authStateManager,
+            syncEngine,
+            mockk(relaxed = true),
+            CoroutineScope(UnconfinedTestDispatcher()),
+        )
         compose.setContent { ProfileBottomSheet(onDismiss = {}, viewModel = vm) }
         return vm
     }
@@ -59,7 +71,7 @@ class ProfileAndVoiceSheetTest {
 
     @Test
     fun `the unsynced warning offers cancel and sign out anyway`() {
-        coEvery { syncEngine.hasUnsyncedChanges() } returns true
+        coEvery { syncEngine.hasUnsyncedChanges(any()) } returns true
         coEvery { authRepository.logout() } returns Result.Success(Unit)
         profile()
 
@@ -73,7 +85,7 @@ class ProfileAndVoiceSheetTest {
 
     @Test
     fun `cancelling the unsynced warning keeps the user signed in`() {
-        coEvery { syncEngine.hasUnsyncedChanges() } returns true
+        coEvery { syncEngine.hasUnsyncedChanges(any()) } returns true
         profile()
         click("Log out")
 

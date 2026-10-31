@@ -65,13 +65,10 @@ interface ShoppingItemDao {
     )
     suspend fun softDeleteItem(itemId: String, now: Long)
 
-    // Everything not yet pushed — includes tombstoned rows on purpose.
-    @Query("SELECT * FROM shopping_items WHERE pendingSync = 1")
-    suspend fun getPendingSyncItems(): List<ShoppingItemEntity>
-
-    // The push's read: one account's pending items. The upsert is one batch, so
-    // a single row the server rejects (another account's, after a lost
-    // session) would otherwise fail every push, forever.
+    // The push's read: one account's pending items — includes tombstoned rows
+    // on purpose. The upsert is one batch, so a single row the server rejects
+    // (another account's, after a lost session) would otherwise fail every
+    // push, forever. There is deliberately no unscoped variant.
     @Query(
         """
         SELECT i.* FROM shopping_items i
@@ -81,6 +78,16 @@ interface ShoppingItemDao {
     )
     suspend fun getPendingSyncItemsForAccount(accountId: String): List<ShoppingItemEntity>
 
+    // The same rows, counted — see ShoppingListDao.countPendingAccountLists.
+    @Query(
+        """
+        SELECT COUNT(*) FROM shopping_items i
+        JOIN shopping_lists l ON l.id = i.listId
+        WHERE i.pendingSync = 1 AND l.accountId = :accountId
+    """,
+    )
+    suspend fun countPendingSyncItemsForAccount(accountId: String): Int
+
     // Guarded clear — see ShoppingListDao.markListSynced.
     @Query("UPDATE shopping_items SET pendingSync = 0 WHERE id = :id AND updatedAt = :updatedAt")
     suspend fun markItemSynced(id: String, updatedAt: Long)
@@ -89,10 +96,9 @@ interface ShoppingItemDao {
     @Query("SELECT * FROM shopping_items WHERE id = :itemId")
     suspend fun getItemRaw(itemId: String): ShoppingItemEntity?
 
-    // Telemetry-only reads (see core/telemetry/TelemetryContext). COUNT rather
-    // than reusing getPendingSyncItems().size, which would materialise every
-    // row to throw them all away — this runs on screen changes, so it stays
-    // cheap by construction rather than by luck.
+    // Telemetry-only reads (see core/telemetry/TelemetryContext). COUNTs rather
+    // than materialising every row to throw them all away — this runs on
+    // screen changes, so it stays cheap by construction rather than by luck.
     @Query("SELECT COUNT(*) FROM shopping_items WHERE deletedAt IS NULL")
     suspend fun countActiveItems(): Int
 

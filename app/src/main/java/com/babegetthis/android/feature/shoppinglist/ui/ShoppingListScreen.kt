@@ -128,6 +128,12 @@ fun ShoppingListScreen(
     val authState by authStateManager.authState.collectAsState()
     val isLoggedIn = authState is AuthState.Authenticated
     val isSessionExpired by viewModel.isSessionExpired.collectAsState()
+    // An account still owns this phone's lists after a lost session, and the
+    // profile sheet is the only way to sign out — which is the only way those
+    // lists ever leave the phone (docs/technical-decisions/008). So the account
+    // control stays while the session is merely expired; only live-session
+    // features (voice, sharing) look at isLoggedIn.
+    val hasAccount = isLoggedIn || isSessionExpired
     val adoptionNotice by viewModel.adoptionNotice.collectAsState()
     val userName by authStateManager.userName.collectAsState()
     var showProfileSheet by remember { mutableStateOf(false) }
@@ -206,7 +212,7 @@ fun ShoppingListScreen(
                         )
                     }
                     AccountAction(
-                        isLoggedIn = isLoggedIn,
+                        hasAccount = hasAccount,
                         userName = userName,
                         onOpenProfile = {
                             haptic(Haptic.Light)
@@ -445,8 +451,8 @@ fun ShoppingListScreen(
     }
 
     // Auto-dismiss the profile sheet when the user logs out
-    LaunchedEffect(isLoggedIn) {
-        if (!isLoggedIn) {
+    LaunchedEffect(hasAccount) {
+        if (!hasAccount) {
             showProfileSheet = false
         }
     }
@@ -493,7 +499,7 @@ fun ShoppingListScreen(
     }
 
     // Profile bottom sheet — only rendered when the user taps the profile icon
-    if (showProfileSheet && isLoggedIn) {
+    if (showProfileSheet && hasAccount) {
         ProfileBottomSheet(
             onDismiss = { showProfileSheet = false },
             onToast = { message ->
@@ -527,10 +533,11 @@ private fun TimePeriodHeader(period: TimePeriod) {
 }
 
 // The Home top-bar account control. Its appearance is the visual cue for
-// auth state: an initial-avatar when signed in, a "Sign in" pill when not.
+// auth state: an initial-avatar while an account owns the phone's lists
+// (signed in, or a lost session), a "Sign in" pill when nobody does.
 @Composable
-private fun AccountAction(isLoggedIn: Boolean, userName: String?, onOpenProfile: () -> Unit, onSignIn: () -> Unit) {
-    if (isLoggedIn) {
+private fun AccountAction(hasAccount: Boolean, userName: String?, onOpenProfile: () -> Unit, onSignIn: () -> Unit) {
+    if (hasAccount) {
         // Circular initial avatar — same language as the Profile sheet avatar.
         val initial = userName?.trim()?.firstOrNull()?.uppercase()
         Box(

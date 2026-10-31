@@ -29,7 +29,7 @@ these decisions. They are recorded here so that can't happen twice.
 | D5 | **Got This is per person, not shared between list members.** (For the Got This spec; not built here.) | Household-level history — list members are not necessarily one household (a flatmate, a friend, a coworker for one trip). |
 | D6 | **A lost session keeps the account's lists visible and editable**; only an explicit sign-out removes them. New `AuthState.SessionExpired(userId)`. | Treat session loss like sign-out — lists vanish over a token expiry, which 004 already ruled out. |
 | D7 | **A server-side list no longer needs a share code**: `lists.share_code` is nullable and write-once. | A code for every list at creation — every private list joinable by anyone who guesses six characters. |
-| D8 | **Background catch-up is account-wide**: one discovery request, full history only for lists new to the phone, the rest in batches since one account sync point. | Per-list catch-up for every list — two requests per list on every app open once every list syncs. |
+| D8 | **Background catch-up is account-wide**: one discovery request, one request for the account's items changed since one account sync point (RLS-scoped, like discovery), full history only for lists new to the phone. Every multi-row read pages, since PostgREST caps a response at 1000 rows. | Per-list catch-up for every list — two requests per list on every app open once every list syncs. Batches of list ids — a sync point taken across batches read at different times skips changes made in between. |
 
 ## Ownership, by event
 

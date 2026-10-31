@@ -3,14 +3,20 @@ package com.babegetthis.android.feature.shoppinglist.data.repository
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.sync.data.model.ItemRow
+import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.testing.FakeListOwnershipStore
+import com.babegetthis.android.testing.FakeSharedListRemote
+import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
+import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -26,13 +32,31 @@ class ShoppingListRepositoryTest {
 
     private var kicks = 0
     private val ownership = FakeListOwnershipStore()
+    private val remote = FakeSharedListRemote()
 
     // Everything below the ownership section runs as a guest, which is how
     // these tests behaved before lists had owners.
     private val repository by lazy { repositoryAs(authStateFor(null)) }
 
-    private fun repositoryAs(auth: AuthStateManager) =
-        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao, auth, ownership) { kicks++ }
+    // A real engine over the fake remote: deleteListIfEmpty asks the server
+    // through it, and what matters is what lands in Room as a result.
+    private fun repositoryAs(auth: AuthStateManager) = ShoppingListRepository(
+        dbRule.listDao,
+        dbRule.itemDao,
+        dbRule.categoryDao,
+        auth,
+        ownership,
+        { kicks++ },
+        SyncEngine(
+            dbRule.listDao,
+            dbRule.itemDao,
+            remote,
+            FakeSyncPointStore(),
+            ownership,
+            { auth.liveSessionUserId() },
+            mockk(relaxed = true),
+        ),
+    )
 
     private suspend fun seed(id: String, accountId: String? = null, shareCode: String? = null) =
         dbRule.listDao.insertList(TestData.listEntity(id = id).copy(accountId = accountId, shareCode = shareCode))
@@ -407,6 +431,100 @@ class ShoppingListRepositoryTest {
         assertEquals(false, repository.deleteListIfEmpty(id).data())
     }
 
+    @Test
+    fun `deleteListIfEmpty reports false for a list that does not exist`() = runTest {
+        assertEquals(false, repository.deleteListIfEmpty("missing").data())
+    }
+
+    // --- deleteListIfEmpty on account lists (docs/technical-decisions/008) ---
+    //
+    // "Empty on this phone" is only half the story for a list the account's
+    // other phones can see: the deletion would reach them with no undo.
+
+    private suspend fun seedOnServer(id: String, accountId: String = "u1", shareCode: String? = null) =
+        dbRule.listDao.insertList(
+            TestData.listEntity(id = id).copy(accountId = accountId, shareCode = shareCode, onServer = true),
+        )
+
+    @Test
+    fun `a shared list is never auto-deleted`() = runTest {
+        seedOnServer("shared", shareCode = "ABC234")
+
+        assertEquals(false, repositoryAs(authStateFor("u1")).deleteListIfEmpty("shared").data())
+        assertNull(dbRule.listDao.getListRaw("shared")!!.deletedAt)
+    }
+
+    @Test
+    fun `an empty account list that never reached the server is tombstoned without asking`() = runTest {
+        val repo = repositoryAs(authStateFor("u1"))
+        val id = repo.createList("Groceries").data()
+        kicks = 0
+
+        assertEquals(true, repo.deleteListIfEmpty(id).data())
+
+        assertNotNull(
+            "a tombstone, which the push drops rather than uploads",
+            dbRule.listDao.getListRaw(id)!!.deletedAt,
+        )
+        assertTrue("nothing to ask the server about", remote.fetchedListIds.isEmpty())
+        assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `an empty account list on the server is tombstoned once the server agrees it is empty`() = runTest {
+        seedOnServer("solo")
+
+        assertEquals(true, repositoryAs(authStateFor("u1")).deleteListIfEmpty("solo").data())
+
+        assertEquals(listOf("solo"), remote.fetchedListIds)
+        assertNotNull(dbRule.listDao.getListRaw("solo")!!.deletedAt)
+        assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `an empty-looking account list is kept when the server has items for it`() = runTest {
+        seedOnServer("solo")
+        remote.itemRows =
+            listOf(
+                ItemRow(id = "x", listId = "solo", name = "Milk", quantity = "1", updatedAt = "2026-08-01T10:00:00Z"),
+            )
+
+        assertEquals(false, repositoryAs(authStateFor("u1")).deleteListIfEmpty("solo").data())
+
+        assertNull(dbRule.listDao.getListRaw("solo")!!.deletedAt)
+        assertNotNull("the other phone's item landed", dbRule.itemDao.getItemRaw("x"))
+        assertEquals(0, kicks)
+    }
+
+    @Test
+    fun `an empty account list is kept when the server cannot be reached`() = runTest {
+        seedOnServer("solo")
+        remote.failFetches = true
+
+        assertEquals(false, repositoryAs(authStateFor("u1")).deleteListIfEmpty("solo").data())
+
+        assertNull(dbRule.listDao.getListRaw("solo")!!.deletedAt)
+        assertEquals(0, kicks)
+    }
+
+    @Test
+    fun `an empty account list is kept after a lost session`() = runTest {
+        seedOnServer("solo")
+
+        assertEquals(false, repositoryAs(authStateFor("u1", expired = true)).deleteListIfEmpty("solo").data())
+
+        assertTrue(remote.fetchedListIds.isEmpty())
+        assertNull(dbRule.listDao.getListRaw("solo")!!.deletedAt)
+    }
+
+    @Test
+    fun `a tombstoned account list is not deleted twice`() = runTest {
+        seedOnServer("solo")
+        dbRule.listDao.softDeleteList("solo", now = 5L)
+
+        assertEquals(false, repositoryAs(authStateFor("u1")).deleteListIfEmpty("solo").data())
+    }
+
     // The whole point of the undo cache: the list AND its items come back, so the
     // derived completion state recomputes correctly.
     @Test
@@ -423,6 +541,30 @@ class ShoppingListRepositoryTest {
         assertEquals(id, restored.id)
         assertEquals(2, restored.itemCount)
         assertEquals(1, restored.completedItemCount)
+    }
+
+    // The push drops a list deleted before it ever reached the server rather
+    // than uploading its tombstone, so by the time Undo is tapped the row can
+    // be gone. It comes back as the account's, queued, as a new list would —
+    // re-inserting it as a guest list would silently detach it from sync.
+    @Test
+    fun `restoring a list whose row is gone gives it back to the account`() = runTest {
+        val repo = repositoryAs(authStateFor("u1"))
+        val id = repo.createList("Groceries").data()
+        dbRule.itemDao.insertItem(TestData.itemEntity(id = "i1", listId = id))
+        val original = repo.getAllLists().first().single()
+        val captured = repo.deleteListAndCaptureItems(id).data()
+        dbRule.listDao.deleteNeverSentDeletedLists()
+        assertNull(dbRule.listDao.getListRaw(id))
+        kicks = 0
+
+        repo.restoreListWithItems(original, captured)
+
+        val row = dbRule.listDao.getListRaw(id)!!
+        assertEquals("u1", row.accountId)
+        assertTrue(row.pendingSync)
+        assertTrue(dbRule.itemDao.getItemRaw("i1")!!.pendingSync)
+        assertEquals(1, kicks)
     }
 
     @Test
