@@ -18,6 +18,9 @@ data class ListRow(
     // Null for an account list that isn't shared (docs/technical-decisions/008).
     @SerialName("share_code") val shareCode: String? = null,
     @SerialName("created_by") val createdBy: String? = null,
+    // When the list was first made, on whichever phone made it. Write-once on
+    // the server (migration 003); null on rows from before it existed.
+    @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("deleted_at") val deletedAt: String? = null,
 )

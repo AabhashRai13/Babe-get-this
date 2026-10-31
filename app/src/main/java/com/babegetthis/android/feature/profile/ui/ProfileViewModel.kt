@@ -115,13 +115,14 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeletingAccount = true)
 
-            // Before, not after: the final best-effort push inside needs the
-            // session that deleteAccount is about to destroy. If deletion then
-            // fails, discovery on the next sync kick restores the lists.
-            syncEngine.evictAccountLists()
+            // Push while the session still exists, delete the account, and only
+            // then take its lists off the phone. A deletion that fails (offline,
+            // server error) must leave every list and unsynced edit in place.
+            syncEngine.push()
 
             when (val result = authRepository.deleteAccount()) {
                 is Result.Success -> {
+                    syncEngine.evictAccountLists()
                     _uiState.value = _uiState.value.copy(isDeletingAccount = false)
                     welcome.reset()
                     _toastEvent.emit("Your account has been deleted")

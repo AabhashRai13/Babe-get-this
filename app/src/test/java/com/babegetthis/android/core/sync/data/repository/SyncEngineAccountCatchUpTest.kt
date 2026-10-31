@@ -193,4 +193,23 @@ class SyncEngineAccountCatchUpTest {
         assertNull(dbRule.listDao.getListRaw("new"))
         assertTrue(remote.fetchedListIds.isEmpty())
     }
+
+    // If a new list's row landed before its history, a failed pull would make
+    // it "known" next time, and only items newer than the account sync point
+    // would ever arrive — the rest of a list joined elsewhere, gone for good.
+    @Test
+    fun `a new list whose history fails to load is retried in full`() = runTest {
+        syncPoints.set(SyncEngine.ACCOUNT_SYNC_POINT, t12)
+        remote.listRows = listOf(listRow("joined"))
+        remote.itemRows = listOf(itemRow("old-item", "joined", updatedAt = t10))
+        remote.failItemFetchFor = "joined"
+
+        assertTrue(engine.catchUpAccount() is Result.Error)
+        assertNull("no row without its history", dbRule.listDao.getListRaw("joined"))
+
+        remote.failItemFetchFor = null
+        engine.catchUpAccount()
+
+        assertNotNull(dbRule.itemDao.getItemRaw("old-item"))
+    }
 }

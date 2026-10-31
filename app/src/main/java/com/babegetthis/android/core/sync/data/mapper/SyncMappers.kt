@@ -17,6 +17,7 @@ fun ShoppingListEntity.toRow(createdBy: String): ListRow = ListRow(
     name = name,
     shareCode = shareCode,
     createdBy = createdBy,
+    createdAt = createdAt.millisToIso(),
     deletedAt = deletedAt?.millisToIso(),
 )
 
@@ -44,7 +45,10 @@ fun ListRow.toEntity(local: ShoppingListEntity?, accountId: String, lockedIds: S
     return ShoppingListEntity(
         id = id,
         name = name,
-        createdAt = local?.createdAt ?: serverMs,
+        // The list's own creation date when the server has it, so a list that
+        // comes back after sign-out (or onto another phone) keeps its place on
+        // the lists screen. Older rows fall back as before.
+        createdAt = createdAt?.isoToMillis() ?: local?.createdAt ?: serverMs,
         updatedAt = serverMs,
         isLocked = local?.isLocked ?: (id in lockedIds), // per-device, never synced
         shareCode = shareCode,

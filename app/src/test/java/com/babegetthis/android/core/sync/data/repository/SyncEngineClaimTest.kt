@@ -41,6 +41,7 @@ class SyncEngineClaimTest {
         shareCode: String? = null,
         onServer: Boolean = false,
         pendingSync: Boolean = false,
+        isLocked: Boolean = false,
     ) = dbRule.listDao.insertList(
         ShoppingListEntity(
             id = id,
@@ -51,6 +52,7 @@ class SyncEngineClaimTest {
             pendingSync = pendingSync,
             accountId = accountId,
             onServer = onServer,
+            isLocked = isLocked,
         ),
     )
 
@@ -183,5 +185,67 @@ class SyncEngineClaimTest {
         assertFalse(engine.onAuthState(AuthState.Loading))
         assertFalse(ownership.isAccountListsMigrated())
         assertNull(list("guest")!!.accountId)
+    }
+
+    // A lock is per-device and never syncs; the remembered set is what re-locks
+    // a list that sign-out evicted. Locks set BEFORE the update never went
+    // through setLocked, so the first run has to record them.
+    @Test
+    fun `the first claim remembers locks set before the update`() = runTest {
+        seedList("locked", isLocked = true)
+        seedList("open")
+
+        engine.claimDeviceLists("user-1")
+
+        assertEquals(setOf("locked"), ownership.lockedListIds())
+    }
+
+    @Test
+    fun `a signed-out first launch remembers locks too`() = runTest {
+        seedList("locked", isLocked = true)
+
+        engine.onAuthState(AuthState.Unauthenticated)
+
+        assertEquals(setOf("locked"), ownership.lockedListIds())
+    }
+
+    // The first claim takes every ownerless shared replica without asking the
+    // server. One left by a different account would fail RLS on every push and
+    // stall the whole queue — so the server's first answer decides which stay.
+    @Test
+    fun `first-run claims the server doesn't vouch for are released after discovery`() = runTest {
+        seedList("mine", shareCode = "AAA111", onServer = true)
+        seedList("stray", shareCode = "BBB222", onServer = true, pendingSync = true)
+        engine.claimDeviceLists("user-1")
+        assertEquals("user-1", list("stray")!!.accountId)
+        remote.listRows = listOf(
+            com.babegetthis.android.core.sync.data.model.ListRow(
+                id = "mine",
+                name = "List mine",
+                shareCode = "AAA111",
+                updatedAt = "2026-08-01T10:00:00Z",
+            ),
+        )
+
+        engine.catchUpAccount()
+
+        assertEquals("user-1", list("mine")!!.accountId)
+        assertNull("not this account's — back to ownerless", list("stray")!!.accountId)
+        assertTrue(ownership.unverifiedListIds().isEmpty())
+
+        engine.push()
+        assertTrue("a released stray is never pushed", remote.upsertedLists.none { it.id == "stray" })
+    }
+
+    @Test
+    fun `claims stay until the server actually answers`() = runTest {
+        seedList("stray", shareCode = "BBB222", onServer = true)
+        engine.claimDeviceLists("user-1")
+        remote.failFetches = true
+
+        engine.catchUpAccount()
+
+        assertEquals("user-1", list("stray")!!.accountId)
+        assertEquals(setOf("stray"), ownership.unverifiedListIds())
     }
 }

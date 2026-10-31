@@ -38,9 +38,16 @@ class PrefsListOwnershipStore(context: Context) : ListOwnershipStore {
         prefs.edit { remove(KEY_LOCKED) }
     }
 
+    override fun unverifiedListIds(): Set<String> = prefs.getStringSet(KEY_UNVERIFIED, emptySet()).orEmpty().toSet()
+
+    override fun setUnverifiedListIds(ids: Set<String>) {
+        prefs.edit { putStringSet(KEY_UNVERIFIED, ids) }
+    }
+
     private companion object {
         const val KEY_ADOPTION_NOTICE = "adoption_notice"
         const val KEY_MIGRATED = "account_lists_migrated"
         const val KEY_LOCKED = "locked_list_ids"
+        const val KEY_UNVERIFIED = "unverified_list_ids"
     }
 }

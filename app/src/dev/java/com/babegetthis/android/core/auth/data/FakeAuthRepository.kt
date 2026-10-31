@@ -29,7 +29,7 @@ class FakeAuthRepository @Inject constructor(
             "taken@test.com" -> Result.Error(AppError.AuthError("Email is already registered."))
             "confirm@test.com" -> Result.Success(RegisterResult.ConfirmationRequired)
             else -> {
-                val userId = UUID.randomUUID().toString()
+                val userId = fakeUserId(email)
                 val fakeToken = "fake-token-${UUID.randomUUID()}"
                 authStateManager.login(
                     token = fakeToken,
@@ -52,7 +52,7 @@ class FakeAuthRepository @Inject constructor(
             "error@test.com" -> Result.Error(AppError.ServerError(500, "Fake server error"))
             "wrong@test.com" -> Result.Error(AppError.AuthError("Invalid email or password."))
             else -> {
-                val userId = UUID.randomUUID().toString()
+                val userId = fakeUserId(email)
                 val fakeToken = "fake-token-${UUID.randomUUID()}"
                 authStateManager.login(
                     token = fakeToken,
@@ -72,7 +72,7 @@ class FakeAuthRepository @Inject constructor(
     // the token is ignored — there is no Supabase to verify it against.
     override suspend fun signInWithGoogle(idToken: String, rawNonce: String): Result<User> {
         delay(800)
-        val userId = UUID.randomUUID().toString()
+        val userId = fakeUserId("dev@gmail.com")
         authStateManager.login(
             token = "fake-token-${UUID.randomUUID()}",
             userId = userId,
@@ -96,7 +96,7 @@ class FakeAuthRepository @Inject constructor(
         return when {
             code.all { it == '0' } -> Result.Error(AppError.AuthError("Invalid code. Check the email and try again."))
             else -> {
-                val userId = UUID.randomUUID().toString()
+                val userId = fakeUserId(email)
                 authStateManager.login(
                     token = "fake-token-${UUID.randomUUID()}",
                     userId = userId,
@@ -129,4 +129,10 @@ class FakeAuthRepository @Inject constructor(
         val email = tokenManager.getUserEmail() ?: "dev@test.com"
         return Result.Success(User(id = userId, email = email, name = name))
     }
+
+    // The same email always gets the same id, like a real account. A fresh
+    // random id on every sign-in looked like a different account to the
+    // sign-in claim, which drops another account's lists from the phone
+    // (docs/technical-decisions/008) — so every dev re-sign-in lost them.
+    private fun fakeUserId(email: String): String = UUID.nameUUIDFromBytes(email.lowercase().toByteArray()).toString()
 }

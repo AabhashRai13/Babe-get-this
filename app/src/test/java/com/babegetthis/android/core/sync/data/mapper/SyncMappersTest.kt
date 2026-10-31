@@ -107,6 +107,25 @@ class SyncMappersTest {
         assertEquals("ABC123", entity.shareCode)
     }
 
+    // The lists screen sorts and groups by creation date. A list coming back
+    // after sign-out, or onto a second phone, must keep its own date — not
+    // become "created" whenever it was last edited.
+    @Test
+    fun `a pushed row carries the list's creation time`() {
+        val row = ShoppingListEntity(id = "l", name = "n", createdAt = 1_000L, updatedAt = 2_000L)
+            .toRow(createdBy = "user-9")
+
+        assertEquals("1970-01-01T00:00:01Z", row.createdAt)
+    }
+
+    @Test
+    fun `a rediscovered list keeps its creation date`() {
+        val entity = ListRow(id = "l", name = "n", createdAt = "2026-01-01T00:00:00Z", updatedAt = iso)
+            .toEntity(local = null, accountId = "user-1", lockedIds = emptySet())
+
+        assertEquals(1_767_225_600_000L, entity.createdAt)
+    }
+
     // Whatever the server sends is the signed-in account's list, and it is
     // on the server by definition (docs/technical-decisions/008).
     @Test

@@ -55,5 +55,7 @@ sync"; `shareCode` now only means "shared".
   unsynced changes are lost without a warning.
 - Guest lists move into whichever account signs in on that phone.
 - Guest lists are device-only: uninstalling loses them, as before.
-- An old app version on another of the account's phones sees the account's
-  unshared lists as local, and its edits to them don't sync until it updates.
+- Old app versions can't decode a list without a share code: once the account
+  has one, an old version's background sync of shared lists fails. This release
+  ships at Play in-app update priority 5 (IMMEDIATE, decision 003) so old clients
+  update first.

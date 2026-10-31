@@ -19,7 +19,7 @@
 - Room `exportSchema = false`: every schema change is an additive `Migration` covered by `androidTest/.../MigrationTest.kt`.
 - Test names: backticked sentences in `src/test`; camelCase in `src/androidTest` (minSdk 24 dexing).
 - Telemetry parameters are bounded enums only (decision 007); events live in `AnalyticsEvent.kt` and map in `AnalyticsEventMapper.kt`.
-- Supabase migration 003 is applied (staging, then prod) **before** the app ships; it must stay compatible with old app versions.
+- Supabase migration 003 is applied (staging, then prod) **before** the app ships. (Corrected after the final review: old app versions can't decode a null share code, so the release ships as a forced update — see the release gate.)
 - User-facing copy is fixed by this plan (strings tables in Tasks 10–12); use it verbatim.
 - Comments follow the codebase's existing style: explain *why*, reference the decision doc (`008`) where a rule comes from.
 
@@ -675,5 +675,7 @@ where exists (select 1 from public.list_members m where m.list_id = l.id and m.u
   - share a solo list
   - expired session shows the banner
   - account deletion removes the server rows
+- [ ] **Task 14 (`delete_user` purges solo lists) is applied on prod before the privacy policy is published** — the policy promises that purge.
 - [ ] Privacy policy published on babegetthis.com; Play Console Data safety form updated (shopping-list content: collected, linked to account, for app functionality, deletable).
 - [ ] Migrations applied on prod **before** the release goes out.
+- [ ] Release published at Play in-app update **priority 5** (IMMEDIATE): old versions can't decode lists without a share code.

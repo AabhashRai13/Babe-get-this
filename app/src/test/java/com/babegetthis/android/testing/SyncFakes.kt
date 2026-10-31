@@ -57,8 +57,11 @@ class FakeSharedListRemote : SharedListRemote {
 
     val itemFetchListIds = mutableListOf<String>()
 
+    // Fail the full item pull of this one list (a dropped request mid-pass).
+    var failItemFetchFor: String? = null
+
     override suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow> {
-        if (failFetches) error("network down")
+        if (failFetches || listId == failItemFetchFor) error("network down")
         itemFetchListIds += listId
         lastItemSince = sinceIso
         return itemRows.filter { it.listId == listId }
@@ -141,5 +144,11 @@ class FakeListOwnershipStore : ListOwnershipStore {
     }
     override fun forgetAllLocks() {
         locks.clear()
+    }
+
+    private var unverified = emptySet<String>()
+    override fun unverifiedListIds(): Set<String> = unverified
+    override fun setUnverifiedListIds(ids: Set<String>) {
+        unverified = ids
     }
 }

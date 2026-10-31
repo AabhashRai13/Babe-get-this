@@ -320,9 +320,10 @@ clears the set.
    solo list; a share code can't be changed once set; `delete_user` leaves
    lists that other members still have.
 
-Compatibility: old app versions keep working against the new schema (they
-always send a code). The new app against the old schema fails to push unshared
-lists (they stay queued), so **the migration ships before the app**.
+Compatibility (corrected after the final review): Old app versions can't read the account's lists once one of them is unshared: their `ListRow` has a non-null `shareCode`, so decoding `share_code: null` fails and their background catch-up of shared lists stops. This release therefore ships at Play in-app update priority 5 (IMMEDIATE, decision 003) so old clients update first. The new app
+against the old schema fails to push unshared lists (they stay queued) — and
+those rejected rows block the rest of the push queue too — so **the migration
+ships before the app**.
 
 ## Privacy and release
 
@@ -350,9 +351,9 @@ guest-vs-account split is measurable, following the rules in decision 007.
 - **INSERT returns "already exists":** treated as success (a previous push
   reached the server but the app died before recording `onServer`).
 - **Share while offline:** `onServer = 0` → push fails → clear error, no code shown.
-- **Old app version on a second phone:** discovers the account's solo lists
-  and treats them as local; edits made in the old version don't sync back.
-  Accepted (see trade-offs).
+- **Old app version on a second phone:** can't decode a list with a null
+  share code, so its background catch-up fails until it updates. Handled by
+  shipping this release as a forced (priority 5) update — see Compatibility.
 
 ## Testing
 
@@ -399,5 +400,5 @@ Following the existing coverage gate and test style (in-memory Room,
 - Guest lists move into whichever account signs in on that phone (a couple
   sharing one phone: the first to sign in gets them).
 - Guest lists are device-only: uninstalling or clearing data loses them, as today.
-- Mixed app versions across one account's phones: edits from an old version
-  don't sync back until it updates.
+- Mixed app versions across one account's phones: an old version loses
+  background sync of shared lists until it takes the forced update.

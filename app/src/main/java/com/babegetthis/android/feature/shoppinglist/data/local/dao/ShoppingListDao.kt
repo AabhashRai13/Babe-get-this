@@ -76,6 +76,9 @@ interface ShoppingListDao {
     @Query("SELECT COUNT(*) FROM shopping_lists WHERE isLocked = 1")
     suspend fun lockedCount(): Int
 
+    @Query("SELECT id FROM shopping_lists WHERE isLocked = 1")
+    suspend fun getLockedListIds(): List<String>
+
     // Insert a list and its items as ONE transaction, so a failure or a
     // cancellation between the two writes can't leave a list stripped of its
     // items. Used by list-creation-with-items and by undo-restore; both used to
@@ -199,6 +202,14 @@ interface ShoppingListDao {
 
     @Query("UPDATE shopping_lists SET accountId = :userId WHERE accountId IS NULL AND shareCode IS NOT NULL")
     suspend fun claimOwnerlessSharedLists(userId: String)
+
+    @Query("SELECT id FROM shopping_lists WHERE accountId IS NULL AND shareCode IS NOT NULL")
+    suspend fun getOwnerlessSharedListIds(): List<String>
+
+    // Undo a first-run claim the server didn't confirm: back to ownerless, so
+    // it is never pushed, shown, or kept past the next sign-out.
+    @Query("UPDATE shopping_lists SET accountId = NULL WHERE id IN (:ids) AND accountId = :userId")
+    suspend fun releaseClaims(ids: List<String>, userId: String)
 
     // Everything a sign-in does to the device's lists, as one transaction so a
     // crash can't leave half the guest lists claimed and their items unqueued.

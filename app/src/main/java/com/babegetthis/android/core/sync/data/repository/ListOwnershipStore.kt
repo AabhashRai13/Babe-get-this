@@ -25,4 +25,10 @@ interface ListOwnershipStore {
     fun lockedListIds(): Set<String>
     fun rememberLock(listId: String, locked: Boolean)
     fun forgetAllLocks()
+
+    // Shared replicas the first claim took without the server confirming the
+    // account is a member. Held until the first successful discovery, which
+    // keeps the ones it returns and releases the rest.
+    fun unverifiedListIds(): Set<String>
+    fun setUnverifiedListIds(ids: Set<String>)
 }

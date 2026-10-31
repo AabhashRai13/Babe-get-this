@@ -2,7 +2,9 @@
 
 <!-- Revised 2026-10-15 for account-owned lists (docs/technical-decisions/008).
      Publish together with the app release that ships them, and set the
-     effective date below to that release date. -->
+     effective date below to that release date.
+     DO NOT publish before delete_user purges lists nobody else joined
+     (plan Task 14) — section 6 promises it. -->
 
 Effective date: August 18, 2026
 

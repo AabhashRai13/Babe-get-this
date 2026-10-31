@@ -273,6 +273,29 @@ class AuthStateManagerTest {
         assertEquals(AuthState.Unauthenticated, manager.authState.value)
     }
 
+    // The real race: Supabase reports the lost session on a background thread
+    // while the explicit sign-out runs on Main. Here the sign-out lands right in
+    // the middle of expireSession — after it read the user id, before it set
+    // the state. Without one lock over both, the stale write wins and a
+    // signed-out user ends up "session expired" as the old account.
+    @Test
+    fun `an explicit sign-out racing the session-lost event still ends signed out`() {
+        val tokens = inMemoryTokenManager()
+        val manager = AuthStateManager(tokens)
+        manager.login("t", "u1", "Aabhash", "a@b.c")
+        val signOut = Thread { manager.logout() }
+        every { tokens.getUserId() } answers {
+            signOut.start()
+            signOut.join(200) // unlocked, the sign-out finishes in here
+            "u1"
+        }
+
+        manager.expireSession()
+        signOut.join()
+
+        assertEquals(AuthState.Unauthenticated, manager.authState.value)
+    }
+
     // -- data owner: whose lists the device shows --
 
     @Test

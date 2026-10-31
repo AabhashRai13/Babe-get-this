@@ -79,8 +79,12 @@ class SyncEngine(
         // right now. Later, an ownerless replica can only be a stray from a lost
         // session, and waits for the server to vouch for it (apply()).
         val firstClaim = !ownership.isAccountListsMigrated()
+        // Taken on trust, so remembered: one left by a different account would
+        // fail RLS on every push and stall the whole queue. The first discovery
+        // keeps the ones the server returns (catchUpAccount).
+        if (firstClaim) ownership.setUnverifiedListIds(listDao.getOwnerlessSharedListIds().toSet())
         val claimed = listDao.claimDeviceLists(userId, includeOwnerlessShared = firstClaim)
-        ownership.markAccountListsMigrated()
+        finishFirstRun()
         if (claimed > 0) ownership.setAdoptionNotice(ownership.adoptionNotice.value + claimed)
         // Count only. Which lists moved is the user's business.
         crashReporter.breadcrumb("sync: claimed $claimed lists")
@@ -102,10 +106,28 @@ class SyncEngine(
             // A signed-out first launch after the update: nothing to claim, and
             // any shared replica left on the device is a stray — never take it
             // wholesale at a later sign-in.
-            ownership.markAccountListsMigrated()
+            finishFirstRun()
             false
         }
         AuthState.Loading -> false
+    }
+
+    // The server has answered: first-run claims it didn't return aren't this
+    // account's, so let them go before they are ever pushed again.
+    private suspend fun releaseUnverifiedClaims(userId: String, confirmed: Set<String>) {
+        val unverified = ownership.unverifiedListIds()
+        if (unverified.isEmpty()) return
+        listDao.releaseClaims((unverified - confirmed).toList(), userId)
+        ownership.setUnverifiedListIds(emptySet())
+    }
+
+    // Once per install, after the ownership update. Locks set before it never
+    // went through setLocked, so they aren't in the remembered set that
+    // re-locks a list sign-out evicted; record them before marking the run done.
+    private suspend fun finishFirstRun() {
+        if (ownership.isAccountListsMigrated()) return
+        listDao.getLockedListIds().forEach { ownership.rememberLock(it, locked = true) }
+        ownership.markAccountListsMigrated()
     }
 
     // Fetch everything changed in one list since its sync point and land it in
@@ -155,9 +177,14 @@ class SyncEngine(
         val userId = currentUserId() ?: return@safeCall
         val known = listDao.getAccountListIds(userId).toSet()
         val discovered = remote.fetchAllLists()
-        apply(userId, discovered, emptyList())
-        discovered.filter { it.id !in known && it.deletedAt == null }
-            .forEach { apply(userId, emptyList(), remote.fetchItems(it.id, sinceIso = null)) }
+        val (fresh, rest) = discovered.partition { it.id !in known && it.deletedAt == null }
+        apply(userId, rest, emptyList())
+        releaseUnverifiedClaims(userId, confirmed = discovered.mapTo(HashSet()) { it.id })
+        // A list new to this phone lands together with its whole history, never
+        // before it: once its row is in Room it counts as known, and a known
+        // list only gets items newer than the account sync point. If the pull
+        // fails, the row stays out and the next pass tries again in full.
+        fresh.forEach { apply(userId, listOf(it), remote.fetchItems(it.id, sinceIso = null)) }
 
         val since = syncPoints.get(ACCOUNT_SYNC_POINT)
         var newest: String? = null

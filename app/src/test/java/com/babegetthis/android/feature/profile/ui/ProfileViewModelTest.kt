@@ -286,16 +286,31 @@ class ProfileViewModelTest {
         }
     }
 
+    // Push while the session still exists, delete the account, and only then
+    // take its lists off the phone: a deletion that fails (offline, server
+    // error) must leave every list — and every unsynced edit — where it was.
     @Test
-    fun `deleteAccount evicts the account's lists BEFORE the account is destroyed`() = runTest {
+    fun `deleteAccount pushes first and evicts the lists only after the account is gone`() = runTest {
+        coEvery { authRepository.deleteAccount() } returns Result.Success(Unit)
         val vm = buildViewModel()
 
         vm.deleteAccount()
 
         coVerifyOrder {
-            syncEngine.evictAccountLists()
+            syncEngine.push()
             authRepository.deleteAccount()
+            syncEngine.evictAccountLists()
         }
+    }
+
+    @Test
+    fun `a failed account deletion keeps every list on the phone`() = runTest {
+        coEvery { authRepository.deleteAccount() } returns Result.Error(AppError.NetworkError())
+        val vm = buildViewModel()
+
+        vm.deleteAccount()
+
+        coVerify(exactly = 0) { syncEngine.evictAccountLists() }
     }
 
     // --- signing out with changes that never reached the server ---

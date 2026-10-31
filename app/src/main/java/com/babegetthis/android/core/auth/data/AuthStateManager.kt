@@ -72,7 +72,13 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
     private val _userEmail = MutableStateFlow(tokenManager.getUserEmail())
     val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
 
+    // Every state transition below is @Synchronized: Supabase reports a lost
+    // session on a background thread while sign-in and sign-out run on Main,
+    // and a read-then-write interleaved with another transition would leave a
+    // stale state behind (e.g. a signed-out user stuck as "session expired").
+
     // Call this once when the app starts (e.g., from MainActivity or Application)
+    @Synchronized
     fun initialize() {
         val token = tokenManager.getToken()
         val userId = tokenManager.getUserId()
@@ -88,6 +94,7 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
 
     // Called after successful login or register.
     // Persists token, user ID, name, and email so they survive app restarts.
+    @Synchronized
     fun login(token: String, userId: String, userName: String, userEmail: String) {
         tokenManager.saveToken(token)
         tokenManager.saveUserId(userId)
@@ -110,6 +117,7 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
     // no user id is stored, so it can never undo an explicit sign-out, which
     // fires this same event when it clears the Supabase session. In Loading,
     // storage is updated and initialize() derives SessionExpired from it.
+    @Synchronized
     fun expireSession() {
         val userId = tokenManager.getUserId() ?: return
         tokenManager.clearToken()
@@ -119,6 +127,7 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
     }
 
     // Called on explicit sign-out and account deletion only.
+    @Synchronized
     fun logout() {
         tokenManager.clear()
         _authState.value = AuthState.Unauthenticated
