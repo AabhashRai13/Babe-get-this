@@ -57,9 +57,8 @@ and hasn't chosen yet. It has two buttons:
 
 - **Sign in** → the existing Login screen (Register, Google sign-in and
   forgot-password are reachable from there, as today). Back returns to Welcome.
-- **Continue as guest** → the lists screen. Copy under the button makes the
-  trade clear: guest lists stay on this phone only; signing in saves them to an
-  account, enables sharing and voice.
+- **Continue as guest** → the lists screen. (No explanatory copy under the
+  buttons — removed at the product owner's request, 2026-10-31.)
 
 Rules:
 

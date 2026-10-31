@@ -39,14 +39,6 @@ class WelcomeScreenTest {
     }
 
     @Test
-    fun `both choices are explained`() {
-        show()
-
-        compose.onNodeWithText("Save your lists to your account, share them, and add items by voice.").assertExists()
-        compose.onNodeWithText("Your lists stay on this phone only.").assertExists()
-    }
-
-    @Test
     fun `sign in calls back without continuing as guest`() {
         show()
 

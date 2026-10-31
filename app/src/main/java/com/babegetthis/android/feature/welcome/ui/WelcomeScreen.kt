@@ -30,14 +30,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.R
 
-// First launch, signed out: the one place the guest-or-account trade is made
-// explicit (docs/technical-decisions/008). Guests keep lists on this phone
-// only; an account syncs them, shares them and unlocks voice.
+// First launch, signed out: guest or account (docs/technical-decisions/008).
+// Guests keep lists on this phone only; an account syncs them, shares them
+// and unlocks voice.
 @Composable
 fun WelcomeScreen(onSignIn: () -> Unit, onContinueAsGuest: () -> Unit, viewModel: WelcomeViewModel = hiltViewModel()) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -104,9 +103,8 @@ fun WelcomeScreen(onSignIn: () -> Unit, onContinueAsGuest: () -> Unit, viewModel
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-            ChoiceBody(stringResource(R.string.welcome_sign_in_body))
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
                 onClick = {
@@ -124,18 +122,6 @@ fun WelcomeScreen(onSignIn: () -> Unit, onContinueAsGuest: () -> Unit, viewModel
                     fontWeight = FontWeight.SemiBold,
                 )
             }
-            ChoiceBody(stringResource(R.string.welcome_guest_body))
         }
     }
-}
-
-@Composable
-private fun ChoiceBody(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 8.dp, start = 8.dp, end = 8.dp),
-    )
 }
