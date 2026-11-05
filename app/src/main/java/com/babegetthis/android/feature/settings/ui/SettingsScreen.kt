@@ -1,5 +1,10 @@
 package com.babegetthis.android.feature.settings.ui
 
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +17,7 @@ import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.LockReset
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Password
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Refresh
@@ -37,6 +43,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.babegetthis.android.BuildConfig
 import com.babegetthis.android.R
@@ -45,6 +52,8 @@ import com.babegetthis.android.core.pin.ui.PinSetupDialog
 import com.babegetthis.android.core.pin.ui.RecoveryResetDialog
 import com.babegetthis.android.core.pin.ui.RegenerateRecoveryDialog
 import com.babegetthis.android.core.pin.ui.RemovePinDialog
+import com.babegetthis.android.core.reminder.ui.NOTIFICATION_PERMISSION
+import com.babegetthis.android.core.reminder.ui.rememberPermissionState
 import com.babegetthis.android.core.review.openPlayListing
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
 import com.babegetthis.android.core.ui.components.SettingsRow
@@ -52,6 +61,14 @@ import com.babegetthis.android.core.ui.openPrivacyPolicy
 import kotlinx.coroutines.launch
 
 // The same page the Play listing links to.
+
+// The per-app notification page exists from API 26; below that the app details page is the closest.
+private fun notificationSettingsIntent(packageName: String): Intent =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri())
+    }
 
 private enum class SettingsDialog { None, SetUp, Change, Remove, Regenerate, Forgot }
 
@@ -68,6 +85,23 @@ fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel
     val context = LocalContext.current
 
     LaunchedEffect(pinExists) { viewModel.refreshLockedCount() }
+
+    val reminderRow by viewModel.reminderRow.collectAsState()
+    val permission = rememberPermissionState(requested = viewModel.permissionRequested())
+    LaunchedEffect(permission) { viewModel.updatePermissionState(permission) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { viewModel.onNotificationPermissionResult(it) }
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                SettingsEvent.RequestNotificationPermission -> permissionLauncher.launch(NOTIFICATION_PERMISSION)
+                SettingsEvent.OpenNotificationSettings -> context.startActivity(
+                    notificationSettingsIntent(context.packageName),
+                )
+            }
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
@@ -129,6 +163,33 @@ fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            )
+
+            Text(
+                text = stringResource(R.string.settings_reminders_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+            )
+
+            SettingsRow(
+                icon = Icons.Outlined.NotificationsActive,
+                title = stringResource(R.string.settings_reminders_title),
+                subtitle = stringResource(
+                    if (reminderRow == ReminderRowState.Blocked) {
+                        R.string.settings_reminders_blocked_subtitle
+                    } else {
+                        R.string.settings_reminders_subtitle
+                    },
+                ),
+                onClick = { viewModel.onReminderSwitch(reminderRow != ReminderRowState.On) },
+                trailing = {
+                    Switch(
+                        checked = reminderRow == ReminderRowState.On,
+                        onCheckedChange = { viewModel.onReminderSwitch(it) },
+                    )
+                },
             )
 
             Text(

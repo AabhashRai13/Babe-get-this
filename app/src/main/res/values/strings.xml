@@ -158,15 +158,14 @@
         <item quantity="one">%d item is still unticked</item>
         <item quantity="other">%d items are still unticked</item>
     </plurals>
-    <!-- The prompt strings feed the Items screen sheet; the Settings strings are consumed by Task 12. -->
     <string name="reminder_prompt_title">Forget something?</string>
     <string name="reminder_prompt_body">Get one nudge if you leave items unticked after a shop.</string>
     <string name="reminder_prompt_accept">Remind me</string>
     <string name="reminder_prompt_decline">Not now</string>
-    <string name="settings_reminders_section" tools:ignore="UnusedResources">Reminders</string>
-    <string name="settings_reminders_title" tools:ignore="UnusedResources">Shopping reminders</string>
-    <string name="settings_reminders_subtitle" tools:ignore="UnusedResources">A nudge when you leave items unticked after a shop</string>
-    <string name="settings_reminders_blocked_subtitle" tools:ignore="UnusedResources">Allow notifications in system settings to turn this on</string>
+    <string name="settings_reminders_section">Reminders</string>
+    <string name="settings_reminders_title">Shopping reminders</string>
+    <string name="settings_reminders_subtitle">A nudge when you leave items unticked after a shop</string>
+    <string name="settings_reminders_blocked_subtitle">Allow notifications in system settings to turn this on</string>
 
     <!-- PIN entry -->
     <string name="pin_label">PIN</string>
