@@ -7,6 +7,8 @@ import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,11 +45,18 @@ class WorkManagerEnqueuerTest {
     @Test
     fun `enqueueUnique keeps exactly one request and replaces it`() = runBlocking {
         enqueuer.enqueueUnique("L1", 7L, 3_000L)
-        assertEquals(1, infos().size)
+        val firstId = infos().single().id
 
         enqueuer.enqueueUnique("L2", 8L, 3_000L)
-        val live = infos().filter { it.state != WorkInfo.State.CANCELLED }
-        assertEquals(1, live.size)
+
+        // Under KEEP the second call would be ignored: the first job would stay
+        // ENQUEUED and remain the unique name's only entry. REPLACE deletes the
+        // old job outright (it is not left behind as CANCELLED), so it is gone
+        // by id and the one live entry is a different job.
+        assertNull(workManager.getWorkInfoById(firstId).get())
+        val live = infos().single()
+        assertNotEquals(firstId, live.id)
+        assertEquals(WorkInfo.State.ENQUEUED, live.state)
     }
 
     @Test
