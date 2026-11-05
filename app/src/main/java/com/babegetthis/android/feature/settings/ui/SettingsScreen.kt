@@ -30,6 +30,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,12 +40,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.babegetthis.android.BuildConfig
 import com.babegetthis.android.R
 import com.babegetthis.android.core.pin.ui.ChangePinDialog
@@ -72,6 +76,8 @@ private fun notificationSettingsIntent(packageName: String): Intent =
 
 private enum class SettingsDialog { None, SetUp, Change, Remove, Regenerate, Forgot }
 
+// The replacement LocalLifecycleOwner lives in lifecycle-runtime-compose 2.8+; this project is on 2.6.1.
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel = hiltViewModel()) {
@@ -89,6 +95,16 @@ fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel
     val reminderRow by viewModel.reminderRow.collectAsState()
     val permission = rememberPermissionState(requested = viewModel.permissionRequested())
     LaunchedEffect(permission) { viewModel.updatePermissionState(permission) }
+    // Returning from system settings leaves the permission state unchanged when only the OS
+    // notification switch was flipped, so the row is also recomputed on every resume.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) viewModel.onResumed()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { viewModel.onNotificationPermissionResult(it) }

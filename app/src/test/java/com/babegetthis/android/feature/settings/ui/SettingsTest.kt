@@ -1,10 +1,17 @@
 package com.babegetthis.android.feature.settings.ui
 
+import android.Manifest
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.lifecycle.Lifecycle
+import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.pin.data.PinRepository
@@ -353,7 +360,7 @@ class SettingsViewModelTest {
 @RunWith(RobolectricTestRunner::class)
 class SettingsScreenTest {
 
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val viewModel = mockk<SettingsViewModel>(relaxed = true)
 
@@ -458,6 +465,39 @@ class SettingsScreenTest {
 
         compose.onNodeWithText("Shopping reminders").assertIsDisplayed()
         compose.onNodeWithText("Allow notifications in system settings to turn this on").assertIsDisplayed()
+        // The reminders switch is the first toggle on the screen; Blocked must never read as on.
+        compose.onAllNodes(isToggleable())[0].assertIsOff()
+    }
+
+    // The permission state and the OS gate can change while the user is in system settings, so
+    // resuming must re-read the gate. Fails if the ON_RESUME observer is removed from the screen.
+    @Test
+    fun `the reminders row recovers from Blocked when the screen resumes`() {
+        org.robolectric.Shadows.shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val gate = FakeNotificationGate(enabled = false)
+        val pinRepository = mockk<PinRepository>(relaxed = true) {
+            every { this@mockk.pinExists } returns MutableStateFlow(false)
+        }
+        val vm = SettingsViewModel(
+            pinRepository,
+            mockk(relaxed = true),
+            mockk<TelemetryConsent>(relaxed = true),
+            CoroutineScope(UnconfinedTestDispatcher()),
+            mockk(relaxed = true),
+            FakeReminderPrefs(),
+            gate,
+        )
+        compose.setContent { SettingsScreen(viewModel = vm) }
+        compose.onNodeWithText("Allow notifications in system settings to turn this on").assertIsDisplayed()
+
+        gate.enabled = true
+        compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+
+        compose.onNodeWithText("A nudge when you leave items unticked after a shop").assertIsDisplayed()
+        compose.onAllNodes(isToggleable())[0].assertIsOn()
     }
 
     @Test
@@ -471,7 +511,7 @@ class SettingsScreenTest {
 @RunWith(RobolectricTestRunner::class)
 class SettingsRowTest {
 
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun `a row shows its title`() {
