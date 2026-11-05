@@ -13,11 +13,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 // Kicks a push + catch-up whenever connectivity returns or the app comes to
-// the foreground. No WorkManager in v1 (design.md open question, resolved to
-// "foreground + connectivity callback"): a queued edit waits at most until
-// the next time the user opens the app with signal — acceptable for a
-// shopping list. Kicks are cheap and idempotent, so double-firing (e.g.
-// registration + first foreground) is harmless.
+// the foreground. Sync deliberately does not use WorkManager (design.md open
+// question, resolved to "foreground + connectivity callback"): a queued edit
+// waits at most until the next time the user opens the app with signal —
+// acceptable for a shopping list. Shopping reminders are the one WorkManager
+// user: a notification has to fire while the app is closed. Kicks are cheap and
+// idempotent, so double-firing (e.g. registration + first foreground) is
+// harmless.
 class SyncTrigger(
     private val engine: SyncEngine,
     private val authStateManager: AuthStateManager,
