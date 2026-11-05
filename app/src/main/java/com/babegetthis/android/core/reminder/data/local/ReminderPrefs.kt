@@ -1,6 +1,8 @@
 package com.babegetthis.android.core.reminder.data.local
 
+import android.annotation.SuppressLint
 import android.content.Context
+import androidx.core.content.edit
 
 /** The one reminder currently armed: which list, which generation, and when it was armed. */
 data class PendingReminder(val listId: String, val generation: Long, val armedAt: Long)
@@ -35,7 +37,7 @@ class SharedPrefsReminderPrefs(context: Context) : ReminderPrefs {
     override var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, true)
         set(value) {
-            prefs.edit().putBoolean(KEY_ENABLED, value).apply()
+            prefs.edit { putBoolean(KEY_ENABLED, value) }
         }
 
     override val generationCounter: Long
@@ -53,6 +55,9 @@ class SharedPrefsReminderPrefs(context: Context) : ReminderPrefs {
         )
     }
 
+    // The Boolean from commit() is load-bearing (the scheduler refuses to enqueue
+    // when it is false); the KTX edit(commit = true) discards it.
+    @SuppressLint("UseKtx")
     override fun commitPending(record: PendingReminder): Boolean = prefs.edit()
         .putLong(KEY_GENERATION_COUNTER, record.generation)
         .putString(KEY_PENDING_LIST_ID, record.listId)
@@ -60,6 +65,9 @@ class SharedPrefsReminderPrefs(context: Context) : ReminderPrefs {
         .putLong(KEY_PENDING_ARMED_AT, record.armedAt)
         .commit()
 
+    // The Boolean from commit() is load-bearing (the scheduler refuses to enqueue
+    // when it is false); the KTX edit(commit = true) discards it.
+    @SuppressLint("UseKtx")
     override fun commitClearPending(): Boolean = prefs.edit()
         .remove(KEY_PENDING_LIST_ID)
         .remove(KEY_PENDING_GENERATION)
@@ -69,13 +77,13 @@ class SharedPrefsReminderPrefs(context: Context) : ReminderPrefs {
     override var promptSnoozedUntil: Long
         get() = prefs.getLong(KEY_PROMPT_SNOOZED_UNTIL, 0L)
         set(value) {
-            prefs.edit().putLong(KEY_PROMPT_SNOOZED_UNTIL, value).apply()
+            prefs.edit { putLong(KEY_PROMPT_SNOOZED_UNTIL, value) }
         }
 
     override var permissionRequested: Boolean
         get() = prefs.getBoolean(KEY_PERMISSION_REQUESTED, false)
         set(value) {
-            prefs.edit().putBoolean(KEY_PERMISSION_REQUESTED, value).apply()
+            prefs.edit { putBoolean(KEY_PERMISSION_REQUESTED, value) }
         }
 
     private companion object {
