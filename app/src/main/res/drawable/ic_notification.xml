@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Status-bar glyph for reminder notifications. Same clipboard, tick and heart
+   as ic_launcher_monochrome, but cropped to the glyph's own bounds (24..84 of
+   the launcher's 108 canvas) so it fills a 24dp status-bar slot instead of
+   sitting inside the launcher safe zone. The status bar tints by alpha, so the
+   colour is plain white.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="60"
+    android:viewportHeight="60">
+
+    <group
+        android:translateX="-24"
+        android:translateY="-24">
+
+        <path
+            android:pathData="M38,31 L70,31 A6,6 0 0 1 76,37 L76,77 A6,6 0 0 1 70,83 L38,83 A6,6 0 0 1 32,77 L32,37 A6,6 0 0 1 38,31 Z"
+            android:strokeWidth="5"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineJoin="round" />
+
+        <path
+            android:pathData="M49,23 L59,23 A4,4 0 0 1 63,27 L63,31 A4,4 0 0 1 59,35 L49,35 A4,4 0 0 1 45,31 L45,27 A4,4 0 0 1 49,23 Z"
+            android:fillColor="#FFFFFFFF"
+            android:strokeWidth="5"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineJoin="round" />
+
+        <path
+            android:pathData="M41,50 l6,6 l13,-14"
+            android:strokeWidth="5"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+
+        <path
+            android:pathData="M54,70 c0,-5 -8,-6 -8,-1 c0,5 8,9 8,9 c0,0 8,-4 8,-9 c0,-5 -8,-4 -8,1z"
+            android:fillColor="#FFFFFFFF" />
+    </group>
+</vector>
