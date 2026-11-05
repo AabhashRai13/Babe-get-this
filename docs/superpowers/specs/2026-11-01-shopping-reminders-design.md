@@ -32,14 +32,14 @@ Recorded with the alternative that was rejected, so they are not re-argued.
 | D1 | **On-device scheduling with WorkManager.** No backend, no FCM. | Server-side scan (pg_cron + edge function + FCM) — guest lists never leave the phone, so guests would get no reminders at all. Also needs a device-token table, the FCM module, and Play Data safety updates. Revisit only for partner-driven nudges while the app is dead. |
 | D2 | **Trigger is "partly shopped then quiet"**: at least one item ticked on this phone, at least one unticked, and no local activity on that list for 3 hours. | Fixed delay after any edit, or a time of day — both fire on lists that are intentionally waiting for shopping day. |
 | D3 | **Only ticks made on this phone arm a reminder, and only local edits reset it.** Synced-in partner changes neither arm nor reset. At fire time the list's Room state decides, whoever wrote it: the worker does not check that the locally ticked item is still ticked, only that the list is partly shopped. | Counting partner ticks for arming — if the partner is shopping, nudging this phone is wrong; the partner's phone gets its own nudge. Tracking the specific ticked item — a user who ticks milk, unticks it, and ticks eggs is still mid-shop; per-item tracking adds state for no better decision. |
-| D4 | **One pending reminder at a time, for the most recently ticked list.** | One per list — a user shopping two lists in one trip would get two notifications about the same outing. |
+| D4 | **One pending reminder at a time, belonging to the most recently *eligible* locally ticked list.** A tick that does not leave its list partly shopped (the last item, or a one-item list) does not start a session and does not disturb the pending reminder of another list. | One per list — a user shopping two lists in one trip would get two notifications about the same outing. "Most recently ticked" literally — finishing list B would silently kill A's reminder even though B never started a session. |
 | D5 | **Once per shopping session.** After a nudge the list is left alone until the next tick on it, which starts a fresh session. | Daily until done — a half-shopped list that sits for a week is often intentional, and repeat nudges drive uninstalls. |
 | D6 | **Permission is asked in context**: after the first tick that would arm a reminder, via an in-app sheet before the system dialog. | At onboarding — the user does not yet know why they would want it, and Android stops showing the dialog after two refusals. Settings-only — near-zero adoption. |
 | D7 | **WorkManager, not AlarmManager.** | Exact alarms need a special permission that Android 13 denies by default to non-alarm apps; inexact alarms die on reboot without a boot receiver and have no replace-pending semantic. |
 | D8 | **Kill switch through the existing feature flag cache**, read at arm time in the UI process. | Reading the flag inside the worker — the cache is empty on a background cold start, so the worker would always see "off". |
 | D9 | **Doubt means silence.** Every check at fire time that cannot be satisfied suppresses the nudge; the worker never retries. | Retry on failure — a reminder that arrives twice or late is worse than one that is dropped. |
-| D10 | **Every enqueue carries a generation number**, and a worker acts only if its generation is the one currently recorded. A stale worker neither posts nor clears state. | Trusting `REPLACE` alone — it cancels a running worker only cooperatively, leaving a window where an old worker could post for a list that was retargeted, or wipe the record of a newer job. |
-| D11 | **Prefs are written before the job is enqueued**, under one lock, and the worker's generation check is what reconciles the two stores. | Two-phase bookkeeping or a start-up reconciliation pass — more code for a failure that is already harmless (see Consistency). |
+| D10 | **Every enqueue carries a generation number, and the worker's final ownership check, the post, and the conditional clear run under the same singleton lock the scheduler uses.** A stale worker neither posts nor clears state. Ownership means the *active* pending record matches on list id and generation; a cleared record owns nothing even though the counter keeps its value. | Trusting `REPLACE` alone — it cancels a running worker only cooperatively. Two unlocked generation reads — they shrink the window but a retarget can still land between the last read and `notify()`. Comparing the counter alone — a worker from a cleared session would still match the retained counter. |
+| D11 | **The pending record is committed to disk synchronously (on IO, under the lock) before the job is enqueued, and the enqueue is awaited before the lock is released.** A failed commit means no enqueue. The worker's ownership check is what reconciles the two stores. | `apply()` plus fire-and-forget enqueue — `apply()` persists asynchronously and `enqueueUniqueWork` returns an async `Operation`, so "prefs before work" would hold in memory but not on disk, and two rapid calls could reorder at WorkManager. A start-up reconciliation pass — more code for a failure that is already harmless (see Consistency). |
 | D12 | **The preference is user intent; the permission is OS state. Both are required to arm and both are re-checked in the worker.** | Treating the toggle as the only switch — a user who revokes notifications in system settings would still see the switch on and get nothing. |
 
 ## What users see
@@ -52,11 +52,18 @@ The tick lands as today. Then a Material 3 modal bottom sheet appears:
 > Get one nudge if you leave items unticked after a shop.
 > [Remind me] [Not now]
 
-- **Remind me** launches the system notification permission dialog. On grant,
-  the list the user just ticked is armed, so the first-ever session gets its
-  reminder too. On deny, nothing else happens.
+- **Remind me** launches the system notification permission dialog and records
+  `permissionRequested = true`. On grant, the list the user just ticked is
+  armed (after re-checking it is still partly shopped), so the first-ever
+  session gets its reminder too. On deny, the offer is snoozed for 14 days,
+  the same as Not now: a user who said yes to us and no to the system should
+  not see the sheet again on the next tick.
 - **Not now**, or dismissing the sheet by swipe, snoozes the offer for 14 days
   on this device.
+
+This flow assumes `targetSdk >= 33`, which the app already satisfies (36). An
+app targeting 32 or lower gets a system-driven prompt on Android 13 where a
+single denial can end prompting, which would break the in-context design.
 
 The sheet appears only when the list the user just ticked is **genuinely
 partly shopped**: after the tick, at least one live item is picked up and at
@@ -64,9 +71,15 @@ least one is not. Ticking the last item never prompts, and nor does ticking
 the first item on a one-item list.
 
 The sheet never appears when: the device is below Android 13 (no runtime
-permission exists; reminders simply work), permission is already granted, the
-Settings toggle is off, the offer is snoozed, or the system has permanently
-refused (two denials).
+permission exists, so there is nothing to ask; OS notification state still
+matters, see Settings), permission is already granted, the Settings toggle is
+off, the offer is snoozed, or the system has permanently refused.
+
+**Permanently refused** is derived, not inferred from one API:
+`permissionRequested && !granted && !shouldShowRequestPermissionRationale`.
+The rationale flag alone is false both before the first request and after the
+user has refused for good, so without the `permissionRequested` record the two
+states are indistinguishable.
 
 On grant, eligibility is checked again before arming: the list must still be
 partly shopped at that moment. The user may have ticked the remaining items
@@ -82,9 +95,17 @@ importance: sound and shade, no heads-up):
 
 The second line names up to two unticked items and counts the rest, with a
 plural resource so one item reads "Milk is still unticked". For a locked list
-(`isLocked` on the row and a PIN exists) item names are withheld: "3 items are
-still unticked". The list name still shows, matching what the home screen card
-already reveals for locked lists.
+item names are withheld: "3 items are still unticked". The list name still
+shows, matching what the home screen card already reveals for locked lists.
+
+"Locked" here is the conservative reading: `isLocked` on the list row at the
+moment the snapshot is taken, whether or not a PIN currently exists (the app
+treats a locked row with no PIN as unlocked for display, but a notification is
+not the place to make that call). The snapshot is taken by the worker just
+before its locked final section, and if it cannot be taken at all the worker
+posts nothing. Names and lock state come from the same Room transaction, so a
+list that was locked between two reads can never leak names from the earlier
+one.
 
 The notification auto-cancels on tap and uses a fixed id, so a later nudge for
 another list replaces rather than stacks. Its content `PendingIntent` uses a
@@ -95,8 +116,10 @@ being reused for every later nudge.
 ### Tapping the reminder
 
 Lands on the items screen for that list, with Back returning to the list
-catalog. A locked list shows its PIN gate first, exactly as it does today when
-opened from the catalog.
+catalog. This holds wherever the user was: on the catalog, inside a different
+list, or in Settings. The back stack after a tap is always catalog → target
+list, never the previously open screen. A locked list shows its PIN gate
+first, exactly as it does today when opened from the catalog.
 
 ### Settings
 
@@ -114,9 +137,15 @@ The switch shows **preference AND permission**: it reads as on only when the
   directly (no sheet). Grant sets `enabled = true`; deny leaves it unchanged
   and the switch stays off.
 - On, with permission already granted, sets `enabled = true`.
-- If the system has permanently refused, the switch stays off, the subtitle
-  becomes "Allow notifications in system settings to turn this on", and
-  tapping the row opens the app's system notification settings page.
+- If the system has permanently refused (as defined above), the switch stays
+  off, the subtitle becomes "Allow notifications in system settings to turn
+  this on", and tapping the row opens the app's system notification settings
+  page.
+- **Android 12 and below.** There is no runtime permission, but
+  `areNotificationsEnabled()` can still be false if the user disabled the
+  app's notifications in system settings. The switch shows preference AND OS
+  state on every version; when the OS state is off, the row behaves like the
+  permanently-refused case and opens system settings.
 - If the user revokes notifications in system settings while `enabled` is
   true, the switch reads off next time Settings is shown; turning it on again
   follows the "permission missing" path. The preference itself is not
@@ -135,12 +164,13 @@ All new code lives in `core/reminder`, wired by a `ReminderModule` in
 | Unit | Does | Depends on |
 |---|---|---|
 | `ReminderKicker` | `fun interface` with `onLocalPickUp(listId)` and `onLocalEdit(listId)`. Called by `ShoppingItemRepository` after local writes. Sits next to `SyncKicker`; the repository never learns WorkManager exists. | nothing |
-| `ReminderScheduler` | Implements the kicker. Checks the gate (`enabled` preference, feature flag, notification permission, list eligibility) and enqueues a unique one-time request named `shopping_reminder` with a 3-hour initial delay and `REPLACE` policy, carrying the list id and a generation number. `onLocalEdit` re-enqueues only if a job for that list is pending. Answers `shouldOfferPermission(listId)` for the ViewModel, arms on `onPermissionGranted(listId)` after re-checking eligibility, and cancels on toggle-off, flag-off and sign-out. Every mutation runs under one `Mutex`. | `WorkEnqueuer`, `ReminderPrefs`, `ReminderEligibility`, `FeatureFlagCache`, `NotificationManagerCompat`, `AuthStateManager` |
-| `ReminderEligibility` | One suspend function, `isPartlyShopped(listId)`: the list exists with `deletedAt` null and, among live items, at least one is picked up and at least one is not. Backed by a single DAO count query. Shared by the scheduler (arm and prompt) and the worker (fire), so "partly shopped" has one definition. | `ShoppingListDao`, `ShoppingItemDao` |
-| `WorkEnqueuer` | Interface over the two WorkManager calls used (enqueue unique, cancel unique) so the scheduler is unit-testable without WorkManager. | `WorkManager` (production impl) |
-| `ReminderWorker` | `@HiltWorker` `CoroutineWorker`. Reads its list id and generation from input data. Acts only if its generation matches `pendingGeneration` in prefs; a stale worker exits without posting and without touching prefs. Otherwise re-validates (preference, permission, eligibility, foreground, age), posts through the notifier or stays silent, clears the pending record, and always returns `success`. | `ReminderEligibility`, `ReminderPrefs`, `ReminderNotifier`, `CrashReporter`, injected foreground-state and clock providers |
-| `ReminderNotifier` | Creates the channel idempotently, formats the copy, builds the content intent, posts. Holds no decisions. | `NotificationManagerCompat`, string resources |
-| `ReminderPrefs` | SharedPreferences, same pattern as `PrefsSyncPointStore`. Fields: `enabled` (default true), `pendingListId`, `pendingGeneration` (monotonic `Long`, default 0), `pendingArmedAt`, `promptSnoozedUntil`. | `Context` |
+| `ReminderScheduler` | Singleton. Implements the kicker and owns **the** `Mutex` for all reminder state. Checks the gate (`enabled` preference, feature flag, OS notification state, list eligibility) and enqueues a unique one-time request named `shopping_reminder` with a 3-hour initial delay and `REPLACE` policy, carrying the list id and a generation number. `onLocalEdit` re-enqueues only if a job for that list is pending. Answers `shouldOfferPermission(listId)`, arms on `onPermissionGranted(listId)` after re-checking eligibility, cancels on toggle-off, sign-out and `onFlagsLoaded()` with the flag off. Exposes `finish(listId, generation, post: suspend () -> Unit)`, which the worker calls for its final section: under the lock, verify ownership, run `post`, clear the record. Every mutation commits prefs and awaits WorkManager inside the lock. | `WorkEnqueuer`, `ReminderPrefs`, `ReminderEligibility`, `FeatureFlagCache`, `NotificationManagerCompat`, `AuthStateManager`, `CrashReporter` |
+| `ReminderEligibility` | One suspend function, `isPartlyShopped(listId)`: the list exists with `deletedAt` null and, among live items, at least one is picked up and at least one is not. Backed by the same DAO query `ReminderContentReader` uses, so "partly shopped" has one definition. Used by the scheduler for prompt and arm. | `ShoppingListDao`, `ShoppingItemDao` |
+| `ReminderContentReader` | One suspend function, `snapshot(listId): ReminderContent?`, read in a single Room transaction: list name, `isLocked`, count of picked live items, and the unpicked live items' names in list order. Null when the list is missing or tombstoned. The worker derives both eligibility and copy from this one snapshot, so the counts and the names come from the same instant. | `ShoppingListDao`, `ShoppingItemDao` |
+| `WorkEnqueuer` | Interface over the two WorkManager calls used, as **suspend** functions that await the returned `Operation`: `enqueueUnique(listId, generation, delay)` and `cancelUnique()`. The production implementation calls `WorkManager.enqueueUniqueWork(…, REPLACE, …).await()` and `cancelUniqueWork(…).await()`. | `WorkManager` (production impl) |
+| `ReminderWorker` | `@HiltWorker` `CoroutineWorker`. Reads its list id and generation from input data. Does a cheap unlocked ownership pre-check, then the environment checks (preference, OS notification state, foreground, age), then takes the snapshot, then hands the post to `scheduler.finish`, which re-verifies ownership under the lock. Always returns `success`. Rethrows `CancellationException`; reports any other exception as a non-fatal. | `ReminderScheduler`, `ReminderContentReader`, `ReminderPrefs`, `ReminderNotifier`, `CrashReporter`, injected foreground-state and clock providers |
+| `ReminderNotifier` | Creates the channel idempotently, formats the copy from a `ReminderContent`, builds the content intent, posts. Holds no decisions and reads no data. | `NotificationManagerCompat`, string resources |
+| `ReminderPrefs` | SharedPreferences, same pattern as `PrefsSyncPointStore`, but with a record API rather than loose fields. `enabled: Boolean` (default true). `generationCounter: Long` (monotonic, default 0, never reset). `pending: PendingReminder?` where `PendingReminder(listId, generation, armedAt)` is read and written as one unit: `readPending()`, `commitPending(record)`, `commitClearPending()`. `promptSnoozedUntil: Long`. `permissionRequested: Boolean`. The two `commit…` functions use `commit()`, not `apply()`, return the result, and are only ever called on an IO dispatcher inside the scheduler's lock. | `Context` |
 | `ReminderIntentParser` | Pure Kotlin. Reads the list id and name extras from an `Intent`, returns null when absent or when `startAtWelcome` is true. | nothing |
 
 ### Repository hook
@@ -167,7 +197,11 @@ shopping today is normal.
 `MainActivity` reads the extras in `onCreate` and in `onNewIntent`, pushes the
 parsed target into a `MutableStateFlow`, and `BgtNavGraph` gets an optional
 `pendingList` parameter it navigates to after the start destination and then
-clears, so a rotation does not re-navigate. The content intent uses
+clears, so a rotation does not re-navigate. The navigation call is
+`navigate(Routes.shoppingItems(id, name)) { popUpTo(Routes.SHOPPING_LIST) }`,
+which pops anything above the catalog (another list's items screen, Settings)
+before pushing the target, so the back stack is catalog → target regardless of
+where the user was. The content intent uses
 `FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_SINGLE_TOP | FLAG_ACTIVITY_CLEAR_TOP`,
 so a backgrounded activity receives `onNewIntent` rather than a second
 instance.
@@ -182,6 +216,23 @@ sheet and owns the permission launcher; grant calls
 `scheduler.onPermissionGranted(listId)`, which re-checks eligibility and arms
 only if the list is still partly shopped; deny or dismiss calls
 `scheduler.snoozePrompt()`.
+
+### Feature flag kill switch
+
+The flag `shopping_reminders` is read from `FeatureFlagCache` at arm time, in
+the UI process, never in the worker (D8). On its own that only prevents
+*future* arming, so a job armed before a flag flip would still fire. To make
+the flag a real kill switch, `BabeGetThisApp` calls
+`scheduler.onFlagsLoaded()` right after `featureFlagCache.update(...)` in its
+existing start-up coroutine. With the flag off, `onFlagsLoaded` takes the lock,
+clears the pending record and awaits `cancelUniqueWork`. With the flag on it
+does nothing.
+
+What this does and does not guarantee: a job armed before the flip is
+cancelled on the next cold start once the flag fetch completes. If the job
+fires before that fetch (the phone was off, then the app process starts for
+the job itself), the worker, which does not consult the flag, may still post
+once. Accepted; see Accepted trade-offs.
 
 ### Dependencies
 
@@ -239,97 +290,147 @@ through `TestListenableWorkerBuilder.setWorkerFactory`).
 
 1. User ticks an item on list A. Repository writes Room, then calls
    `onLocalPickUp(A)`.
-2. Scheduler, under its lock: passes the gate (preference, flag, permission,
-   `isPartlyShopped(A)`), increments `pendingGeneration` to *g*, writes
-   `pendingListId = A`, `pendingArmedAt = now` and *g* to prefs, **then**
-   enqueues the job for A with input `(A, g)` using `REPLACE`.
+2. Scheduler, on its IO scope, takes the lock, passes the gate (preference,
+   flag, OS notification state, `isPartlyShopped(A)`), increments
+   `generationCounter` to *g*, **commits** `PendingReminder(A, g, now)` to
+   disk, and only if the commit succeeded **enqueues and awaits** the job for
+   A with input `(A, g)` using `REPLACE`. Then it releases the lock. The UI
+   thread never waits on any of this: the kicker call returns immediately,
+   exactly like `SyncKicker.pushSoon`.
 3. Further ticks or edits on A within three hours repeat step 2 with a new
-   generation, resetting the clock. A tick on list B retargets the single job
-   to B, also with a new generation.
+   generation, resetting the clock. A tick on list B that leaves B partly
+   shopped retargets the single job to B, also with a new generation. A tick
+   on B that does not (B's last item) changes nothing (D4).
 4. Partner changes arrive through `SyncEngine.apply`, which never touches the
    kicker.
-5. Three hours after the last local activity the worker for *(A, g)* runs. If
-   *g* is not the recorded `pendingGeneration` it exits at once, touching
-   nothing. Otherwise it re-validates, posts or stays silent, and clears the
-   pending record.
+5. Three hours after the last local activity the worker for *(A, g)* runs. It
+   pre-checks ownership without the lock, runs its environment checks, takes a
+   content snapshot, then calls `scheduler.finish(A, g) { notifier.post(…) }`.
+   Under the lock the scheduler verifies ownership again, runs the post, and
+   clears the record. If ownership fails at either point, nothing is posted
+   and nothing is cleared.
 
 ## Consistency between WorkManager and prefs
 
-Two stores, one writer order, one reconciler.
+Two stores, one lock, one writer order, one reconciler.
 
-- **Writer order.** Prefs first, then enqueue, both under the scheduler's
-  `Mutex`. Rapid rescheduling therefore serialises: each call sees the previous
-  call's prefs and enqueues after it, so the generation in the last enqueued
-  job always equals the generation in prefs.
-- **Process death after prefs, before enqueue.** Prefs claim a pending job that
-  does not exist. Harmless: no notification can fire, and the next tick or
-  edit on that list overwrites the record and enqueues normally. `onLocalEdit`
-  believing a job is pending and "re-enqueueing" simply creates it.
-- **Process death after enqueue, before prefs.** Cannot happen; prefs are
-  written first.
-- **Job exists, prefs cleared or changed.** The worker's generation does not
-  match, so it exits without posting or clearing. This is also what protects
-  against `REPLACE`'s cooperative cancellation window: a worker already past
-  its Room reads when a newer job is enqueued will fail the generation check
-  before posting, because the check is the last thing before `notify()`.
-- **Clearing.** Only a worker whose generation matched clears
-  `pendingListId`, `pendingArmedAt` and the generation's "pending" status (the
-  counter itself is never reset, so it stays monotonic across sessions).
-  Cancel paths (toggle off, flag off, sign-out) clear the same fields under the
-  lock and cancel the unique work.
+- **One lock.** The scheduler's `Mutex` guards every read-modify-write of the
+  pending record, every WorkManager call, and the worker's final section.
+  Workers run in the app process, so the lock covers them. Rapid rescheduling
+  therefore serialises: each call sees the previous call's committed record
+  and its completed enqueue.
+- **Writer order, durably.** Inside the lock: `commit()` the record on IO,
+  check the result, then `enqueueUniqueWork(...).await()`. Because the enqueue
+  is awaited, two successive calls cannot reach WorkManager out of order, so
+  the last job standing always carries the generation of the committed record.
+- **Commit failure.** `commit()` returning false means no enqueue, a non-fatal
+  through `CrashReporter`, and the in-memory counter is still advanced (it is
+  only a uniqueness source). Outcome: no reminder for this tick; the next tick
+  tries again.
+- **Process death after commit, before enqueue completes.** The record claims
+  a job that may not exist. Harmless: no notification can fire, and the next
+  tick or edit on that list overwrites the record and enqueues normally.
+  `onLocalEdit` believing a job is pending and "re-enqueueing" simply creates
+  it.
+- **Process death after enqueue, before commit.** Cannot happen; the commit
+  comes first and is synchronous.
+- **Job exists, record cleared or changed.** The worker fails ownership and
+  exits without posting or clearing. Ownership is
+  `pending != null && pending.listId == workerListId && pending.generation ==
+  workerGeneration`. The counter alone is never consulted, so a worker from a
+  session whose record was cleared does not match even though the counter
+  still holds its value (D10).
+- **Why the final section is locked.** Without it this ordering is possible:
+  worker A reads ownership (match), scheduler B retargets and commits
+  generation 5, worker A posts. With it, either B's retarget completes first
+  and A's locked ownership check fails, or A's post and clear complete first
+  and B's retarget then writes a fresh record. Both orders are correct.
+- **Clearing.** Only the locked final section of a worker whose ownership
+  held clears the record; cancel paths (toggle off, sign-out, flag off at
+  cold start) clear it under the same lock and await `cancelUniqueWork`. The
+  counter is never reset.
 - **No start-up reconciliation.** Every inconsistency above resolves to "no
   notification" or "self-heals on the next tick", so a scan on app start would
   add code without changing any outcome.
 
 ## Fire-time checks (worker)
 
-In this order; all must hold or the worker exits silently:
+In this order; all must hold or the worker exits silently, returning `success`:
 
-1. **Generation matches** `pendingGeneration` in prefs. A mismatch means a newer
-   job superseded this one; exit without posting and without clearing (D10).
+1. **Ownership pre-check**, unlocked and cheap: the active pending record
+   matches this worker's list id and generation. A mismatch means a newer job
+   superseded this one or the session was cleared; exit at once (D10).
 2. The `enabled` preference is true (D12; covers a toggle-off that raced the
    job).
-3. Notifications are allowed by the OS (`areNotificationsEnabled()`).
-4. `ReminderEligibility.isPartlyShopped(listId)`: the list exists with
-   `deletedAt` null, and among live items at least one is picked up and at
-   least one is not, regardless of who wrote those states (D3).
-5. The app is not in the foreground (`ProcessLifecycleOwner`, injected).
-6. The job was armed less than 24 hours ago. Aggressive OEM battery killers can
-   hold a job for a day; a nudge the next afternoon about yesterday's shop is
-   noise.
-7. **Generation still matches**, re-read immediately before `notify()`. This
-   closes the window between the Room reads and the post.
+3. Notifications are allowed by the OS (`areNotificationsEnabled()`), on every
+   Android version: below 13 there is no runtime prompt, but the user can
+   still disable the app's notifications in system settings.
+4. The app is not in the foreground (`ProcessLifecycleOwner`, injected).
+5. **Age is sane.** `age = now - pending.armedAt` must satisfy
+   `0 <= age <= 24h`. Negative means the wall clock moved backwards since
+   arming; over 24 hours means an aggressive OEM battery killer held the job,
+   or the clock jumped forward. Either way a nudge now is noise. WorkManager's
+   own delay bookkeeping may use wall-clock time, so this check is the one
+   place clock behaviour is reasoned about.
+6. **Snapshot and eligibility.** `ReminderContentReader.snapshot(listId)` is
+   non-null, with at least one picked live item and at least one unpicked,
+   regardless of who wrote those states (D3). Copy is formatted from this
+   snapshot; if `isLocked` is true, item names are withheld.
+7. **Ownership under the lock**, inside `scheduler.finish`. Re-verify the
+   record as in check 1, then `notify()`, then clear the record, all before
+   the lock is released. This is the step that makes the post atomic with
+   respect to rescheduling and cancellation (D10).
+
+Exceptions: `CancellationException` is rethrown so WorkManager's own
+cancellation (a `REPLACE`, a `cancelUniqueWork`) is not mistaken for a crash.
+Anything else is caught, reported as a non-fatal, and the worker returns
+`success` without retry; the record is cleared only if the failure happened
+inside the locked section after ownership held.
 
 ## Error handling and edge cases
 
 | Case | Behaviour |
 |---|---|
-| List deleted or tombstoned before firing | Check 4 fails; silent. |
-| User finishes the list | Check 4 fails (zero unticked); silent. No explicit cancel on the last tick: the worker's check is the single source of truth. |
-| User unticks everything | Check 4 fails (zero ticked); silent. |
+| List deleted or tombstoned before firing | Check 6 fails; silent. |
+| User finishes the list | Check 6 fails (zero unticked); silent. No explicit cancel on the last tick: the worker's check is the single source of truth. |
+| User unticks everything | Check 6 fails (zero ticked); silent. |
 | User ticks milk, unticks milk, ticks eggs | Still partly shopped at fire time; the nudge fires. The worker does not care which item was ticked (D3). |
-| Partner finishes the list on their phone | Sync writes Room; check 4 fails at fire time. Partner activity never arms or resets, but final Room state wins. |
+| Partner finishes the list on their phone | Sync writes Room; check 6 fails at fire time. Partner activity never arms or resets, but final Room state wins. |
 | Partner ticks items, user ticks none | Nothing was ever armed on this phone. No nudge here; the partner's phone handles its own. |
-| Stale worker: user retargets from A to B while A's worker is running | A's worker fails check 1 or 7 and exits without posting or clearing. B's record and job are untouched. |
-| Stale worker: toggle off while the worker is running | Cancel path cleared the record under the lock; check 1 fails. If the worker was already past check 1, check 2 or 7 catches it. |
-| Sign-out | Account lists are evicted. Scheduler also cancels the job and clears the record on the `AuthState` signed-out transition; check 4 covers a missed cancel. |
+| User ticks the last item on list B while A has a pending reminder | B is not partly shopped, so nothing is armed and A's reminder stays (D4). |
+| Stale worker: user retargets from A to B while A's worker is running | Serialised by the lock. Either B's retarget commits first and A's worker fails the locked ownership check (7), posting nothing and clearing nothing; or A's post and clear finish first and B's retarget then writes a fresh record. B's job is never disturbed by A's worker. |
+| Stale worker: record cleared, counter unchanged | A worker from the cleared session finds `pending == null` and fails ownership. The counter is never compared on its own (D10). |
+| Stale worker: toggle off while the worker is running | The cancel path clears the record under the lock. The worker fails check 1, or if already past it, check 2 or the locked check 7. |
+| Flag turned off remotely while a job is pending | On the next cold start, once the flag fetch completes, `onFlagsLoaded` cancels the job and clears the record. If the job fires before that fetch, it may post once. |
+| Prefs `commit()` fails while arming | No enqueue; non-fatal reported; no reminder for this tick. The next tick tries again. |
+| Sign-out | Account lists are evicted. Scheduler also cancels the job and clears the record on the `AuthState` signed-out transition; check 6 covers a missed cancel. |
 | Toggle off or flag off | Scheduler cancels the pending job and clears the record; the gate blocks new ones. Flag flips take effect on next cold start, like every flag. |
-| Permission revoked after arming | Check 3 fails; silent. The `enabled` preference is not changed; the Settings switch reads off because it shows preference AND permission. |
-| App in the foreground at fire time | Check 5 fails; silent, no reschedule. The next tick is a fresh session. |
-| Doze delay | Fires late, sometimes by an hour or more. Copy says "still unticked", not "three hours ago", so late reads fine. Capped by check 6. |
-| Exception in the worker | Caught, reported as a non-fatal through `CrashReporter`, pending record cleared only if the generation matched, `success` returned so WorkManager never retries. |
+| Permission revoked after arming, or notifications disabled in system settings on Android 12 and below | Check 3 fails; silent. The `enabled` preference is not changed; the Settings switch reads off because it shows preference AND OS state. |
+| User taps Remind me, then denies the system dialog | `permissionRequested` is recorded, the offer is snoozed 14 days, nothing is armed. |
+| App in the foreground at fire time | Check 4 fails; silent, no reschedule. The next tick is a fresh session. |
+| Doze delay | Fires late, sometimes by an hour or more. Copy says "still unticked", not "three hours ago", so late reads fine. Capped by check 5. |
+| List locked after arming, before firing | The snapshot in check 6 sees `isLocked = true`; names are withheld, the count still shows. |
+| Exception in the worker | `CancellationException` is rethrown. Anything else is caught, reported as a non-fatal through `CrashReporter`, `success` returned so WorkManager never retries. The record is cleared only if the failure happened inside the locked section after ownership held. |
 | Two ticks in quick succession | Serialised by the scheduler's lock, each with its own generation; `REPLACE` on one unique name means the last job wins and the only job left carries the recorded generation. |
 | Process death between Room write and kicker call | Tick is saved, nothing was armed. The next tick arms. A lost nudge is never data loss. |
 | Process death between prefs write and enqueue | Prefs claim a job that does not exist. No notification can fire; the next tick or edit on that list writes a new record and enqueues. See Consistency. |
 | Reboot | WorkManager persists the job and its remaining delay. |
-| Clock or timezone change | WorkManager delays are elapsed-time based. |
-| Tap with `startAtWelcome` true | Extras ignored. Cannot happen with a live notification (sign-out cancels the job and evicts the list, so check 4 fails), stated so nobody has to reason about it. |
+| Clock or timezone change | WorkManager's delay bookkeeping may use wall-clock time, so a clock jump can fire the job early or late. Check 5 suppresses a negative age (clock moved back) and an age over 24 hours (clock moved forward, or the job was held). A timezone change alone does not move the epoch clock and has no effect. |
+| Tap while inside a different list, or in Settings | `popUpTo(SHOPPING_LIST)` pops that screen; the back stack becomes catalog → target. |
+| Tap with `startAtWelcome` true | Extras ignored. Cannot happen with a live notification (sign-out cancels the job and evicts the list, so check 6 fails), stated so nobody has to reason about it. |
 
 ## Telemetry
 
 Two events through `TelemetryContext`: `reminder_posted` and `reminder_tapped`.
 No list or item names, consistent with screen views stripping the
-user-authored list name. These answer whether three hours is the right delay.
+user-authored list name.
+
+`reminder_posted` carries one parameter, `delay_bucket`: the elapsed time from
+`armedAt` to the post, bucketed as `3-4h`, `4-6h`, `6-12h`, `12-24h`. Posts
+and taps on their own say whether people engage; the bucket says whether a
+reminder that was ignored arrived when designed or hours late under Doze,
+which is the difference between a product timing problem and a delivery
+problem. The bucket is coarse enough to identify nobody.
 
 ## Privacy and release
 
@@ -359,39 +460,68 @@ are kept thin and decisions live in plain classes.
 
 ### Unit and Robolectric (`app/src/test`)
 
-- **`ReminderSchedulerTest`** against a fake `WorkEnqueuer`, a fake
-  `ReminderEligibility` and in-memory prefs:
+- **`ReminderSchedulerTest`** against a fake suspend `WorkEnqueuer` whose
+  completion the test controls, a fake `ReminderEligibility`, and a fake
+  `ReminderPrefs` whose `commit…` calls can be made to fail:
   - Arming: tick on a partly-shopped list arms with list id, 3-hour delay and
     generation 1; a second tick on the same list re-enqueues with generation 2;
-    a tick on another list retargets with generation 3; a tick on a list that
-    is not partly shopped (last item ticked, one-item list) does not arm.
+    a tick on another partly-shopped list retargets with generation 3; a tick
+    on a list that is not partly shopped (last item ticked, one-item list)
+    does not arm and leaves an existing pending record for another list
+    untouched (D4).
   - Resetting: edit with nothing pending does not arm; edit on the pending list
     re-enqueues with a new generation; edit on a different list changes
     nothing.
-  - Gate: `enabled` false, flag off, and permission missing on API 33 each
-    block arming and cancel the pending job, clearing the record.
-  - Ordering: prefs are written before the fake enqueuer is called (the fake
-    asserts the prefs state at enqueue time).
+  - Gate: `enabled` false, flag off, and OS notifications disabled each block
+    arming and cancel the pending job, clearing the record.
+    `onFlagsLoaded()` with the flag off cancels and clears; with it on, does
+    nothing.
+  - Durable ordering: the fake enqueuer asserts the record was committed
+    before it was called. A failing `commit()` results in no enqueue, a
+    non-fatal, and no record.
+  - Asynchronous ordering: with the first enqueue's completion held, a second
+    tick must not reach the enqueuer until the first completes; after release,
+    the enqueuer saw exactly two calls in order and the record matches the
+    second.
   - Concurrency: 50 interleaved ticks and edits from several coroutines leave
-    exactly one enqueued job whose generation equals the recorded one.
-  - Prompt: `shouldOfferPermission(listId)` covers each of its five conditions,
-    the snooze boundary at exactly 14 days, and false when the list is not
-    partly shopped. `onPermissionGranted(listId)` arms when the list is still
-    partly shopped and does nothing when it no longer is.
-- **`ReminderWorkerTest`** with `TestListenableWorkerBuilder` and an in-memory
-  Room database (the pattern the sync DAO tests use):
-  - Posts when partly shopped and the generation matches, then clears the
-    record.
-  - Silent on each of the seven fire-time checks, including a stale generation
-    at check 1 (record untouched afterwards) and a generation that changes
-    between check 1 and check 7 (simulated by a prefs write from the injected
-    notifier hook; record untouched, nothing posted).
+    exactly one enqueued job whose generation equals the committed record's.
+  - `finish`: with a matching record, runs the post and clears; with a
+    mismatched list id, generation, or `pending == null` (counter unchanged),
+    neither posts nor clears.
+  - **Stale worker at the post boundary**, deterministic: the post lambda
+    suspends on a latch; while it is suspended, a retarget to list B is
+    launched and must be blocked on the lock; release the latch; assert the
+    post ran once for A, then B's record is written and B's job enqueued. And
+    the mirror case: retarget first, then `finish` for A's generation posts
+    nothing and B's record survives.
+  - Prompt: `shouldOfferPermission(listId)` covers each of its conditions, the
+    snooze boundary at exactly 14 days, false when the list is not partly
+    shopped, and the permanently-refused derivation in all four combinations
+    of `permissionRequested` and the rationale flag. `onPermissionGranted`
+    arms when the list is still partly shopped and does nothing when it no
+    longer is. `onPermissionDenied` records the request and snoozes.
+- **`ReminderWorkerTest`** with `TestListenableWorkerBuilder`, an in-memory
+  Room database (the pattern the sync DAO tests use) and the real scheduler
+  over fakes:
+  - Posts when partly shopped and ownership holds, then the record is cleared.
+  - Silent on each of the seven fire-time checks, including: `pending == null`
+    with the counter still equal to the worker's generation (check 1); a
+    negative age and an age of 24h + 1s (check 5); a retarget performed from
+    the content reader hook so it lands between check 6 and check 7 (nothing
+    posted, B's record intact).
   - Partly shopped where the only ticked item was written through the DAO
     directly (simulating a partner tick): still posts, proving D3's fire-time
     rule.
-  - `enabled` false at fire time: silent.
-  - DAO failure reports a non-fatal and returns success. Foreground state and
-    clock are injected.
+  - Lock state: list locked before the snapshot withholds names; a snapshot
+    with `isLocked = true` and no PIN still withholds names.
+  - `CancellationException` from the content reader propagates out of
+    `doWork` and is not reported as a non-fatal.
+  - Any other DAO failure reports a non-fatal and returns success. Foreground
+    state and clock are injected.
+- **`ReminderContentReaderTest`** (Room in-memory): returns null for a missing
+  or tombstoned list; excludes tombstoned items from both counts and names;
+  names are in list order; a list row updated to locked between two snapshots
+  is reported locked in the second.
 - **`ReminderNotifierTest`** (Robolectric, `ShadowNotificationManager`):
   - Copy: one item, two items, three or more with the "and N more" tail, the
     locked-list variant.
@@ -416,8 +546,9 @@ are kept thin and decisions live in plain classes.
   `startAtWelcome` suppressing navigation.
 - **`BgtNavGraphTest`** (new; Robolectric Compose with a
   `TestNavHostController`, the first test of the graph itself): with a
-  `pendingList` the graph ends on the items
-  route for that id with the catalog beneath it on the back stack; a
+  `pendingList` the graph ends on the items route for that id with the
+  catalog directly beneath it; the same when the graph was already showing a
+  different list's items screen or Settings (that entry is popped); a
   rotation after navigation does not navigate twice; a second `pendingList`
   value after the first was consumed navigates again.
 - **`MainActivityTest`** (Robolectric): `onNewIntent` with reminder extras
@@ -460,3 +591,14 @@ reproduce in a test; the telemetry events are how these show up in the field.
   local tick armed it, gets the nudge.
 - The generation counter in prefs grows forever. At one increment per tick it
   cannot overflow a `Long` in any realistic lifetime.
+- The feature flag cancels pending work on the next cold start after the
+  fetch completes. A job that fires before that fetch, or on a device that
+  never cold-starts the app again, may post once after the flag was turned
+  off. A live flag or a worker-side flag read would need the cache to be
+  persisted, which is out of scope.
+- The lock guarantees atomicity within the app process only. WorkManager runs
+  workers in the app process, so that is sufficient; a future multi-process
+  configuration would need a different guard.
+- Each arm does one synchronous `commit()` on the IO dispatcher. The UI never
+  waits on it, but on a slow disk a burst of ticks serialises behind it. At
+  one record per tick this is well under a millisecond each in practice.
