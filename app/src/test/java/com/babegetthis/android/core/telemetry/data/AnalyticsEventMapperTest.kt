@@ -49,6 +49,8 @@ class AnalyticsEventMapperTest {
         AnalyticsEvent.ListCompleted(itemCount = 7),
         AnalyticsEvent.CategoryAutoAssigned("cat-dairy-eggs"),
         AnalyticsEvent.CategoryCorrected("cat-dairy-eggs", "cat-frozen-foods"),
+        AnalyticsEvent.ReminderPosted(delayMillis = 3 * 60 * 60 * 1000L + 1),
+        AnalyticsEvent.ReminderTapped,
     )
 
     @Test
@@ -190,6 +192,26 @@ class AnalyticsEventMapperTest {
         assertEquals(
             MappedEvent(name = "welcome_choice", text = mapOf("choice" to "sign_in")),
             AnalyticsEventMapper.map(AnalyticsEvent.WelcomeChoiceMade(WelcomeChoice.SignIn)),
+        )
+    }
+
+    @Test
+    fun `reminder posted carries only the delay bucket`() {
+        // Delay is the elapsed time from scheduling to posting. The raw value
+        // is a fingerprint, so only its bucket leaves the device.
+        assertEquals(
+            MappedEvent(name = "reminder_posted", text = mapOf("delay_bucket" to "3-4h")),
+            AnalyticsEventMapper.map(
+                AnalyticsEvent.ReminderPosted(delayMillis = 3 * 60 * 60 * 1000L + 1),
+            ),
+        )
+    }
+
+    @Test
+    fun `reminder tapped maps to a parameterless event`() {
+        assertEquals(
+            MappedEvent(name = "reminder_tapped"),
+            AnalyticsEventMapper.map(AnalyticsEvent.ReminderTapped),
         )
     }
 
