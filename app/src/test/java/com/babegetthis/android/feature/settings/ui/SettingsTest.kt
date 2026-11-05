@@ -1,15 +1,28 @@
 package com.babegetthis.android.feature.settings.ui
 
+import android.Manifest
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.lifecycle.Lifecycle
+import androidx.test.core.app.ApplicationProvider
+import app.cash.turbine.test
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.pin.data.PinRepository
+import com.babegetthis.android.core.reminder.NotificationGate
+import com.babegetthis.android.core.reminder.PermissionState
+import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.telemetry.TelemetryConsent
 import com.babegetthis.android.core.ui.components.SettingsRow
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
+import com.babegetthis.android.testing.FakeNotificationGate
+import com.babegetthis.android.testing.FakeReminderPrefs
 import com.babegetthis.android.testing.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -18,6 +31,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -41,6 +55,10 @@ class SettingsViewModelTest {
     // OFF in tests. Production defaults them on — tests that care stub it.
     private val consent = mockk<TelemetryConsent>(relaxed = true)
 
+    private val reminderScheduler = mockk<ReminderScheduler>(relaxed = true)
+    private val reminderPrefs = FakeReminderPrefs()
+    private val notificationGate = FakeNotificationGate()
+
     private fun viewModel(): SettingsViewModel {
         every { pinRepository.pinExists } returns pinExists
         return SettingsViewModel(
@@ -48,6 +66,9 @@ class SettingsViewModelTest {
             listRepository,
             consent,
             CoroutineScope(UnconfinedTestDispatcher()),
+            reminderScheduler,
+            reminderPrefs,
+            notificationGate,
         )
     }
 
@@ -180,12 +201,241 @@ class SettingsViewModelTest {
         verify { consent.setAnalyticsEnabled(true) }
         assertTrue(vm.analyticsEnabled.value)
     }
+
+    @Test
+    fun `the reminder row is On only with the preference and permission`() = runTest {
+        val vm = viewModel()
+
+        reminderPrefs.enabled = true
+        vm.updatePermissionState(PermissionState.Granted)
+        assertEquals(ReminderRowState.On, vm.reminderRow.value)
+
+        vm.updatePermissionState(PermissionState.NotRequired)
+        assertEquals(ReminderRowState.On, vm.reminderRow.value)
+
+        reminderPrefs.enabled = false
+        vm.updatePermissionState(PermissionState.Granted)
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+
+        reminderPrefs.enabled = true
+        vm.updatePermissionState(PermissionState.Requestable)
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `permanently refused or os-disabled reads Blocked`() = runTest {
+        val vm = viewModel()
+        reminderPrefs.enabled = true
+
+        vm.updatePermissionState(PermissionState.PermanentlyRefused)
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+
+        notificationGate.enabled = false
+        vm.updatePermissionState(PermissionState.Granted)
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+    }
+
+    // On API 33+ areNotificationsEnabled() is false whenever POST_NOTIFICATIONS
+    // is not granted, so a never-asked user has the gate closed. That must read
+    // as Off (askable), not Blocked, or the direct request can never run.
+    @Test
+    fun `gate closed with Requestable reads Off and switching on asks for permission`() = runTest {
+        notificationGate.enabled = false
+        reminderPrefs.enabled = true
+        val order = mutableListOf<String>()
+        every { reminderScheduler.onPermissionRequested() } answers { order += "requested" }
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Requestable)
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+
+        vm.events.test {
+            vm.onReminderSwitch(true)
+
+            assertEquals(SettingsEvent.RequestNotificationPermission, awaitItem())
+            order += "event"
+        }
+        assertEquals(listOf("requested", "event"), order)
+        coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
+    }
+
+    @Test
+    fun `gate closed with Granted reads Blocked`() = runTest {
+        notificationGate.enabled = false
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+
+        vm.updatePermissionState(PermissionState.Granted)
+
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `gate closed with NotRequired reads Blocked`() = runTest {
+        notificationGate.enabled = false
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+
+        vm.updatePermissionState(PermissionState.NotRequired)
+
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `gate open with Requestable reads Off`() = runTest {
+        notificationGate.enabled = true
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+
+        vm.updatePermissionState(PermissionState.Requestable)
+
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+    }
+
+    // The switch branches on the state as it is now, not as last pushed: the
+    // user may have turned notifications off in system settings meanwhile.
+    @Test
+    fun `switching on re-reads the gate before choosing a branch`() = runTest {
+        reminderPrefs.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Granted)
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+
+        notificationGate.enabled = false
+        vm.events.test {
+            vm.onReminderSwitch(true)
+
+            assertEquals(SettingsEvent.OpenNotificationSettings, awaitItem())
+        }
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+        coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
+    }
+
+    @Test
+    fun `switching off disables the scheduler`() = runTest {
+        val vm = viewModel()
+
+        vm.onReminderSwitch(false)
+
+        coVerify { reminderScheduler.setEnabled(false) }
+    }
+
+    @Test
+    fun `switching off refreshes the row from the preference`() = runTest {
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+        assertEquals(ReminderRowState.On, vm.reminderRow.value)
+        coEvery { reminderScheduler.setEnabled(false) } answers { reminderPrefs.enabled = false }
+
+        vm.onReminderSwitch(false)
+
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `switching on when Requestable records the request and asks for permission`() = runTest {
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Requestable)
+
+        vm.events.test {
+            vm.onReminderSwitch(true)
+
+            assertEquals(SettingsEvent.RequestNotificationPermission, awaitItem())
+        }
+        verify { reminderScheduler.onPermissionRequested() }
+        coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
+    }
+
+    @Test
+    fun `switching on when Blocked opens system settings`() = runTest {
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.PermanentlyRefused)
+
+        vm.events.test {
+            vm.onReminderSwitch(true)
+
+            assertEquals(SettingsEvent.OpenNotificationSettings, awaitItem())
+        }
+        coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
+        verify(exactly = 0) { reminderScheduler.onPermissionRequested() }
+    }
+
+    @Test
+    fun `switching on when the os has notifications off opens system settings`() = runTest {
+        notificationGate.enabled = false
+        val vm = viewModel()
+
+        vm.events.test {
+            vm.onReminderSwitch(true)
+
+            assertEquals(SettingsEvent.OpenNotificationSettings, awaitItem())
+        }
+    }
+
+    @Test
+    fun `switching on when Granted enables`() = runTest {
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Granted)
+
+        vm.onReminderSwitch(true)
+
+        coVerify { reminderScheduler.setEnabled(true) }
+        verify(exactly = 0) { reminderScheduler.onPermissionRequested() }
+    }
+
+    @Test
+    fun `a granted permission result enables`() = runTest {
+        reminderPrefs.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Granted)
+        coEvery { reminderScheduler.setEnabled(true) } answers { reminderPrefs.enabled = true }
+
+        vm.onNotificationPermissionResult(true)
+
+        coVerify { reminderScheduler.setEnabled(true) }
+        assertEquals(ReminderRowState.On, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `a denied permission result leaves reminders untouched`() = runTest {
+        reminderPrefs.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Requestable)
+
+        vm.onNotificationPermissionResult(false)
+
+        coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `onResumed recomputes the row from the gate`() = runTest {
+        notificationGate.enabled = false
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Granted)
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+
+        notificationGate.enabled = true
+        vm.onResumed()
+        assertEquals(ReminderRowState.On, vm.reminderRow.value)
+
+        notificationGate.enabled = false
+        vm.onResumed()
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `permissionRequested delegates to the scheduler`() = runTest {
+        every { reminderScheduler.permissionRequested() } returns true
+
+        assertTrue(viewModel().permissionRequested())
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
 class SettingsScreenTest {
 
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val viewModel = mockk<SettingsViewModel>(relaxed = true)
 
@@ -205,6 +455,8 @@ class SettingsScreenTest {
         // which blows up on the Boolean cast the moment the screen collects it.
         every { viewModel.analyticsEnabled } returns MutableStateFlow(analyticsEnabled)
         every { viewModel.crashReportingEnabled } returns MutableStateFlow(crashReportingEnabled)
+        every { viewModel.reminderRow } returns MutableStateFlow(ReminderRowState.Off)
+        every { viewModel.events } returns MutableSharedFlow()
         compose.setContent { SettingsScreen(viewModel = viewModel) }
     }
 
@@ -266,12 +518,104 @@ class SettingsScreenTest {
 
         io.mockk.verify { viewModel.refreshLockedCount() }
     }
+
+    // Granted with the OS gate closed is the real Blocked case (the user turned
+    // notifications off in system settings). Without the grant, API 33+ reads
+    // Requestable and the row is askable, not Blocked.
+    @Test
+    fun `the reminders row shows the blocked subtitle when blocked`() {
+        org.robolectric.Shadows.shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val pinExists = MutableStateFlow(false)
+        val pinRepository = mockk<PinRepository>(relaxed = true) {
+            every { this@mockk.pinExists } returns pinExists
+        }
+        val consent = mockk<TelemetryConsent>(relaxed = true)
+        val vm = SettingsViewModel(
+            pinRepository,
+            mockk(relaxed = true),
+            consent,
+            CoroutineScope(UnconfinedTestDispatcher()),
+            mockk(relaxed = true),
+            FakeReminderPrefs(),
+            NotificationGate { false },
+        )
+
+        compose.setContent { SettingsScreen(viewModel = vm) }
+
+        compose.onNodeWithText("Shopping reminders").assertIsDisplayed()
+        compose.onNodeWithText("Allow notifications in system settings to turn this on").assertIsDisplayed()
+        // The reminders switch is the first toggle on the screen; Blocked must never read as on.
+        compose.onAllNodes(isToggleable())[0].assertIsOff()
+    }
+
+    // The permission state and the OS gate can change while the user is in system settings, so
+    // resuming must re-read the gate. Fails if the ON_RESUME observer is removed from the screen.
+    @Test
+    fun `the reminders row recovers from Blocked when the screen resumes`() {
+        org.robolectric.Shadows.shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val gate = FakeNotificationGate(enabled = false)
+        val pinRepository = mockk<PinRepository>(relaxed = true) {
+            every { this@mockk.pinExists } returns MutableStateFlow(false)
+        }
+        val vm = SettingsViewModel(
+            pinRepository,
+            mockk(relaxed = true),
+            mockk<TelemetryConsent>(relaxed = true),
+            CoroutineScope(UnconfinedTestDispatcher()),
+            mockk(relaxed = true),
+            FakeReminderPrefs(),
+            gate,
+        )
+        compose.setContent { SettingsScreen(viewModel = vm) }
+        compose.onNodeWithText("Allow notifications in system settings to turn this on").assertIsDisplayed()
+
+        gate.enabled = true
+        compose.activityRule.scenario.moveToState(Lifecycle.State.STARTED)
+        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+
+        compose.onNodeWithText("A nudge when you leave items unticked after a shop").assertIsDisplayed()
+        compose.onAllNodes(isToggleable())[0].assertIsOn()
+    }
+
+    // API 34, never asked: areNotificationsEnabled() is false only because the
+    // grant is missing. The row must stay askable so the direct request can run.
+    @Test
+    fun `a never-asked user on API 33+ sees the plain subtitle, not Blocked`() {
+        val pinRepository = mockk<PinRepository>(relaxed = true) {
+            every { this@mockk.pinExists } returns MutableStateFlow(false)
+        }
+        val vm = SettingsViewModel(
+            pinRepository,
+            mockk(relaxed = true),
+            mockk<TelemetryConsent>(relaxed = true),
+            CoroutineScope(UnconfinedTestDispatcher()),
+            mockk(relaxed = true),
+            FakeReminderPrefs(),
+            NotificationGate { false },
+        )
+
+        compose.setContent { SettingsScreen(viewModel = vm) }
+
+        compose.onNodeWithText("A nudge when you leave items unticked after a shop").assertIsDisplayed()
+        compose.onNodeWithText("Allow notifications in system settings to turn this on").assertDoesNotExist()
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `the reminders row shows the plain subtitle when not blocked`() {
+        render(pinExists = false)
+
+        compose.onNodeWithText("A nudge when you leave items unticked after a shop").assertIsDisplayed()
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
 class SettingsRowTest {
 
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun `a row shows its title`() {

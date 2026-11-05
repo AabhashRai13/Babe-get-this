@@ -22,6 +22,25 @@ fun bucketCount(count: Int): String = when {
     else -> "50+"
 }
 
+private const val HOUR = 60L * 60L * 1_000L
+
+// Reminder delay: time from scheduling a reminder to it actually posting.
+//
+// The reminder is scheduled for 3h after the list was armed, so the 3h edge
+// is the scheduled time itself and everything above it is delivery delay.
+// "<3h" is one bucket because a post before its scheduled time is a clock or
+// scheduling anomaly, not a delay worth distinguishing. The 4h, 6h, 12h and
+// 24h edges are coarse on purpose: Doze and battery restrictions push late
+// posts into the long tail, and that tail is what this bucket exists to show.
+fun bucketReminderDelay(millis: Long): String = when {
+    millis < 3 * HOUR -> "<3h"
+    millis < 4 * HOUR -> "3-4h"
+    millis < 6 * HOUR -> "4-6h"
+    millis < 12 * HOUR -> "6-12h"
+    millis < 24 * HOUR -> "12-24h"
+    else -> "24h+"
+}
+
 // Durations: recording length, transcription latency.
 //
 // Boundaries chosen around what the voice flow actually feels like rather than

@@ -9,6 +9,8 @@ import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.model.Category
+import com.babegetthis.android.core.reminder.PermissionState
+import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
@@ -57,6 +59,7 @@ class ShoppingItemsViewModel @Inject constructor(
     private val sharedListRemote: SharedListRemote,
     private val analytics: AnalyticsRepository,
     private val markers: TelemetryMarkers,
+    private val reminderScheduler: ReminderScheduler,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
@@ -196,9 +199,44 @@ class ShoppingItemsViewModel @Inject constructor(
     sealed class UiEvent {
         data object ListJustCompleted : UiEvent()
         data class ShareList(val text: String) : UiEvent()
+        data object RequestNotificationPermission : UiEvent()
     }
     private val _events = MutableSharedFlow<UiEvent>()
     val events = _events.asSharedFlow()
+
+    // Defaults to Granted so no prompt can appear before the screen has
+    // reported the real state: the scheduler never offers a prompt for Granted.
+    private var permissionState: PermissionState = PermissionState.Granted
+
+    private val _showReminderPrompt = MutableStateFlow(false)
+    val showReminderPrompt: StateFlow<Boolean> = _showReminderPrompt.asStateFlow()
+
+    fun updatePermissionState(state: PermissionState) {
+        permissionState = state
+    }
+
+    fun permissionRequested(): Boolean = reminderScheduler.permissionRequested()
+
+    fun onReminderPromptAccepted() {
+        reminderScheduler.onPermissionRequested()
+        _showReminderPrompt.value = false
+        viewModelScope.launch { _events.emit(UiEvent.RequestNotificationPermission) }
+    }
+
+    fun onReminderPromptDeclined() {
+        reminderScheduler.onPermissionDenied()
+        _showReminderPrompt.value = false
+    }
+
+    fun onNotificationPermissionResult(granted: Boolean) {
+        viewModelScope.launch {
+            if (granted) {
+                reminderScheduler.onPermissionGranted(listId)
+            } else {
+                reminderScheduler.onPermissionDenied()
+            }
+        }
+    }
 
     // When non-null, the share-code dialog is showing this code.
     val shareCodeDialog = MutableStateFlow<String?>(null)
@@ -405,7 +443,12 @@ class ShoppingItemsViewModel @Inject constructor(
                     // Only the check, not the un-check. Un-checking is a
                     // correction, and counting it would inflate the shopping
                     // activity this is meant to measure.
-                    if (isPickedUp) analytics.track(AnalyticsEvent.ItemCheckedOff)
+                    if (isPickedUp) {
+                        analytics.track(AnalyticsEvent.ItemCheckedOff)
+                        if (reminderScheduler.shouldOfferPermission(listId, permissionState)) {
+                            _showReminderPrompt.value = true
+                        }
+                    }
                     onListEdited()
                 }
                 is Result.Error -> {

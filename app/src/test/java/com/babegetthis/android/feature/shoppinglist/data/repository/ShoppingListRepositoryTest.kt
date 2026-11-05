@@ -6,6 +6,7 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.testing.FakeListOwnershipStore
+import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
@@ -56,6 +57,7 @@ class ShoppingListRepositoryTest {
             { auth.liveSessionUserId() },
             mockk(relaxed = true),
         ),
+        FakeReminderKicker(),
     )
 
     private suspend fun seed(id: String, accountId: String? = null, shareCode: String? = null) =

@@ -4,7 +4,8 @@
      Publish together with the app release that ships them, and set the
      effective date below to that release date.
      DO NOT publish before delete_user purges lists nobody else joined
-     (plan Task 14) — section 6 promises it. -->
+     (plan Task 14) — section 6 promises it.
+     Revised 2026-11-05 for shopping reminders (on-device notifications; nothing collected). -->
 
 Effective date: August 18, 2026
 
@@ -63,6 +64,7 @@ The short version: lists you make as a guest, without signing in, stay on your d
 * No location data.
 * No contacts, photos, files, or other device content.
 * We never sell or rent your personal information to anyone.
+* Shopping reminders are notifications built on your device from the lists already on it. They can be turned off in Settings, and nothing about them is sent anywhere.
 
 ## 3. How We Use Your Information
 

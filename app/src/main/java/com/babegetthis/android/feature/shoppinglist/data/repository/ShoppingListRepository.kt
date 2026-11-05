@@ -6,6 +6,7 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.reminder.ReminderKicker
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
@@ -36,6 +37,7 @@ class ShoppingListRepository @Inject constructor(
     private val ownership: ListOwnershipStore,
     private val syncKicker: SyncKicker,
     private val syncEngine: SyncEngine,
+    private val reminderKicker: ReminderKicker,
 ) {
     // Flows don't need Result wrapping — Room handles errors internally
     // and the Flow just stops emitting. We wrap write operations only.
@@ -147,6 +149,7 @@ class ShoppingListRepository @Inject constructor(
         if (itemEntities.isNotEmpty()) {
             shoppingItemDao.insertItems(itemEntities)
             if (synced) syncKicker.pushSoon()
+            reminderKicker.onLocalEdit(listId)
         }
         listId
     }

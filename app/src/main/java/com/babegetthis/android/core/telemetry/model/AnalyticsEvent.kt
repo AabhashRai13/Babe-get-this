@@ -123,6 +123,20 @@ sealed interface AnalyticsEvent {
     data class CategoryAutoAssigned(val categoryId: String?) : AnalyticsEvent
 
     data class CategoryCorrected(val fromCategoryId: String?, val toCategoryId: String?) : AnalyticsEvent
+
+    // -- Shopping reminders ------------------------------------------------
+    // Question: does a scheduled reminder get seen and acted on, and does
+    // the delay bucket tell "ignored on time" apart from "arrived late"?
+    // Posted plus tapped is the engagement rate; the delay separates a
+    // reminder the user ignored from one Android held back under Doze.
+
+    // The reminder notification was posted. delayMillis is the elapsed time
+    // from when it was armed to when it actually posted; only its bucket is
+    // sent, since the raw value is a fingerprint.
+    data class ReminderPosted(val delayMillis: Long) : AnalyticsEvent
+
+    // The user tapped the reminder notification and opened the app.
+    data object ReminderTapped : AnalyticsEvent
 }
 
 // How an item got into the list. The whole voice bet is measured by the

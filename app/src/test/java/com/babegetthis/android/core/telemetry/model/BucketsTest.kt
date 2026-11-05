@@ -60,4 +60,27 @@ class BucketsTest {
         // fastest possible transcription.
         assertEquals("unknown", bucketMillis(-1L))
     }
+
+    private val hour = 60L * 60 * 1_000
+
+    @Test
+    fun `reminder delay buckets land on the documented edges`() {
+        assertEquals("<3h", bucketReminderDelay(3 * hour - 1))
+        assertEquals("3-4h", bucketReminderDelay(3 * hour))
+        assertEquals("3-4h", bucketReminderDelay(4 * hour - 1))
+        assertEquals("4-6h", bucketReminderDelay(4 * hour))
+        assertEquals("4-6h", bucketReminderDelay(6 * hour - 1))
+        assertEquals("6-12h", bucketReminderDelay(6 * hour))
+        assertEquals("6-12h", bucketReminderDelay(12 * hour - 1))
+        assertEquals("12-24h", bucketReminderDelay(12 * hour))
+        assertEquals("12-24h", bucketReminderDelay(24 * hour - 1))
+        assertEquals("24h+", bucketReminderDelay(24 * hour))
+    }
+
+    @Test
+    fun `a negative reminder delay falls into the earliest bucket`() {
+        // Delay is computed by subtracting timestamps; a backwards clock must
+        // not invent a new label. It lands where a too-early post belongs.
+        assertEquals("<3h", bucketReminderDelay(-1L))
+    }
 }
