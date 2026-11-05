@@ -3,6 +3,8 @@ package com.babegetthis.android.feature.shoppingitems.ui
 import android.content.Intent
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
@@ -67,6 +69,9 @@ import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptPurpose
 import com.babegetthis.android.core.pin.ui.PinSetupDialog
+import com.babegetthis.android.core.reminder.ui.NOTIFICATION_PERMISSION
+import com.babegetthis.android.core.reminder.ui.ReminderPermissionSheet
+import com.babegetthis.android.core.reminder.ui.rememberPermissionState
 import com.babegetthis.android.core.review.requestInAppReview
 import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
@@ -99,6 +104,19 @@ fun ShoppingItemsScreen(
     val leavingDeletesList by viewModel.leavingDeletesList.collectAsState()
     var confirmLeave by remember { mutableStateOf(false) }
     val showShareAuthPrompt by viewModel.showShareAuthPrompt.collectAsState()
+    val showReminderPrompt by viewModel.showReminderPrompt.collectAsState()
+
+    // Reported to the ViewModel so the next tick can decide whether to offer the
+    // reminder prompt. Recomputed on resume (the user may flip it in settings).
+    val permission = rememberPermissionState(requested = viewModel.permissionRequested())
+    LaunchedEffect(permission) { viewModel.updatePermissionState(permission) }
+
+    // Only launched via UiEvent.RequestNotificationPermission, which is only
+    // emitted from the prompt's accept button, which is only offered while the
+    // state is Requestable (API 33+).
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> viewModel.onNotificationPermissionResult(granted) }
 
     val isLocked by viewModel.isLocked.collectAsState()
     val sessionUnlocked by viewModel.sessionUnlocked.collectAsState()
@@ -187,6 +205,8 @@ fun ShoppingItemsScreen(
                     }
                     context.startActivity(Intent.createChooser(sendIntent, null))
                 }
+                is ShoppingItemsViewModel.UiEvent.RequestNotificationPermission ->
+                    notificationPermissionLauncher.launch(NOTIFICATION_PERMISSION)
             }
         }
     }
@@ -540,6 +560,13 @@ fun ShoppingItemsScreen(
     // One prompt serves both auth-gated features on this screen (live share
     // and voice); dismiss clears whichever flag raised it, and the copy names
     // whichever feature was actually tapped (task 8.4).
+    if (showReminderPrompt) {
+        ReminderPermissionSheet(
+            onAccept = viewModel::onReminderPromptAccepted,
+            onDecline = viewModel::onReminderPromptDeclined,
+        )
+    }
+
     if (showShareAuthPrompt || showVoiceAuthPrompt) {
         AuthPromptDialog(
             title = stringResource(

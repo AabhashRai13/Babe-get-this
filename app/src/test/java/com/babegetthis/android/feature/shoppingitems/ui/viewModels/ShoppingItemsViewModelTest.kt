@@ -9,6 +9,8 @@ import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.model.Category
+import com.babegetthis.android.core.reminder.PermissionState
+import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.core.telemetry.AnalyticsRepository
@@ -66,6 +68,7 @@ class ShoppingItemsViewModelTest {
     private lateinit var sharedListRemote: FakeSharedListRemote
     private lateinit var analytics: AnalyticsRepository
     private lateinit var markers: TelemetryMarkers
+    private lateinit var reminderScheduler: ReminderScheduler
     private lateinit var itemsFlow: MutableStateFlow<List<ShoppingItem>>
     private lateinit var shareCodeFlow: MutableStateFlow<String?>
 
@@ -84,6 +87,8 @@ class ShoppingItemsViewModelTest {
         // relaxed returns false for firstTime(), i.e. "already fired" — so
         // once-per-user events stay silent unless a test asks for them.
         markers = mockk(relaxed = true)
+        // relaxed shouldOfferPermission() returns false, i.e. "do not prompt".
+        reminderScheduler = mockk(relaxed = true)
         itemsFlow = MutableStateFlow(emptyList())
         shareCodeFlow = MutableStateFlow(null)
 
@@ -113,6 +118,7 @@ class ShoppingItemsViewModelTest {
         sharedListRemote = sharedListRemote,
         analytics = analytics,
         markers = markers,
+        reminderScheduler = reminderScheduler,
         applicationScope = CoroutineScope(testDispatcher),
     )
 
@@ -554,6 +560,7 @@ class ShoppingItemsViewModelTest {
             sharedListRemote = sharedListRemote,
             analytics = analytics,
             markers = markers,
+            reminderScheduler = reminderScheduler,
             applicationScope = CoroutineScope(testDispatcher),
         )
 
@@ -1149,6 +1156,113 @@ class ShoppingItemsViewModelTest {
             analytics.track(AnalyticsEvent.ListCompleted(itemCount = 2))
             analytics.track(AnalyticsEvent.FirstListCompleted(itemCount = 2))
         }
+    }
+
+    // -- reminder permission prompt --
+
+    @Test
+    fun `a tick asks the scheduler with the reported permission state and shows the prompt on true`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { reminderScheduler.shouldOfferPermission("L1", PermissionState.Requestable) } returns true
+        val viewModel = buildViewModel()
+        viewModel.updatePermissionState(PermissionState.Requestable)
+        assertFalse(viewModel.showReminderPrompt.value)
+
+        viewModel.togglePickedUp("i1", isPickedUp = true)
+
+        coVerify { reminderScheduler.shouldOfferPermission("L1", PermissionState.Requestable) }
+        assertTrue(viewModel.showReminderPrompt.value)
+    }
+
+    @Test
+    fun `a tick after the last item is not offered when the scheduler says no`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { reminderScheduler.shouldOfferPermission(any(), any()) } returns false
+        val viewModel = buildViewModel()
+        viewModel.updatePermissionState(PermissionState.Requestable)
+
+        viewModel.togglePickedUp("i1", isPickedUp = true)
+
+        coVerify { reminderScheduler.shouldOfferPermission("L1", PermissionState.Requestable) }
+        assertFalse(viewModel.showReminderPrompt.value)
+    }
+
+    @Test
+    fun `unticking never asks`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { reminderScheduler.shouldOfferPermission(any(), any()) } returns true
+        val viewModel = buildViewModel()
+        viewModel.updatePermissionState(PermissionState.Requestable)
+
+        viewModel.togglePickedUp("i1", isPickedUp = false)
+
+        coVerify(exactly = 0) { reminderScheduler.shouldOfferPermission(any(), any()) }
+        assertFalse(viewModel.showReminderPrompt.value)
+    }
+
+    @Test
+    fun `accepting records the request, hides the sheet and emits the launch event`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { reminderScheduler.shouldOfferPermission(any(), any()) } returns true
+        val viewModel = buildViewModel()
+        viewModel.togglePickedUp("i1", isPickedUp = true)
+        assertTrue(viewModel.showReminderPrompt.value)
+
+        viewModel.events.test {
+            viewModel.onReminderPromptAccepted()
+
+            assertEquals(ShoppingItemsViewModel.UiEvent.RequestNotificationPermission, awaitItem())
+        }
+
+        verify { reminderScheduler.onPermissionRequested() }
+        assertFalse(viewModel.showReminderPrompt.value)
+    }
+
+    @Test
+    fun `declining denies and hides the sheet`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { reminderScheduler.shouldOfferPermission(any(), any()) } returns true
+        val viewModel = buildViewModel()
+        viewModel.togglePickedUp("i1", isPickedUp = true)
+        assertTrue(viewModel.showReminderPrompt.value)
+
+        viewModel.onReminderPromptDeclined()
+
+        verify { reminderScheduler.onPermissionDenied() }
+        assertFalse(viewModel.showReminderPrompt.value)
+    }
+
+    @Test
+    fun `a granted result arms the current list, a denied result snoozes`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.onNotificationPermissionResult(granted = true)
+        coVerify(exactly = 1) { reminderScheduler.onPermissionGranted("L1") }
+        verify(exactly = 0) { reminderScheduler.onPermissionDenied() }
+
+        viewModel.onNotificationPermissionResult(granted = false)
+        verify(exactly = 1) { reminderScheduler.onPermissionDenied() }
+        coVerify(exactly = 1) { reminderScheduler.onPermissionGranted(any()) }
+    }
+
+    @Test
+    fun `no prompt before the screen reports a permission state`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("i1", isPickedUp = true)
+
+        // Defaults to Granted, which the scheduler never offers a prompt for.
+        coVerify { reminderScheduler.shouldOfferPermission("L1", PermissionState.Granted) }
+        assertFalse(viewModel.showReminderPrompt.value)
+    }
+
+    @Test
+    fun `permissionRequested reads the scheduler`() {
+        every { reminderScheduler.permissionRequested() } returns true
+        val viewModel = buildViewModel()
+
+        assertTrue(viewModel.permissionRequested())
     }
 
     // onCleared is protected on ViewModel, so reach it the way the framework

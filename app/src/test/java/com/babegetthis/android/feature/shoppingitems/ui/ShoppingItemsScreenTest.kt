@@ -19,6 +19,7 @@ import com.babegetthis.android.core.data.repository.CategoryRepository
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.pin.data.PinRepository
+import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
@@ -29,6 +30,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +66,7 @@ class ShoppingItemsScreenTest {
     private val authStateManager = mockk<AuthStateManager>(relaxed = true)
     private val listRepository = mockk<ShoppingListRepository>(relaxed = true)
     private val pinRepository = mockk<PinRepository>(relaxed = true)
+    private val scheduler = mockk<ReminderScheduler>(relaxed = true)
 
     private val itemsFlow = MutableStateFlow<List<ShoppingItem>>(emptyList())
     private var navigatedBack = false
@@ -97,6 +100,7 @@ class ShoppingItemsScreenTest {
             sharedListRemote = com.babegetthis.android.testing.FakeSharedListRemote(),
             analytics = mockk(relaxed = true),
             markers = mockk(relaxed = true),
+            reminderScheduler = scheduler,
             applicationScope = CoroutineScope(UnconfinedTestDispatcher()),
         )
         compose.setContent {
@@ -206,6 +210,23 @@ class ShoppingItemsScreenTest {
             .performSemanticsAction(SemanticsActions.OnClick)
 
         coVerify { itemRepository.togglePickedUp("i1", true) }
+    }
+
+    @Test
+    fun `the reminder sheet shows its copy and routes both buttons`() {
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { scheduler.shouldOfferPermission(any(), any()) } returns true
+        render(items = listOf(item("i1", "Milk"), item("i2", "Eggs")))
+
+        compose.onNodeWithTag(TestTags.itemCheckbox("i1"))
+            .performSemanticsAction(SemanticsActions.OnClick)
+
+        compose.onNodeWithText("Forget something?").assertIsDisplayed()
+        compose.onNodeWithText("Not now").performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+
+        verify { scheduler.onPermissionDenied() }
+        compose.onNodeWithText("Forget something?").assertDoesNotExist()
     }
 
     @Test
