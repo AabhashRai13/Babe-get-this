@@ -6,14 +6,14 @@ plugins {
 
 android {
     namespace = "com.babegetthis.android.baselineprofile"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         // Macrobenchmark measures cold start, which needs a real ART profile
         // and a non-debuggable target. API 28 is the floor for that; the app
         // itself still supports 24, those devices simply get no profile.
         minSdk = 28
-        targetSdk = 36
+        targetSdk = 37
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

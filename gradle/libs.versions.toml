@@ -30,7 +30,8 @@ turbine = "1.1.0"
 # is full of. 0.8.x is the last line targeting Kotlin 2.0.x.
 kover = "0.8.3"
 # Robolectric runs Android-framework code on the JVM, so Compose screen tests and
-# Room DAO tests execute in CI with no emulator. 4.13 supports compileSdk 36.
+# Room DAO tests execute in CI with no emulator. 4.13 builds against compileSdk
+# 37; the tests themselves run on its SDK 34 image (see robolectric.properties).
 robolectric = "4.13"
 androidxTest = "1.7.0"
 androidxTestRunner = "1.7.0"
