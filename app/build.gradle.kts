@@ -49,13 +49,13 @@ val releaseKeyPassword: String? = localProperties.getProperty("RELEASE_KEY_PASSW
 android {
     namespace = "com.babegetthis.android"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.babegetthis.android"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 10
         versionName = "1.1.0"
 
