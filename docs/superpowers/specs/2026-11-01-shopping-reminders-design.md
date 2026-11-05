@@ -1,6 +1,6 @@
 # Shopping reminders — design
 
-**Date:** 2026-11-01 · **Status:** awaiting review · **Branch:** `feat/guest-and-account-lists` (spec only; implementation gets its own branch)
+**Date:** 2026-11-01 · **Status:** implemented · **Branch:** `feat/guest-and-account-lists` (spec only; implementation gets its own branch)
 
 ## Summary
 

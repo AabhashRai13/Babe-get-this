@@ -23,6 +23,7 @@ Light and dark both follow the system setting:
 - Voice capture — dictate your groceries and get a new, auto-named list (requires internet)
 - Add items with quantities, categories, notes, and a per-item shop
 - Mark items as picked up with a single tap, with undo on accidental deletes
+- One reminder if you leave items unticked after a shop, scheduled on the device
 - Share any list as plain text through any messaging app
 - Time-aware greeting and progress tracking on the home screen
 - Fully usable offline — Room is the single source of truth
