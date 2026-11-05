@@ -276,6 +276,88 @@ class ReminderSchedulerTest {
         schedulerScope.cancel() // stops the collector
     }
 
+    // ---- Failures in the fire-and-forget launches ----
+
+    @Test
+    fun `a throwing eligibility inside onLocalPickUp reports a non-fatal and does not propagate`() = runTest {
+        val scheduler = newScheduler()
+        val failure = IllegalStateException("database is locked")
+        eligibility.partlyShopped = { throw failure }
+
+        scheduler.onLocalPickUp("L1")
+        advanceUntilIdle()
+
+        assertTrue(enqueuer.enqueued.isEmpty())
+        verify(exactly = 1) {
+            crashReporter.recordNonFatal(failure, AppError.UnknownError("reminder scheduler"))
+        }
+        // The scope survived: a later tick still arms.
+        eligibility.partlyShopped = { true }
+        scheduler.onLocalPickUp("L1")
+        advanceUntilIdle()
+        assertEquals(1, enqueuer.enqueued.size)
+    }
+
+    @Test
+    fun `a throwing enqueuer inside onLocalEdit reports a non-fatal and does not propagate`() = runTest {
+        val scheduler = newScheduler()
+        assertTrue(scheduler.arm("L1"))
+        val failure = IllegalStateException("work manager failed")
+        enqueuer.enqueueFailure = failure
+
+        scheduler.onLocalEdit("L1")
+        advanceUntilIdle()
+
+        verify(exactly = 1) {
+            crashReporter.recordNonFatal(failure, AppError.UnknownError("reminder scheduler"))
+        }
+        // The lock was released: a later edit still re-enqueues.
+        enqueuer.enqueueFailure = null
+        scheduler.onLocalEdit("L1")
+        advanceUntilIdle()
+        assertEquals(Triple("L1", 3L, REMINDER_DELAY_MILLIS), enqueuer.enqueued.last())
+    }
+
+    @Test
+    fun `a throwing cancel on the first sign-out is reported and the second sign-out still cancels and clears`() =
+        runTest {
+            val scheduler = newScheduler()
+            val signOuts = MutableSharedFlow<Unit>()
+            scheduler.observeSignOuts(signOuts)
+            runCurrent()
+            val failure = IllegalStateException("cancel failed")
+
+            assertTrue(scheduler.arm("L1"))
+            enqueuer.cancelFailure = failure
+            signOuts.emit(Unit)
+            advanceUntilIdle()
+            verify(exactly = 1) {
+                crashReporter.recordNonFatal(failure, AppError.UnknownError("reminder scheduler"))
+            }
+
+            enqueuer.cancelFailure = null
+            assertTrue(scheduler.arm("L2"))
+            signOuts.emit(Unit)
+            advanceUntilIdle()
+            assertEquals(1, enqueuer.cancels)
+            assertNull(prefs.readPending())
+
+            schedulerScope.cancel() // stops the collector
+        }
+
+    @Test
+    fun `cancelling the scope during a tick is not reported`() = runTest {
+        val scheduler = newScheduler()
+        enqueuer.gate = CompletableDeferred()
+
+        scheduler.onLocalPickUp("L1")
+        runCurrent()
+        schedulerScope.cancel()
+        advanceUntilIdle()
+
+        verify(exactly = 0) { crashReporter.recordNonFatal(any(), any()) }
+    }
+
     // ---- Durability and ordering ----
 
     @Test

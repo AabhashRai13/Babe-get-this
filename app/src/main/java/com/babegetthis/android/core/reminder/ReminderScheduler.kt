@@ -6,6 +6,7 @@ import com.babegetthis.android.core.reminder.data.local.PendingReminder
 import com.babegetthis.android.core.reminder.data.local.ReminderEligibility
 import com.babegetthis.android.core.reminder.data.local.ReminderPrefs
 import com.babegetthis.android.core.telemetry.CrashReporter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,12 +46,15 @@ class ReminderScheduler(
 
     private val mutex = Mutex()
 
+    // The launched work reads Room and calls WorkManager, either of which can
+    // throw. Nothing above these launches can handle it, so a failure is
+    // reported rather than left to crash the process from a routine tick.
     override fun onLocalPickUp(listId: String) {
-        scope.launch { arm(listId) }
+        scope.launch { reportingFailures { arm(listId) } }
     }
 
     override fun onLocalEdit(listId: String) {
-        scope.launch { reset(listId) }
+        scope.launch { reportingFailures { reset(listId) } }
     }
 
     /**
@@ -89,6 +93,11 @@ class ReminderScheduler(
      * Under the lock: if the job still owns the record, runs [post] and then
      * clears the record, even when [post] throws or the caller is cancelled.
      * Returns false, without posting or clearing, when ownership was lost.
+     *
+     * [post] runs while the Mutex is held, so it must never call [arm], [reset],
+     * [finish], [setEnabled], [onFlagsLoaded] or [onPermissionGranted]: the
+     * worker would deadlock until WorkManager cancels it. [onLocalPickUp] and
+     * [onLocalEdit] only launch and are safe to call from it.
      */
     suspend fun finish(listId: String, generation: Long, post: (suspend () -> Unit)?): Boolean = mutex.withLock {
         if (!owns(listId, generation)) return@withLock false
@@ -135,11 +144,23 @@ class ReminderScheduler(
     }
 
     fun observeSignOuts(signOuts: Flow<Unit>) {
-        scope.launch { signOuts.collect { cancelAndClear() } }
+        // Caught per emission so one failure does not end the collector and
+        // leave every later sign-out without a cancel.
+        scope.launch { signOuts.collect { reportingFailures { cancelAndClear() } } }
     }
 
     private suspend fun cancelAndClear() {
         mutex.withLock { cancelAndClearLocked() }
+    }
+
+    private suspend fun reportingFailures(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            crashReporter.recordNonFatal(e, AppError.UnknownError(LAUNCH_FAILED))
+        }
     }
 
     // ---- Called only with mutex held ----
@@ -181,5 +202,6 @@ class ReminderScheduler(
         const val REMINDER_DELAY_MILLIS = 3L * 60 * 60 * 1000
         const val PROMPT_SNOOZE_MILLIS = 14L * 24 * 60 * 60 * 1000
         private const val COMMIT_FAILED = "reminder prefs commit failed"
+        private const val LAUNCH_FAILED = "reminder scheduler"
     }
 }

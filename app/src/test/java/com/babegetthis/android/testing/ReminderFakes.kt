@@ -47,20 +47,25 @@ class FakeReminderPrefs : ReminderPrefs {
 // Records each enqueue as (listId, generation, delayMillis) before it waits on
 // gate, so a test holding gate open sees the enqueue as started but unfinished.
 // onEnqueue runs first, letting a test inspect prefs at the moment of the call.
+// enqueueFailure / cancelFailure, when set, are thrown instead of recording.
 class FakeWorkEnqueuer : WorkEnqueuer {
     val enqueued = mutableListOf<Triple<String, Long, Long>>()
     var cancels = 0
         private set
     var gate: CompletableDeferred<Unit>? = null
     var onEnqueue: (() -> Unit)? = null
+    var enqueueFailure: Exception? = null
+    var cancelFailure: Exception? = null
 
     override suspend fun enqueueUnique(listId: String, generation: Long, delayMillis: Long) {
         onEnqueue?.invoke()
+        enqueueFailure?.let { throw it }
         enqueued += Triple(listId, generation, delayMillis)
         gate?.await()
     }
 
     override suspend fun cancelUnique() {
+        cancelFailure?.let { throw it }
         cancels++
     }
 }
