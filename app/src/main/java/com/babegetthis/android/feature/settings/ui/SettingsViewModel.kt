@@ -102,7 +102,7 @@ class SettingsViewModel @Inject constructor(
     private val _reminderRow = MutableStateFlow(ReminderRowState.Off)
     val reminderRow: StateFlow<ReminderRowState> = _reminderRow.asStateFlow()
 
-    private val _events = MutableSharedFlow<SettingsEvent>(extraBufferCapacity = 1)
+    private val _events = MutableSharedFlow<SettingsEvent>()
     val events: SharedFlow<SettingsEvent> = _events.asSharedFlow()
 
     init {
@@ -110,6 +110,9 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun permissionRequested(): Boolean = reminderScheduler.permissionRequested()
+
+    // The user may have flipped the OS notification switch while away; the gate is re-read in the refresh.
+    fun onResumed() = refreshReminderRow()
 
     fun updatePermissionState(state: PermissionState) {
         permissionState = state
@@ -121,10 +124,10 @@ class SettingsViewModel @Inject constructor(
         when {
             !checked -> enableReminders(false)
             _reminderRow.value == ReminderRowState.Blocked ->
-                _events.tryEmit(SettingsEvent.OpenNotificationSettings)
+                emitEvent(SettingsEvent.OpenNotificationSettings)
             permissionState == PermissionState.Requestable -> {
                 reminderScheduler.onPermissionRequested()
-                _events.tryEmit(SettingsEvent.RequestNotificationPermission)
+                emitEvent(SettingsEvent.RequestNotificationPermission)
             }
             else -> enableReminders(true)
         }
@@ -133,6 +136,10 @@ class SettingsViewModel @Inject constructor(
     // A denial is the items-screen flow's concern to snooze; Settings only re-reads.
     fun onNotificationPermissionResult(granted: Boolean) {
         if (granted) enableReminders(true) else refreshReminderRow()
+    }
+
+    private fun emitEvent(event: SettingsEvent) {
+        viewModelScope.launch { _events.emit(event) }
     }
 
     private fun enableReminders(enabled: Boolean) {

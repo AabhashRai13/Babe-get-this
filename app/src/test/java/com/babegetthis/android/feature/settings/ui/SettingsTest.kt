@@ -326,6 +326,23 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onResumed recomputes the row from the gate`() = runTest {
+        notificationGate.enabled = false
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Granted)
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+
+        notificationGate.enabled = true
+        vm.onResumed()
+        assertEquals(ReminderRowState.On, vm.reminderRow.value)
+
+        notificationGate.enabled = false
+        vm.onResumed()
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+    }
+
+    @Test
     fun `permissionRequested delegates to the scheduler`() = runTest {
         every { reminderScheduler.permissionRequested() } returns true
 
