@@ -107,6 +107,11 @@ object AnalyticsEventMapper {
 
         AnalyticsEvent.SharedListFirstEditByJoiner -> ev("shared_list_first_edit")
 
+        is AnalyticsEvent.WelcomeChoiceMade -> ev(
+            name = "welcome_choice",
+            text = mapOf("choice" to event.choice.value),
+        )
+
         // -- Activation --------------------------------------------------
         AnalyticsEvent.AccountRegistered -> ev("account_registered")
 

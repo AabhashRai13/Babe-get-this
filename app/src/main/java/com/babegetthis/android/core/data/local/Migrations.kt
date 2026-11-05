@@ -48,3 +48,16 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("UPDATE categories SET name = 'Personal Care & Beauty' WHERE id = 'cat-toiletries-personal-care'")
     }
 }
+
+// v4 -> v5: list ownership (docs/technical-decisions/008). Additive. accountId
+// stays NULL on every row here: the signed-in user id lives in encrypted prefs,
+// out of a migration's reach, so ownership is assigned at runtime by
+// SyncEngine.claimDeviceLists. Existing shared replicas are already on the
+// server, which is all onServer records.
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE shopping_lists ADD COLUMN accountId TEXT")
+        db.execSQL("ALTER TABLE shopping_lists ADD COLUMN onServer INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE shopping_lists SET onServer = 1 WHERE shareCode IS NOT NULL")
+    }
+}

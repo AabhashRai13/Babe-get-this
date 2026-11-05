@@ -6,6 +6,7 @@ import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.telemetry.AnalyticsRepository
 import com.babegetthis.android.core.telemetry.Marker
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -38,6 +40,7 @@ class ShoppingListViewModel @Inject constructor(
     private val repository: ShoppingListRepository,
     private val shareRepository: ShareRepository,
     private val authStateManager: AuthStateManager,
+    private val ownership: ListOwnershipStore,
     private val analytics: AnalyticsRepository,
     private val markers: TelemetryMarkers,
     @ApplicationScope private val applicationScope: CoroutineScope,
@@ -94,6 +97,20 @@ class ShoppingListViewModel @Inject constructor(
     )
 
     val showCreateDialog = MutableStateFlow(false)
+
+    // A lost session keeps the account's lists on screen (docs/technical-
+    // decisions/008); the screen asks the user to sign in again so they sync.
+    val isSessionExpired: StateFlow<Boolean> = authStateManager.authState
+        .map { it is AuthState.SessionExpired }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // How many guest lists just moved into the account; the screen tells the
+    // user once, then it is dismissed.
+    val adoptionNotice: StateFlow<Int> = ownership.adoptionNotice
+
+    fun dismissAdoptionNotice() {
+        ownership.setAdoptionNotice(0)
+    }
 
     // When non-null, the edit dialog is shown for this list
     val editingList = MutableStateFlow<ShoppingList?>(null)

@@ -890,6 +890,19 @@ class ShoppingItemsViewModelTest {
         coVerify(exactly = 3) { syncEngine.catchUp("L1") }
     }
 
+    // Another phone on the same account may have changed it: catch up once.
+    // No realtime subscription for a list nobody else edits live.
+    @Test
+    fun `opening an unshared account list catches up once without subscribing`() = runTest {
+        coEvery { listRepository.isAccountList("L1") } returns true
+
+        buildViewModel()
+        coVerify(exactly = 1) { syncEngine.catchUp("L1") }
+
+        sharedListRemote.changeEvents.emit(Unit)
+        coVerify(exactly = 1) { syncEngine.catchUp("L1") }
+    }
+
     @Test
     fun `a local-only list never touches the sync engine`() = runTest {
         buildViewModel()

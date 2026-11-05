@@ -6,7 +6,6 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Bundle
 import com.babegetthis.android.core.auth.data.AuthStateManager
-import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,14 +31,17 @@ class SyncTrigger(
     }
 
     fun register(app: Application) {
-        // Sign-in is a kick: discovery (catchUpAllShared) is what materialises
-        // the account's shared lists after login — and logging in changes
-        // neither foreground state nor connectivity, so without this the
-        // lists only appeared after the next app background/foreground cycle.
-        // StateFlow dedups equal values, so this fires once per transition.
+        // Every auth state change first settles who owns the device's lists
+        // (claim on sign-in or a lost session — docs/technical-decisions/008),
+        // then a live session kicks: discovery is what materialises the
+        // account's lists after login, and logging in changes neither
+        // foreground state nor connectivity, so without this the lists only
+        // appeared after the next app background/foreground cycle. StateFlow
+        // dedups equal values, so this fires once per transition — including
+        // the app-start value, which is what claims after an update.
         scope.launch {
             authStateManager.authState.collect { state ->
-                if (state is AuthState.Authenticated) kick()
+                if (engine.onAuthState(state)) kick()
             }
         }
 
@@ -74,7 +76,7 @@ class SyncTrigger(
             // Results intentionally dropped: failures stay queued (pendingSync
             // flags / sync points untouched) and the next kick retries.
             engine.push()
-            engine.catchUpAllShared()
+            engine.catchUpAccount()
         }
     }
 }

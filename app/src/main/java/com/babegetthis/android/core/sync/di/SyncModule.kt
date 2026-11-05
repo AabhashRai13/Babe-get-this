@@ -1,12 +1,14 @@
 package com.babegetthis.android.core.sync.di
 
 import android.content.Context
-import com.babegetthis.android.core.auth.data.TokenManager
+import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.SyncTrigger
+import com.babegetthis.android.core.sync.data.local.PrefsListOwnershipStore
 import com.babegetthis.android.core.sync.data.local.PrefsSyncPointStore
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.sync.data.remote.SupabaseSharedListRemote
+import com.babegetthis.android.core.sync.data.repository.ListOwnershipStore
 import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
@@ -35,28 +37,33 @@ object SyncModule {
 
     @Provides
     @Singleton
+    fun provideListOwnershipStore(@ApplicationContext context: Context): ListOwnershipStore =
+        PrefsListOwnershipStore(context)
+
+    @Provides
+    @Singleton
     fun provideSyncEngine(
         listDao: ShoppingListDao,
         itemDao: ShoppingItemDao,
         remote: SharedListRemote,
         syncPoints: SyncPointStore,
-        tokenManager: TokenManager,
+        ownership: ListOwnershipStore,
+        authStateManager: AuthStateManager,
         crashReporter: CrashReporter,
     ): SyncEngine = SyncEngine(
         listDao,
         itemDao,
         remote,
         syncPoints,
-        { tokenManager.getUserId() },
+        ownership,
+        { authStateManager.liveSessionUserId() },
         crashReporter,
     )
 
     @Provides
     @Singleton
-    fun provideSyncTrigger(
-        engine: SyncEngine,
-        authStateManager: com.babegetthis.android.core.auth.data.AuthStateManager,
-    ): SyncTrigger = SyncTrigger(engine, authStateManager)
+    fun provideSyncTrigger(engine: SyncEngine, authStateManager: AuthStateManager): SyncTrigger =
+        SyncTrigger(engine, authStateManager)
 
     @Provides
     @Singleton
@@ -66,9 +73,8 @@ object SyncModule {
     @Singleton
     fun provideShareRepository(
         listDao: ShoppingListDao,
-        itemDao: ShoppingItemDao,
         remote: SharedListRemote,
         engine: SyncEngine,
-        tokenManager: TokenManager,
-    ): ShareRepository = ShareRepository(listDao, itemDao, remote, engine, { tokenManager.getUserId() })
+        authStateManager: AuthStateManager,
+    ): ShareRepository = ShareRepository(listDao, remote, engine, { authStateManager.liveSessionUserId() })
 }

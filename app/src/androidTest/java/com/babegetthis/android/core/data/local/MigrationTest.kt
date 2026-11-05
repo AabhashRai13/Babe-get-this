@@ -247,4 +247,63 @@ class MigrationTest {
         }
         db.close()
     }
+
+    @Test
+    fun migrate4To5AddsOwnershipColumnsAndMarksSharedListsOnServer() {
+        context.deleteDatabase(testDb)
+
+        // The v4 lists table (v3 sync columns; v4 changed only seed data), with
+        // one local-only list and one shared replica.
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(testDb)
+                .callback(object : SupportSQLiteOpenHelper.Callback(4) {
+                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL(
+                            "CREATE TABLE shopping_lists (" +
+                                "id TEXT NOT NULL PRIMARY KEY, " +
+                                "name TEXT NOT NULL, " +
+                                "createdAt INTEGER NOT NULL, " +
+                                "updatedAt INTEGER NOT NULL, " +
+                                "isLocked INTEGER NOT NULL DEFAULT 0, " +
+                                "shareCode TEXT, " +
+                                "deletedAt INTEGER, " +
+                                "pendingSync INTEGER NOT NULL DEFAULT 0)",
+                        )
+                        db.execSQL(
+                            "INSERT INTO shopping_lists (id, name, createdAt, updatedAt) " +
+                                "VALUES ('local', 'Groceries', 100, 200)",
+                        )
+                        db.execSQL(
+                            "INSERT INTO shopping_lists (id, name, createdAt, updatedAt, shareCode) " +
+                                "VALUES ('shared', 'Party', 100, 200, 'ABC123')",
+                        )
+                    }
+
+                    override fun onUpgrade(
+                        db: androidx.sqlite.db.SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int,
+                    ) = Unit
+                })
+                .build(),
+        )
+
+        val db = helper.writableDatabase
+        MIGRATION_4_5.migrate(db)
+
+        db.query("SELECT id, name, accountId, onServer FROM shopping_lists ORDER BY id").use { c ->
+            assertEquals(2, c.count)
+            c.moveToFirst()
+            assertEquals("local", c.getString(0))
+            assertEquals("Groceries", c.getString(1)) // data intact
+            assertTrue(c.isNull(2)) // ownership is assigned at runtime, not here
+            assertEquals(0, c.getInt(3))
+            c.moveToNext()
+            assertEquals("shared", c.getString(0))
+            assertTrue(c.isNull(2))
+            assertEquals(1, c.getInt(3)) // a shared replica already lives on the server
+        }
+        db.close()
+    }
 }

@@ -6,7 +6,10 @@ import kotlinx.coroutines.flow.Flow
 
 // Thin seam over Supabase so SyncEngine is testable with a fake. No logic
 // belongs here — anything with a branch goes in the engine, under the
-// coverage gate.
+// coverage gate. The one exception is paging: PostgREST caps every response
+// (Supabase's default max_rows is 1000) and silently cuts the rest, so every
+// multi-row read here returns the COMPLETE result, however many requests that
+// takes. Callers never see a page.
 interface SharedListRemote {
 
     // Plain INSERT for the FIRST share of a list — deliberately not upsert:
@@ -16,6 +19,13 @@ interface SharedListRemote {
     // Returns false when the row already exists (a previous share reached the
     // server but never persisted locally) — caller recovers via fetchList.
     suspend fun insertList(row: ListRow): Boolean
+
+    // Shares a list that already syncs: sets its code unless it has one (the
+    // server's write-once trigger keeps the first) and returns the code the
+    // server now holds. Null when the row isn't visible to this session.
+    // A targeted UPDATE rather than an upsert of the whole row, so sharing can
+    // never clobber a newer name or deletion from another phone.
+    suspend fun setShareCode(listId: String, code: String): String?
 
     // Upsert is fine for every later push: the row exists, membership exists.
     suspend fun upsertLists(rows: List<ListRow>)
@@ -28,6 +38,11 @@ interface SharedListRemote {
     suspend fun fetchList(listId: String, sinceIso: String?): List<ListRow>
 
     suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow>
+
+    // Account-wide item catch-up: every item the current session may see
+    // (RLS scopes it to the account's lists, like fetchAllLists) changed since
+    // sinceIso (null = everything).
+    suspend fun fetchAccountItems(sinceIso: String?): List<ItemRow>
 
     // Discovery: every list row the current session may see — RLS scopes it
     // to the account's memberships. Signed out → empty.

@@ -84,6 +84,10 @@ class PinGateAndUndoTest {
         compose.onNodeWithText("Quantity (required)")
             .performTextInput("1")
         compose.onNode(hasText("Add") and !hasTestTag(TestTags.ADD_ITEM_FAB)).performClick()
+        // The dialog's own field matches the name while it is open: wait for it to
+        // close first, or the back() that follows only closes the dialog and the
+        // swipe lands on the list's title instead of its card on the home screen.
+        awaitGone("Add Item")
         awaitText(name)
     }
 

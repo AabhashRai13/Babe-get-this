@@ -2,6 +2,7 @@ package com.babegetthis.android.core.auth.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import com.babegetthis.android.core.data.local.openEncryptedPrefs
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -46,6 +47,12 @@ class TokenManager @Inject constructor(@ApplicationContext private val context: 
     }
 
     fun getUserEmail(): String? = prefs.getString(KEY_USER_EMAIL, null)
+
+    // Session loss: drop the dead token but keep who the user is, so the
+    // account's lists stay visible until they sign in again.
+    fun clearToken() {
+        prefs.edit { remove(KEY_AUTH_TOKEN) }
+    }
 
     // clear() wipes all keys including the new name/email — no change needed.
     fun clear() {

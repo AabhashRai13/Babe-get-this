@@ -4,9 +4,7 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
-import com.babegetthis.android.core.sync.data.mapper.toRow
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
-import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import kotlin.random.Random
 
@@ -14,42 +12,40 @@ import kotlin.random.Random
 // side). Everything after these runs through SyncEngine like any other edit.
 class ShareRepository(
     private val listDao: ShoppingListDao,
-    private val itemDao: ShoppingItemDao,
     private val remote: SharedListRemote,
     private val syncEngine: SyncEngine,
     private val currentUserId: () -> String?,
     private val random: Random = Random.Default,
 ) {
 
-    // Returns the list's share code, generating one on first share. Server
-    // first, local second: if the upload fails the list stays local-only and
-    // share() is simply retried (with a fresh code — the failed one was never
-    // persisted anywhere).
+    // Returns the list's share code, generating one on first share. The list
+    // already syncs as an account list (docs/technical-decisions/008), so
+    // sharing is just giving it a code: make sure the row is on the server,
+    // then set the code there. Server first, local second: if that fails the
+    // list stays unshared and share() is simply retried with a fresh code.
     suspend fun share(listId: String): Result<String> = safeCall {
         val list = listDao.getListRaw(listId)
             ?: throw AppErrorException(AppError.NotFoundError("That list no longer exists."))
         // Codes are static per list: re-opening the share dialog shows the
         // same one, so a code texted last week keeps working.
         list.shareCode?.let { return@safeCall it }
-        val userId = currentUserId()
-            ?: throw AppErrorException(AppError.AuthError("Sign in to share lists."))
+        currentUserId() ?: throw AppErrorException(AppError.AuthError("Sign in to share lists."))
 
-        val generated = generateCode()
-        val inserted = remote.insertList(list.copy(shareCode = generated).toRow(createdBy = userId))
-        val code = if (inserted) {
-            generated
-        } else {
-            // A previous share() reached the server but died before saving the
-            // code locally. The server row is the truth — adopt its code. We
-            // can read it because that half-share already made us a member.
-            remote.fetchList(listId, sinceIso = null).firstOrNull()?.shareCode
-                ?: throw AppErrorException(AppError.UnknownError())
+        // A list made offline may not have reached the server yet. The push
+        // uploads its items too; its failure is read off onServer below.
+        if (!list.onServer) syncEngine.push()
+        if (listDao.getListRaw(listId)?.onServer != true) {
+            throw AppErrorException(AppError.NetworkError("Couldn't share — check your connection."))
         }
-        val items = itemDao.getItemsByListIdOnce(listId)
-        if (items.isNotEmpty()) {
-            remote.upsertItems(items.map { it.toRow() })
-        }
-        listDao.insertList(list.copy(shareCode = code))
+
+        // The server answers with the code it actually holds: if this list was
+        // already shared (another phone, or an earlier attempt that died before
+        // saving locally), the write-once trigger kept that code — adopt it.
+        val code = remote.setShareCode(listId, generateCode())
+            ?: throw AppErrorException(AppError.UnknownError())
+        // A targeted UPDATE: never insertList (a REPLACE, which cascade-deletes
+        // the items), and never a stale whole-row write over concurrent edits.
+        listDao.setShareCode(listId, code)
         code
     }
 

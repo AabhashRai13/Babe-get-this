@@ -4,6 +4,7 @@
 explicit sign-out only, rediscover on sign-in. Rationale for acceptance:
 shopping apps see rare, deliberate sign-outs — the eviction cost lands on an
 uncommon path while the simplification pays on every path.
+**Superseded in part 2026-10-14 by [008](008-account-owned-lists.md):** "local-only lists" now means guest lists only; a signed-in user's lists are account data, shared or not.
 **Context:** realtime-list-sharing v1 (openspec/changes/realtime-list-sharing).
 
 ## The question

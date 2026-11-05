@@ -234,7 +234,7 @@ and unqueryable.
 Registration is NOT retroactive — a dimension only reports on data collected after it
 exists. Register before you care about the data, not when you go looking for it.
 
-**Custom dimensions** (scope: Event) — 9
+**Custom dimensions** (scope: Event) — 10
 
 | Parameter | Used by |
 | --- | --- |
@@ -247,6 +247,7 @@ exists. Register before you care about the data, not when you go looking for it.
 | `item_count_bucket` | `voice_transcription_completed`, `voice_items_saved`, `first_list_completed`, `list_completed` |
 | `latency_bucket` | `voice_transcription_completed`, `voice_transcription_failed` |
 | `duration_bucket` | `voice_recording_cancelled` |
+| `choice` | `welcome_choice` (`guest` / `sign_in`, docs/technical-decisions/008) |
 
 **Custom metrics** (scope: Event, unit: Standard)
 

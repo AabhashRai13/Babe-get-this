@@ -105,6 +105,11 @@ class TelemetryJourneyTest {
         compose.onNodeWithText("Quantity (required)")
             .performTextInput("1")
         compose.onNode(hasText("Add") and !hasTestTag(TestTags.ADD_ITEM_FAB)).performClick()
+        // The dialog's own field matches the name while it is open — wait for it
+        // to close first (see ListLifecycleTest.addItem).
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodes(hasText("Add Item")).fetchSemanticsNodes().isEmpty()
+        }
         awaitText(name)
     }
 

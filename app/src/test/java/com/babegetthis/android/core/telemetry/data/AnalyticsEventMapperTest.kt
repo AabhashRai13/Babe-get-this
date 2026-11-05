@@ -7,6 +7,7 @@ import com.babegetthis.android.core.telemetry.model.InputMethod
 import com.babegetthis.android.core.telemetry.model.JoinFailureReason
 import com.babegetthis.android.core.telemetry.model.Screen
 import com.babegetthis.android.core.telemetry.model.VoiceFailureReason
+import com.babegetthis.android.core.telemetry.model.WelcomeChoice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -37,6 +38,7 @@ class AnalyticsEventMapperTest {
         AnalyticsEvent.ShareJoinAttempted,
         AnalyticsEvent.ShareJoinSucceeded,
         AnalyticsEvent.ShareJoinFailed(JoinFailureReason.InvalidCode),
+        AnalyticsEvent.WelcomeChoiceMade(WelcomeChoice.Guest),
         AnalyticsEvent.SharedListFirstEditByJoiner,
         AnalyticsEvent.AccountRegistered,
         AnalyticsEvent.AccountLoggedIn,
@@ -177,6 +179,18 @@ class AnalyticsEventMapperTest {
             val mapped = AnalyticsEventMapper.map(AnalyticsEvent.ShareJoinFailed(reason))
             assertEquals(reason.value, mapped.text["reason"])
         }
+    }
+
+    @Test
+    fun `welcome choice maps to welcome_choice with a bounded choice param`() {
+        assertEquals(
+            MappedEvent(name = "welcome_choice", text = mapOf("choice" to "guest")),
+            AnalyticsEventMapper.map(AnalyticsEvent.WelcomeChoiceMade(WelcomeChoice.Guest)),
+        )
+        assertEquals(
+            MappedEvent(name = "welcome_choice", text = mapOf("choice" to "sign_in")),
+            AnalyticsEventMapper.map(AnalyticsEvent.WelcomeChoiceMade(WelcomeChoice.SignIn)),
+        )
     }
 
     @Test

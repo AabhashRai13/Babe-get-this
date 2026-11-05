@@ -3,8 +3,11 @@ package com.babegetthis.android.feature.shoppinglist.data.repository
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
+import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
+import com.babegetthis.android.testing.authStateFor
+import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -27,7 +30,17 @@ class ShoppingListRepositorySharedTest {
 
     private var kicks = 0
     private val repository by lazy {
-        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao) { kicks++ }
+        ShoppingListRepository(
+            dbRule.listDao,
+            dbRule.itemDao,
+            dbRule.categoryDao,
+            authStateFor("u1"),
+            FakeListOwnershipStore(),
+            { kicks++ },
+            // Never reached here: the lists these tests auto-delete haven't been
+            // on the server (ShoppingListRepositoryTest covers the ones that have).
+            mockk(relaxed = true),
+        )
     }
 
     private fun sharedList(id: String = "list-1") = ShoppingListEntity(
@@ -36,6 +49,7 @@ class ShoppingListRepositorySharedTest {
         createdAt = 1L,
         updatedAt = 2L,
         shareCode = "ABC234",
+        accountId = "u1",
     )
 
     private suspend fun seedShared(id: String = "list-1") = dbRule.listDao.insertList(sharedList(id))
@@ -64,7 +78,7 @@ class ShoppingListRepositorySharedTest {
 
     @Test
     fun `renaming a local-only list stays clean and quiet`() = runTest {
-        dbRule.listDao.insertList(sharedList().copy(shareCode = null))
+        dbRule.listDao.insertList(sharedList().copy(shareCode = null, accountId = null))
 
         repository.updateListName("list-1", "Weekend shop")
 
@@ -104,7 +118,7 @@ class ShoppingListRepositorySharedTest {
 
     @Test
     fun `deleting a local-only list still hard-deletes with cascade`() = runTest {
-        dbRule.listDao.insertList(sharedList().copy(shareCode = null))
+        dbRule.listDao.insertList(sharedList().copy(shareCode = null, accountId = null))
         dbRule.itemDao.insertItem(TestData.itemEntity(id = "i1", listId = "list-1"))
 
         repository.deleteListAndCaptureItems("list-1")
@@ -139,6 +153,68 @@ class ShoppingListRepositorySharedTest {
         assertNull("alive again", row.deletedAt)
         assertEquals("share survives the undo round-trip", "ABC234", row.shareCode)
         assertTrue("revival must sync to members", row.pendingSync)
+        assertNotNull("undo must not cascade the items away", dbRule.itemDao.getItemRaw("i1"))
         assertEquals("delete + restore", 2, kicks)
+    }
+
+    // --- unshared account lists sync too (docs/technical-decisions/008) ---
+
+    private suspend fun seedAccountList() = dbRule.listDao.insertList(sharedList().copy(shareCode = null))
+
+    @Test
+    fun `deleting an unshared account list tombstones it and undo clears the tombstone`() = runTest {
+        seedAccountList()
+        dbRule.itemDao.insertItem(TestData.itemEntity(id = "i1", listId = "list-1"))
+        dbRule.itemDao.insertItem(TestData.itemEntity(id = "i2", listId = "list-1"))
+        val captured = (repository.deleteListAndCaptureItems("list-1") as Result.Success).data
+        assertNotNull("tombstoned, not gone", dbRule.listDao.getListRaw("list-1")!!.deletedAt)
+
+        repository.restoreListWithItems(
+            list = ShoppingList(id = "list-1", name = "Groceries", createdAt = 1L, updatedAt = 2L),
+            items = captured,
+        )
+
+        val row = dbRule.listDao.getListRaw("list-1")!!
+        assertNull(row.deletedAt)
+        assertEquals("still the account's list", "u1", row.accountId)
+        assertTrue(row.pendingSync)
+        assertNotNull(dbRule.itemDao.getItemRaw("i1"))
+        assertNotNull(dbRule.itemDao.getItemRaw("i2"))
+        assertEquals(2, kicks)
+    }
+
+    @Test
+    fun `renaming an unshared account list marks it dirty and kicks`() = runTest {
+        seedAccountList()
+
+        repository.updateListName("list-1", "Weekend shop")
+
+        assertTrue(dbRule.listDao.getListRaw("list-1")!!.pendingSync)
+        assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `an empty unshared account list is tombstoned, not deleted`() = runTest {
+        seedAccountList()
+
+        val deleted = repository.deleteListIfEmpty("list-1")
+
+        assertEquals(Result.Success(true), deleted)
+        val row = dbRule.listDao.getListRaw("list-1")!!
+        assertNotNull("the deletion has to reach the account's other phones", row.deletedAt)
+        assertTrue(row.pendingSync)
+        assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `an unshared account list with items is kept`() = runTest {
+        seedAccountList()
+        dbRule.itemDao.insertItem(TestData.itemEntity(id = "i1", listId = "list-1"))
+
+        val deleted = repository.deleteListIfEmpty("list-1")
+
+        assertEquals(Result.Success(false), deleted)
+        assertNull(dbRule.listDao.getListRaw("list-1")!!.deletedAt)
+        assertEquals(0, kicks)
     }
 }

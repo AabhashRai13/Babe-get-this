@@ -221,6 +221,11 @@ class ShoppingItemsViewModel @Inject constructor(
                     if (shared) {
                         syncEngine.catchUp(listId)
                         sharedListRemote.changes(listId).collect { syncEngine.catchUp(listId) }
+                    } else if (listRepository.isAccountList(listId)) {
+                        // Unshared account list: the account's other phones may
+                        // have changed it. Catch up once — no realtime socket
+                        // for a list nobody else edits live.
+                        syncEngine.catchUp(listId)
                     }
                 }
         }
