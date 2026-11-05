@@ -67,7 +67,12 @@ class MainActivity : ComponentActivity() {
         // Check if user has a saved token — this determines the start screen
         authStateManager.initialize()
         startAtWelcome = welcomeRepository.shouldShowWelcome(authStateManager.authState.value)
-        pendingReminder.value = ReminderIntentParser.handleReminderIntent(intent, startAtWelcome, analytics::track)
+        pendingReminder.value = ReminderIntentParser.handleReminderIntent(
+            intent,
+            startAtWelcome,
+            restored = savedInstanceState != null,
+            analytics::track,
+        )
 
         setContent {
             BabeGetThisTheme {
@@ -129,7 +134,8 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        pendingReminder.value = ReminderIntentParser.handleReminderIntent(intent, startAtWelcome, analytics::track)
+        pendingReminder.value =
+            ReminderIntentParser.handleReminderIntent(intent, startAtWelcome, restored = false, analytics::track)
     }
 
     override fun onResume() {

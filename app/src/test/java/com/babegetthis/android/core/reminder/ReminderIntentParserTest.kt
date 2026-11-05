@@ -63,14 +63,32 @@ class ReminderIntentParserTest {
     fun `tracks ReminderTapped once when a target parses, never otherwise`() {
         val tracked = mutableListOf<AnalyticsEvent>()
 
-        val target = ReminderIntentParser.handleReminderIntent(reminderIntent(), false, { tracked.add(it) })
+        val target = ReminderIntentParser.handleReminderIntent(reminderIntent(), false, false, { tracked.add(it) })
         assertEquals(ReminderTarget("list-1", "Weekly shop"), target)
         assertEquals(listOf<AnalyticsEvent>(AnalyticsEvent.ReminderTapped), tracked)
 
         tracked.clear()
-        assertNull(ReminderIntentParser.handleReminderIntent(reminderIntent(listId = null), false, { tracked.add(it) }))
-        assertNull(ReminderIntentParser.handleReminderIntent(reminderIntent(), true, { tracked.add(it) }))
-        assertNull(ReminderIntentParser.handleReminderIntent(null, false, { tracked.add(it) }))
+        assertNull(
+            ReminderIntentParser.handleReminderIntent(reminderIntent(listId = null), false, false, {
+                tracked.add(it)
+            }),
+        )
+        assertNull(ReminderIntentParser.handleReminderIntent(reminderIntent(), true, false, { tracked.add(it) }))
+        assertNull(ReminderIntentParser.handleReminderIntent(null, false, false, { tracked.add(it) }))
+        assertEquals(emptyList<AnalyticsEvent>(), tracked)
+    }
+
+    @Test
+    fun `a restored activity ignores the launch intent and tracks nothing`() {
+        val tracked = mutableListOf<AnalyticsEvent>()
+
+        val target = ReminderIntentParser.handleReminderIntent(
+            reminderIntent(),
+            startAtWelcome = false,
+            restored = true,
+        ) { tracked.add(it) }
+
+        assertNull(target)
         assertEquals(emptyList<AnalyticsEvent>(), tracked)
     }
 }

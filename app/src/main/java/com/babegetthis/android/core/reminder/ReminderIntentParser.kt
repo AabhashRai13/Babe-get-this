@@ -27,12 +27,22 @@ object ReminderIntentParser {
         return ReminderTarget(listId, listName)
     }
 
-    /** [parse], plus one [AnalyticsEvent.ReminderTapped] when it yields a target. */
+    /**
+     * [parse], plus one [AnalyticsEvent.ReminderTapped] when it yields a target.
+     *
+     * [restored] is true when the activity is being recreated (rotation, process
+     * restore): `getIntent()` still holds the original reminder intent, but that
+     * tap was already handled and the NavController has restored its back stack,
+     * so re-parsing would double-count the tap and re-navigate. Returns null and
+     * tracks nothing then.
+     */
     fun handleReminderIntent(
         intent: Intent?,
         startAtWelcome: Boolean,
+        restored: Boolean,
         track: (AnalyticsEvent) -> Unit,
     ): ReminderTarget? {
+        if (restored) return null
         val target = parse(intent, startAtWelcome) ?: return null
         track(AnalyticsEvent.ReminderTapped)
         return target
