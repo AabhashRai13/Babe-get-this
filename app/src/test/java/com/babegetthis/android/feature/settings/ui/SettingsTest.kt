@@ -235,6 +235,81 @@ class SettingsViewModelTest {
         assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
     }
 
+    // On API 33+ areNotificationsEnabled() is false whenever POST_NOTIFICATIONS
+    // is not granted, so a never-asked user has the gate closed. That must read
+    // as Off (askable), not Blocked, or the direct request can never run.
+    @Test
+    fun `gate closed with Requestable reads Off and switching on asks for permission`() = runTest {
+        notificationGate.enabled = false
+        reminderPrefs.enabled = true
+        val order = mutableListOf<String>()
+        every { reminderScheduler.onPermissionRequested() } answers { order += "requested" }
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Requestable)
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+
+        vm.events.test {
+            vm.onReminderSwitch(true)
+
+            assertEquals(SettingsEvent.RequestNotificationPermission, awaitItem())
+            order += "event"
+        }
+        assertEquals(listOf("requested", "event"), order)
+        coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
+    }
+
+    @Test
+    fun `gate closed with Granted reads Blocked`() = runTest {
+        notificationGate.enabled = false
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+
+        vm.updatePermissionState(PermissionState.Granted)
+
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `gate closed with NotRequired reads Blocked`() = runTest {
+        notificationGate.enabled = false
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+
+        vm.updatePermissionState(PermissionState.NotRequired)
+
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+    }
+
+    @Test
+    fun `gate open with Requestable reads Off`() = runTest {
+        notificationGate.enabled = true
+        reminderPrefs.enabled = true
+        val vm = viewModel()
+
+        vm.updatePermissionState(PermissionState.Requestable)
+
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+    }
+
+    // The switch branches on the state as it is now, not as last pushed: the
+    // user may have turned notifications off in system settings meanwhile.
+    @Test
+    fun `switching on re-reads the gate before choosing a branch`() = runTest {
+        reminderPrefs.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Granted)
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
+
+        notificationGate.enabled = false
+        vm.events.test {
+            vm.onReminderSwitch(true)
+
+            assertEquals(SettingsEvent.OpenNotificationSettings, awaitItem())
+        }
+        assertEquals(ReminderRowState.Blocked, vm.reminderRow.value)
+        coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
+    }
+
     @Test
     fun `switching off disables the scheduler`() = runTest {
         val vm = viewModel()
@@ -444,8 +519,13 @@ class SettingsScreenTest {
         io.mockk.verify { viewModel.refreshLockedCount() }
     }
 
+    // Granted with the OS gate closed is the real Blocked case (the user turned
+    // notifications off in system settings). Without the grant, API 33+ reads
+    // Requestable and the row is askable, not Blocked.
     @Test
     fun `the reminders row shows the blocked subtitle when blocked`() {
+        org.robolectric.Shadows.shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>())
+            .grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val pinExists = MutableStateFlow(false)
         val pinRepository = mockk<PinRepository>(relaxed = true) {
             every { this@mockk.pinExists } returns pinExists
@@ -498,6 +578,30 @@ class SettingsScreenTest {
 
         compose.onNodeWithText("A nudge when you leave items unticked after a shop").assertIsDisplayed()
         compose.onAllNodes(isToggleable())[0].assertIsOn()
+    }
+
+    // API 34, never asked: areNotificationsEnabled() is false only because the
+    // grant is missing. The row must stay askable so the direct request can run.
+    @Test
+    fun `a never-asked user on API 33+ sees the plain subtitle, not Blocked`() {
+        val pinRepository = mockk<PinRepository>(relaxed = true) {
+            every { this@mockk.pinExists } returns MutableStateFlow(false)
+        }
+        val vm = SettingsViewModel(
+            pinRepository,
+            mockk(relaxed = true),
+            mockk<TelemetryConsent>(relaxed = true),
+            CoroutineScope(UnconfinedTestDispatcher()),
+            mockk(relaxed = true),
+            FakeReminderPrefs(),
+            NotificationGate { false },
+        )
+
+        compose.setContent { SettingsScreen(viewModel = vm) }
+
+        compose.onNodeWithText("A nudge when you leave items unticked after a shop").assertIsDisplayed()
+        compose.onNodeWithText("Allow notifications in system settings to turn this on").assertDoesNotExist()
+        assertEquals(ReminderRowState.Off, vm.reminderRow.value)
     }
 
     @Test

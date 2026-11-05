@@ -39,6 +39,7 @@ class ReminderScheduler(
     private val flags: FeatureFlagCache,
     private val gate: NotificationGate,
     private val crashReporter: CrashReporter,
+    private val notifier: ReminderNotifier,
     private val clock: ReminderClock,
     private val scope: CoroutineScope,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -64,7 +65,11 @@ class ReminderScheduler(
      */
     suspend fun arm(listId: String): Boolean = mutex.withLock {
         if (!gateOpen()) {
-            cancelAndClearLocked()
+            // Only when something is pending: with the gate closed every tick
+            // lands here, and a disk write plus a WorkManager call per tick for
+            // nothing is waste. Toggle-off, flag-off and sign-out cancel
+            // unconditionally through their own paths.
+            if (prefs.readPending() != null) cancelAndClearLocked()
             return@withLock false
         }
         if (!eligibility.isPartlyShopped(listId)) return@withLock false
@@ -112,7 +117,7 @@ class ReminderScheduler(
     suspend fun shouldOfferPermission(listId: String, permission: PermissionState): Boolean =
         permission == PermissionState.Requestable &&
             prefs.enabled &&
-            flags.isEnabled(FLAG_KEY) &&
+            !flags.isKnownOff(FLAG_KEY) &&
             clock.now() >= prefs.promptSnoozedUntil &&
             eligibility.isPartlyShopped(listId)
 
@@ -122,7 +127,10 @@ class ReminderScheduler(
 
     fun permissionRequested(): Boolean = prefs.permissionRequested
 
-    suspend fun onPermissionGranted(listId: String): Boolean = arm(listId)
+    // setEnabled, onFlagsLoaded and onPermissionGranted run on their callers'
+    // scopes (ViewModel and app scopes), which have no handler of their own, so
+    // a failure is reported here rather than crashing the caller.
+    suspend fun onPermissionGranted(listId: String): Boolean = reportingFailures(fallback = false) { arm(listId) }
 
     fun onPermissionDenied() = snoozePrompt()
 
@@ -131,15 +139,21 @@ class ReminderScheduler(
     }
 
     suspend fun setEnabled(enabled: Boolean) {
-        mutex.withLock {
-            prefs.enabled = enabled
-            if (!enabled) cancelAndClearLocked()
+        reportingFailures {
+            mutex.withLock {
+                prefs.enabled = enabled
+                if (!enabled) cancelAndClearLocked()
+            }
         }
     }
 
+    // Acts only on a flag known to be off: an unloaded cache (the fetch failed,
+    // e.g. an offline cold start for the job itself) is unknown, not off.
     suspend fun onFlagsLoaded() {
-        mutex.withLock {
-            if (!flags.isEnabled(FLAG_KEY)) cancelAndClearLocked()
+        reportingFailures {
+            mutex.withLock {
+                if (flags.isKnownOff(FLAG_KEY)) cancelAndClearLocked()
+            }
         }
     }
 
@@ -153,19 +167,20 @@ class ReminderScheduler(
         mutex.withLock { cancelAndClearLocked() }
     }
 
-    private suspend fun reportingFailures(block: suspend () -> Unit) {
-        try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            crashReporter.recordNonFatal(e, AppError.UnknownError(LAUNCH_FAILED))
-        }
+    private suspend fun reportingFailures(block: suspend () -> Unit) = reportingFailures(Unit, block)
+
+    private suspend fun <T> reportingFailures(fallback: T, block: suspend () -> T): T = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        crashReporter.recordNonFatal(e, AppError.UnknownError(LAUNCH_FAILED))
+        fallback
     }
 
     // ---- Called only with mutex held ----
 
-    private fun gateOpen(): Boolean = prefs.enabled && flags.isEnabled(FLAG_KEY) && gate.notificationsEnabled()
+    private fun gateOpen(): Boolean = prefs.enabled && !flags.isKnownOff(FLAG_KEY) && gate.notificationsEnabled()
 
     private suspend fun enqueueLocked(listId: String): Boolean {
         val record = PendingReminder(listId = listId, generation = prefs.generationCounter + 1, armedAt = clock.now())
@@ -180,10 +195,13 @@ class ReminderScheduler(
 
     // The clear goes first so that, if the process dies between the two, a
     // surviving job finds no record and does nothing. The cancel runs even when
-    // the clear failed: no job means no post, whatever the record says.
+    // the clear failed: no job means no post, whatever the record says. A nudge
+    // already posted is removed last, so sign-out, toggle-off and flag-off
+    // leave nothing on screen to tap into the wrong session.
     private suspend fun cancelAndClearLocked() {
         commitClear()
         enqueuer.cancelUnique()
+        notifier.cancel()
     }
 
     private suspend fun commitClear() {

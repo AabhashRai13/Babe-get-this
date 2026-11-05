@@ -2,6 +2,7 @@ package com.babegetthis.android.core.reminder.data.local
 
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,8 +27,23 @@ class ReminderContentReaderTest {
 
     private suspend fun seedList(id: String = "list-1") = dbRule.listDao.insertList(TestData.listEntity(id = id))
 
-    private suspend fun seedItem(id: String, name: String, picked: Boolean, listId: String = "list-1") =
-        dbRule.itemDao.insertItem(TestData.itemEntity(id = id, listId = listId, name = name, isPickedUp = picked))
+    private suspend fun seedItem(
+        id: String,
+        name: String,
+        picked: Boolean,
+        listId: String = "list-1",
+        shop: String? = null,
+        categoryId: String? = null,
+    ) = dbRule.itemDao.insertItem(
+        TestData.itemEntity(
+            id = id,
+            listId = listId,
+            name = name,
+            isPickedUp = picked,
+            shop = shop,
+            categoryId = categoryId,
+        ),
+    )
 
     @Test
     fun `snapshot is null for a missing list`() = runTest {
@@ -63,24 +79,28 @@ class ReminderContentReaderTest {
         assertEquals(1, content.uncheckedCount)
     }
 
+    // Inserted in an order that differs from the screen's (shop, then category,
+    // then name, nulls last), so a read in insertion order would fail.
     @Test
-    fun `snapshot names come in dao order and count the picked ones`() = runTest {
+    fun `snapshot names come in the items screen's order and count the picked ones`() = runTest {
         seedList()
-        seedItem("a", "Bread", picked = false)
-        seedItem("b", "Milk", picked = true)
-        seedItem("c", "Eggs", picked = false)
-        seedItem("d", "Rice", picked = true)
-        seedItem("e", "Salt", picked = false)
+        seedItem("a", "Apples", picked = false)
+        seedItem("b", "Zucchini", picked = false, shop = "Aldi", categoryId = "veg")
+        seedItem("c", "Bread", picked = false, shop = "Aldi")
+        seedItem("d", "Milk", picked = true, shop = "Aldi", categoryId = "dairy")
+        seedItem("e", "Carrots", picked = false, shop = "Aldi", categoryId = "veg")
+        seedItem("f", "Eggs", picked = false, shop = "Costco", categoryId = "dairy")
+        seedItem("g", "Rice", picked = true)
 
         val content = reader.snapshot("list-1")!!
-        val expectedOrder = dbRule.itemDao.getItemsByListIdOnce("list-1").filterNot { it.isPickedUp }.map { it.name }
+        val screenOrder = dbRule.itemDao.getItemsByListId("list-1").first().filterNot { it.isPickedUp }.map { it.name }
 
         assertEquals("list-1", content.listId)
         assertEquals("Groceries", content.listName)
         assertEquals(2, content.pickedCount)
-        assertEquals(3, content.uncheckedCount)
-        assertEquals(expectedOrder, content.uncheckedNames)
-        assertEquals(setOf("Bread", "Eggs", "Salt"), content.uncheckedNames.toSet())
+        assertEquals(5, content.uncheckedCount)
+        assertEquals(listOf("Carrots", "Zucchini", "Bread", "Eggs", "Apples"), content.uncheckedNames)
+        assertEquals(screenOrder, content.uncheckedNames)
     }
 
     @Test

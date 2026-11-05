@@ -33,6 +33,23 @@ interface ShoppingItemDao {
     @Query("SELECT * FROM shopping_items WHERE listId = :listId AND deletedAt IS NULL")
     suspend fun getItemsByListIdOnce(listId: String): List<ShoppingItemEntity>
 
+    // One-shot read in exactly getItemsByListId's order (keep the two ORDER BYs
+    // identical), for the shopping reminder: the names it shows must come in
+    // the order the items screen lists them.
+    @Query(
+        """
+        SELECT * FROM shopping_items
+        WHERE listId = :listId AND deletedAt IS NULL
+        ORDER BY
+            CASE WHEN shop IS NULL THEN 1 ELSE 0 END,
+            shop ASC,
+            CASE WHEN categoryId IS NULL THEN 1 ELSE 0 END,
+            categoryId ASC,
+            name ASC
+    """,
+    )
+    suspend fun getItemsByListIdOnceOrdered(listId: String): List<ShoppingItemEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: ShoppingItemEntity)
 

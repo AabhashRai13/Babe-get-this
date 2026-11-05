@@ -98,6 +98,33 @@ class ReminderNotifierTest {
         assertEquals(ReminderNotifier.MAX_NAME_CHARS, cut.substringBefore(" is still").length)
     }
 
+    // Each emoji here is one code point but two UTF-16 chars, so a char-based
+    // cut at 39 would split the second surrogate off the last kept emoji.
+    @Test
+    fun `a long name is cut by code point, never splitting an emoji`() {
+        val name = "a".repeat(38) + "😀🍎🥚" // 38 + 😀🍎🥚 = 41 code points
+        assertEquals(41, name.codePointCount(0, name.length))
+
+        val cut = notifier.text(content(listOf(name))).body.substringBefore(" is still")
+
+        assertEquals("a".repeat(38) + "😀…", cut)
+        assertEquals(ReminderNotifier.MAX_NAME_CHARS, cut.codePointCount(0, cut.length))
+
+        // Forty emoji are forty code points (eighty chars): not clipped.
+        val fortyEmoji = "🍎".repeat(ReminderNotifier.MAX_NAME_CHARS)
+        assertEquals("$fortyEmoji is still unticked", notifier.text(content(listOf(fortyEmoji))).body)
+    }
+
+    @Test
+    fun `cancel removes the posted notification`() {
+        notifier.post(content(listOf("Milk")))
+        assertEquals(1, shadowOf(manager).activeNotifications.size)
+
+        notifier.cancel()
+
+        assertEquals(0, shadowOf(manager).activeNotifications.size)
+    }
+
     @Test
     fun `a long list name is cut the same way in the title`() {
         assertEquals(

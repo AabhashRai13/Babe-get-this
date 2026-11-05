@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
+import dagger.Lazy
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -28,10 +29,30 @@ class WorkManagerEnqueuerTest {
         context = ApplicationProvider.getApplicationContext()
         WorkManagerTestInitHelper.initializeTestWorkManager(context)
         workManager = WorkManager.getInstance(context)
-        enqueuer = WorkManagerEnqueuer(workManager)
+        enqueuer = WorkManagerEnqueuer(Lazy { workManager })
     }
 
     private fun infos() = workManager.getWorkInfosForUniqueWork(WorkManagerEnqueuer.UNIQUE_NAME).get()
+
+    // Constructed while Hilt injects the Application, before WorkManager may be
+    // initialised: resolving it then would read workManagerConfiguration early.
+    @Test
+    fun `constructing the enqueuer does not resolve WorkManager`() {
+        var resolved = 0
+        val lazyEnqueuer = WorkManagerEnqueuer(
+            Lazy {
+                resolved++
+                workManager
+            },
+        )
+        assertEquals(0, resolved)
+
+        lazyEnqueuer.buildRequest("L1", 1L, 1_000L)
+        assertEquals(0, resolved)
+
+        runBlocking { lazyEnqueuer.cancelUnique() }
+        assertEquals(1, resolved)
+    }
 
     @Test
     fun `buildRequest carries list id, generation as a Long and the delay`() {
@@ -50,9 +71,10 @@ class WorkManagerEnqueuerTest {
         enqueuer.enqueueUnique("L2", 8L, 3_000L)
 
         // Under KEEP the second call would be ignored: the first job would stay
-        // ENQUEUED and remain the unique name's only entry. REPLACE deletes the
-        // old job outright (it is not left behind as CANCELLED), so it is gone
-        // by id and the one live entry is a different job.
+        // ENQUEUED and remain the unique name's only entry. Under REPLACE the
+        // test driver deletes the replaced job outright; production WorkManager
+        // may leave it CANCELLED until pruned. Here it is gone by id and the one
+        // live entry is a different job.
         assertNull(workManager.getWorkInfoById(firstId).get())
         val live = infos().single()
         assertNotEquals(firstId, live.id)

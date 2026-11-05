@@ -14,6 +14,7 @@ import com.babegetthis.android.core.reminder.SystemReminderClock
 import com.babegetthis.android.core.reminder.WorkEnqueuer
 import com.babegetthis.android.core.reminder.WorkManagerEnqueuer
 import com.babegetthis.android.core.reminder.di.ReminderPlatformModule
+import dagger.Lazy
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -47,7 +48,7 @@ object TestReminderPlatformModule {
 
     @Provides
     @Singleton
-    fun provideEnqueuer(workManager: WorkManager): WorkEnqueuer = WorkManagerEnqueuer(workManager)
+    fun provideEnqueuer(workManager: Lazy<WorkManager>): WorkEnqueuer = WorkManagerEnqueuer(workManager)
 
     @Provides
     @Singleton

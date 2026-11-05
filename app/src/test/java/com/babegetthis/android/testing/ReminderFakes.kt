@@ -23,6 +23,9 @@ class FakeReminderPrefs : ReminderPrefs {
     override var promptSnoozedUntil = 0L
     override var permissionRequested = false
 
+    // Real SharedPreferences updates its in-memory map before the disk write,
+    // so after a failed commit() production would still read the new record.
+    // The fake models the stricter "nothing changed" case instead.
     var failCommits = false
     val commitLog = mutableListOf<String>()
 

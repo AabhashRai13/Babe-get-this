@@ -21,6 +21,7 @@ import com.babegetthis.android.core.reminder.data.local.ReminderEligibility
 import com.babegetthis.android.core.reminder.data.local.ReminderPrefs
 import com.babegetthis.android.core.reminder.data.local.SharedPrefsReminderPrefs
 import com.babegetthis.android.core.telemetry.CrashReporter
+import dagger.Lazy
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -61,6 +62,7 @@ object ReminderModule {
         flags: FeatureFlagCache,
         gate: NotificationGate,
         crashReporter: CrashReporter,
+        notifier: ReminderNotifier,
         clock: ReminderClock,
     ): ReminderScheduler = ReminderScheduler(
         enqueuer = enqueuer,
@@ -69,6 +71,7 @@ object ReminderModule {
         flags = flags,
         gate = gate,
         crashReporter = crashReporter,
+        notifier = notifier,
         clock = clock,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     )
@@ -90,9 +93,11 @@ object ReminderPlatformModule {
     @Singleton
     fun provideWorkManager(@ApplicationContext context: Context): WorkManager = WorkManager.getInstance(context)
 
+    // Lazy so building the enqueuer (during Application injection) does not
+    // initialise WorkManager; see WorkManagerEnqueuer.
     @Provides
     @Singleton
-    fun provideEnqueuer(workManager: WorkManager): WorkEnqueuer = WorkManagerEnqueuer(workManager)
+    fun provideEnqueuer(workManager: Lazy<WorkManager>): WorkEnqueuer = WorkManagerEnqueuer(workManager)
 
     @Provides
     @Singleton

@@ -9,7 +9,7 @@ data class ReminderContent(
     val listName: String,
     val isLocked: Boolean,
     val pickedCount: Int,
-    /** Names of the items not yet picked up, in the order the DAO returns them. */
+    /** Names of the items not yet picked up, in the items screen's order (shop, category, name; nulls last). */
     val uncheckedNames: List<String>,
 ) {
     val uncheckedCount: Int get() = uncheckedNames.size
@@ -29,7 +29,9 @@ class ReminderContentReader(private val db: AppDatabase) {
         // getListRaw returns tombstones too, so the deletedAt check is ours to make.
         val list = db.shoppingListDao().getListRaw(listId)?.takeIf { it.deletedAt == null }
             ?: return@withTransaction null
-        val (picked, unchecked) = db.shoppingItemDao().getItemsByListIdOnce(listId).partition { it.isPickedUp }
+        // Ordered as the items screen shows them, so the names in the nudge are
+        // the first ones the user sees on tapping it.
+        val (picked, unchecked) = db.shoppingItemDao().getItemsByListIdOnceOrdered(listId).partition { it.isPickedUp }
         ReminderContent(
             listId = list.id,
             listName = list.name,

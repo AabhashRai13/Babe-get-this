@@ -134,8 +134,14 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Re-read, not the value from onCreate: the user may have signed out
+        // since, and a tap must then be ignored rather than land an evicted
+        // list on top of Welcome. Kept local on purpose: the startAtWelcome
+        // field feeds NavHost's startDestination, and changing it would make
+        // the next recomposition swap the graph and reset the back stack.
+        val welcomeNow = welcomeRepository.shouldShowWelcome(authStateManager.authState.value)
         pendingReminder.value =
-            ReminderIntentParser.handleReminderIntent(intent, startAtWelcome, restored = false, analytics::track)
+            ReminderIntentParser.handleReminderIntent(intent, welcomeNow, restored = false, analytics::track)
     }
 
     override fun onResume() {

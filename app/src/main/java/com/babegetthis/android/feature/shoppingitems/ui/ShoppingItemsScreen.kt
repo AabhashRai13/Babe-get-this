@@ -557,9 +557,6 @@ fun ShoppingItemsScreen(
         )
     }
 
-    // One prompt serves both auth-gated features on this screen (live share
-    // and voice); dismiss clears whichever flag raised it, and the copy names
-    // whichever feature was actually tapped (task 8.4).
     if (showReminderPrompt) {
         ReminderPermissionSheet(
             onAccept = viewModel::onReminderPromptAccepted,
@@ -567,6 +564,9 @@ fun ShoppingItemsScreen(
         )
     }
 
+    // One prompt serves both auth-gated features on this screen (live share
+    // and voice); dismiss clears whichever flag raised it, and the copy names
+    // whichever feature was actually tapped (task 8.4).
     if (showShareAuthPrompt || showVoiceAuthPrompt) {
         AuthPromptDialog(
             title = stringResource(

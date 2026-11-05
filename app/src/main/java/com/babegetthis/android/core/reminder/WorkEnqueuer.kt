@@ -6,6 +6,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.await
 import androidx.work.workDataOf
+import dagger.Lazy
 import java.util.concurrent.TimeUnit
 
 /** The single unique reminder job. Enqueuing replaces any job already scheduled. */
@@ -14,11 +15,19 @@ interface WorkEnqueuer {
     suspend fun cancelUnique()
 }
 
-/** [WorkEnqueuer] over WorkManager: one unique job, replaced on every enqueue. */
-class WorkManagerEnqueuer(private val workManager: WorkManager) : WorkEnqueuer {
+/**
+ * [WorkEnqueuer] over WorkManager: one unique job, replaced on every enqueue.
+ *
+ * WorkManager is held lazily. This enqueuer is built while Hilt injects
+ * BabeGetThisApp (through the scheduler), and resolving WorkManager then would
+ * initialise it and read workManagerConfiguration before workerFactory is
+ * necessarily injected. Resolving on first enqueue or cancel removes that
+ * dependency on Hilt's field order.
+ */
+class WorkManagerEnqueuer(private val workManager: Lazy<WorkManager>) : WorkEnqueuer {
 
     override suspend fun enqueueUnique(listId: String, generation: Long, delayMillis: Long) {
-        workManager.enqueueUniqueWork(
+        workManager.get().enqueueUniqueWork(
             UNIQUE_NAME,
             ExistingWorkPolicy.REPLACE,
             buildRequest(listId, generation, delayMillis),
@@ -26,7 +35,7 @@ class WorkManagerEnqueuer(private val workManager: WorkManager) : WorkEnqueuer {
     }
 
     override suspend fun cancelUnique() {
-        workManager.cancelUniqueWork(UNIQUE_NAME).await()
+        workManager.get().cancelUniqueWork(UNIQUE_NAME).await()
     }
 
     // The generation goes in as a Long: the worker reads it with getLong and

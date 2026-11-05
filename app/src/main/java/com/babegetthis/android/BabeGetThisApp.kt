@@ -44,7 +44,11 @@ class BabeGetThisApp :
     @Inject lateinit var reminderScheduler: ReminderScheduler
 
     // A getter, not a stored value: Hilt injects the fields in super.onCreate(),
-    // and WorkManager reads this lazily on first use, after injection.
+    // and WorkManager reads this when it first initialises. The getter together
+    // with the lazy WorkManagerEnqueuer (which only resolves WorkManager on its
+    // first enqueue or cancel, never while reminderScheduler is being injected)
+    // guarantees workerFactory is injected before WorkManager first initialises,
+    // whatever order Hilt injects these fields in.
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
 
@@ -67,9 +71,12 @@ class BabeGetThisApp :
         // Fetch once per process start — non-realtime by design, see
         // docs/technical-decisions/003-in-app-update-and-feature-flags.md.
         appScope.launch {
-            featureFlagCache.update(featureFlagRepository.fetchFlags())
+            // A failed fetch (null) leaves the cache unloaded: "unknown", not
+            // "off". WorkManager often wakes a dead process for the reminder job
+            // with no network, and that must not read as a kill switch.
+            featureFlagRepository.fetchFlags()?.let { featureFlagCache.update(it) }
             // Shopping reminder: the flag may just have turned off, so reconcile
-            // the pending job once the real values are in.
+            // the pending job. The scheduler acts only on a flag known to be off.
             reminderScheduler.onFlagsLoaded()
         }
         // Supabase auto-refreshes the session in the background and rotates the

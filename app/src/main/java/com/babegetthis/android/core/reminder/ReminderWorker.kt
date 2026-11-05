@@ -57,9 +57,12 @@ class ReminderWorker @AssistedInject constructor(
     }
 
     private suspend fun fire(listId: String, generation: Long) {
-        if (!scheduler.owns(listId, generation)) return
-        // owns() just read a record for this job, so it is present.
-        val age = clock.now() - prefs.readPending()!!.armedAt
+        // Check 1 (ownership), unlocked, in ONE read: a second read after a
+        // separate owns() could find the record cleared or retargeted in
+        // between. finish() repeats the check under the lock.
+        val pending = prefs.readPending()?.takeIf { it.listId == listId && it.generation == generation }
+            ?: return
+        val age = clock.now() - pending.armedAt
         // Checks 2 to 5 short-circuit before the snapshot, so Room is read
         // only when nothing cheaper has already said no.
         val content = if (checksPass(age)) reader.snapshot(listId)?.takeIf { it.isPartlyShopped } else null

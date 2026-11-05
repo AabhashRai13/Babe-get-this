@@ -116,6 +116,7 @@ class ReminderWorkerTest {
             flags = flags,
             gate = gate,
             crashReporter = crashReporter,
+            notifier = notifier,
             clock = clock,
             scope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)),
             ioDispatcher = StandardTestDispatcher(testScheduler),
@@ -211,6 +212,19 @@ class ReminderWorkerTest {
         assertEquals(listOf("pending:L1:1", "clear"), prefs.commitLog)
     }
 
+    @Test
+    fun `a job for another list or generation posts nothing and clears nothing`() = runTest {
+        armL1()
+
+        assertEquals(ListenableWorker.Result.success(), runWorker(listId = "L2"))
+        assertEquals(ListenableWorker.Result.success(), runWorker(generation = 2L))
+
+        assertPostedNothing()
+        assertEquals(PendingReminder("L1", 1L, ARMED_AT), prefs.readPending())
+        assertEquals(listOf("pending:L1:1"), prefs.commitLog)
+        verify(exactly = 0) { crashReporter.recordNonFatal(any(), any()) }
+    }
+
     // ---- Checks 2 to 6: each posts nothing and clears the record ----
 
     @Test
@@ -254,6 +268,30 @@ class ReminderWorkerTest {
         assertEquals(ListenableWorker.Result.success(), runWorker())
 
         assertPostedNothing()
+        assertCleared()
+    }
+
+    @Test
+    fun `age of exactly zero posts`() = runTest {
+        armL1()
+        clock.now = ARMED_AT
+
+        assertEquals(ListenableWorker.Result.success(), runWorker())
+
+        assertEquals(1, posted.size)
+        verify(exactly = 1) { analytics.track(AnalyticsEvent.ReminderPosted(0L)) }
+        assertCleared()
+    }
+
+    @Test
+    fun `age of exactly 24h posts`() = runTest {
+        armL1()
+        clock.now = ARMED_AT + MAX_AGE_MILLIS
+
+        assertEquals(ListenableWorker.Result.success(), runWorker())
+
+        assertEquals(1, posted.size)
+        verify(exactly = 1) { analytics.track(AnalyticsEvent.ReminderPosted(MAX_AGE_MILLIS)) }
         assertCleared()
     }
 
@@ -328,6 +366,7 @@ class ReminderWorkerTest {
         assertEquals(PendingReminder("L2", 2L, armedL2At), prefs.readPending())
         assertEquals(listOf("pending:L1:1", "pending:L2:2"), prefs.commitLog)
         assertEquals(Triple("L2", 2L, REMINDER_DELAY_MILLIS), enqueuer.enqueued.last())
+        verify(exactly = 0) { crashReporter.recordNonFatal(any(), any()) }
     }
 
     @Test

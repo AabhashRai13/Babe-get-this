@@ -91,4 +91,21 @@ class ReminderIntentParserTest {
         assertNull(target)
         assertEquals(emptyList<AnalyticsEvent>(), tracked)
     }
+
+    // Relaunching from Recents re-delivers the task's base intent, which still
+    // carries the extras of a tap that was already handled.
+    @Test
+    fun `a relaunch from Recents ignores the reminder extras and tracks nothing`() {
+        val tracked = mutableListOf<AnalyticsEvent>()
+        val fromHistory = reminderIntent().addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+
+        val target = ReminderIntentParser.handleReminderIntent(
+            fromHistory,
+            startAtWelcome = false,
+            restored = false,
+        ) { tracked.add(it) }
+
+        assertNull(target)
+        assertEquals(emptyList<AnalyticsEvent>(), tracked)
+    }
 }

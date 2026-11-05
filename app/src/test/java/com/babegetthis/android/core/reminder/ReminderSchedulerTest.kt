@@ -45,6 +45,10 @@ class ReminderSchedulerTest {
     private val flags = FeatureFlagCache().apply { update(mapOf(FLAG_KEY to true)) }
     private val gate = FakeNotificationGate()
     private val crashReporter = mockk<CrashReporter>(relaxed = true)
+
+    // ReminderNotifier is final; a relaxed mock records cancel() without a
+    // NotificationManager behind it.
+    private val notifier = mockk<ReminderNotifier>(relaxed = true)
     private val clock = FakeClock(now = 1_000L)
 
     private lateinit var schedulerScope: CoroutineScope
@@ -53,7 +57,7 @@ class ReminderSchedulerTest {
     // runTest's scheduler, so advanceUntilIdle drives the kicker's launches
     // (backgroundScope work is skipped by it) and every prefs commit is a real
     // suspension point that lets other coroutines run and contend for the lock.
-    private fun TestScope.newScheduler(): ReminderScheduler {
+    private fun TestScope.newScheduler(flags: FeatureFlagCache = this@ReminderSchedulerTest.flags): ReminderScheduler {
         schedulerScope = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
         return ReminderScheduler(
             enqueuer = enqueuer,
@@ -62,6 +66,7 @@ class ReminderSchedulerTest {
             flags = flags,
             gate = gate,
             crashReporter = crashReporter,
+            notifier = notifier,
             clock = clock,
             scope = schedulerScope,
             ioDispatcher = StandardTestDispatcher(testScheduler),
@@ -181,11 +186,28 @@ class ReminderSchedulerTest {
         assertFalse(prefs.enabled)
         assertEquals(1, enqueuer.cancels)
         assertNull(prefs.readPending())
+        verify(exactly = 1) { notifier.cancel() }
 
+        // Nothing is pending any more, so the closed gate has nothing to cancel.
         assertFalse(scheduler.arm("L1"))
-        assertEquals(2, enqueuer.cancels)
+        assertEquals(1, enqueuer.cancels)
         assertEquals(1, enqueuer.enqueued.size)
         assertNull(prefs.readPending())
+    }
+
+    @Test
+    fun `a closed gate with nothing pending writes nothing and cancels nothing`() = runTest {
+        val scheduler = newScheduler()
+        gate.enabled = false
+
+        assertFalse(scheduler.arm("L1"))
+        scheduler.onLocalPickUp("L1")
+        advanceUntilIdle()
+
+        assertEquals(0, enqueuer.cancels)
+        assertTrue(enqueuer.enqueued.isEmpty())
+        assertTrue(prefs.commitLog.isEmpty())
+        verify(exactly = 0) { notifier.cancel() }
     }
 
     @Test
@@ -211,6 +233,7 @@ class ReminderSchedulerTest {
         assertEquals(1, enqueuer.cancels)
         assertEquals(1, enqueuer.enqueued.size)
         assertNull(prefs.readPending())
+        verify(exactly = 1) { notifier.cancel() }
     }
 
     @Test
@@ -224,6 +247,7 @@ class ReminderSchedulerTest {
         assertEquals(1, enqueuer.cancels)
         assertEquals(1, enqueuer.enqueued.size)
         assertNull(prefs.readPending())
+        verify(exactly = 1) { notifier.cancel() }
     }
 
     @Test
@@ -237,6 +261,7 @@ class ReminderSchedulerTest {
         assertEquals(1, enqueuer.cancels)
         assertEquals(1, enqueuer.enqueued.size)
         assertNull(prefs.readPending())
+        verify(exactly = 1) { notifier.cancel() }
     }
 
     @Test
@@ -247,11 +272,45 @@ class ReminderSchedulerTest {
         scheduler.onFlagsLoaded()
         assertEquals(0, enqueuer.cancels)
         assertEquals(PendingReminder("L1", 1L, 1_000L), prefs.readPending())
+        verify(exactly = 0) { notifier.cancel() }
 
         flags.update(emptyMap())
         scheduler.onFlagsLoaded()
         assertEquals(1, enqueuer.cancels)
         assertNull(prefs.readPending())
+        verify(exactly = 1) { notifier.cancel() }
+    }
+
+    // An offline cold start: the fetch failed, so the cache was never loaded.
+    // That is "unknown", not "off": it must neither block nor cancel.
+    @Test
+    fun `an unloaded cache neither blocks arming nor cancels`() = runTest {
+        val scheduler = newScheduler(flags = FeatureFlagCache())
+
+        assertTrue(scheduler.arm("L1"))
+        scheduler.onFlagsLoaded()
+
+        assertEquals(0, enqueuer.cancels)
+        assertEquals(PendingReminder("L1", 1L, 1_000L), prefs.readPending())
+        assertTrue(scheduler.shouldOfferPermission("L1", PermissionState.Requestable))
+        verify(exactly = 0) { notifier.cancel() }
+    }
+
+    @Test
+    fun `a loaded cache without the key blocks arming and cancels`() = runTest {
+        val cache = FeatureFlagCache()
+        val scheduler = newScheduler(flags = cache)
+        assertTrue(scheduler.arm("L1"))
+
+        cache.update(mapOf("some_other_flag" to true))
+        scheduler.onFlagsLoaded()
+
+        assertEquals(1, enqueuer.cancels)
+        assertNull(prefs.readPending())
+        verify(exactly = 1) { notifier.cancel() }
+        assertFalse(scheduler.arm("L1"))
+        assertEquals(1, enqueuer.enqueued.size)
+        assertFalse(scheduler.shouldOfferPermission("L1", PermissionState.Requestable))
     }
 
     @Test
@@ -272,6 +331,8 @@ class ReminderSchedulerTest {
         advanceUntilIdle()
         assertEquals(2, enqueuer.cancels)
         assertNull(prefs.readPending())
+        // A nudge already on screen must not outlive the account that earned it.
+        verify(exactly = 2) { notifier.cancel() }
 
         schedulerScope.cancel() // stops the collector
     }
@@ -358,6 +419,53 @@ class ReminderSchedulerTest {
         verify(exactly = 0) { crashReporter.recordNonFatal(any(), any()) }
     }
 
+    // ---- Failures on caller scopes (app scope, ViewModel scopes) ----
+
+    @Test
+    fun `a throwing cancel inside onFlagsLoaded is reported and does not propagate`() = runTest {
+        val scheduler = newScheduler()
+        assertTrue(scheduler.arm("L1"))
+        flags.update(mapOf(FLAG_KEY to false))
+        val failure = IllegalStateException("cancel failed")
+        enqueuer.cancelFailure = failure
+
+        scheduler.onFlagsLoaded()
+
+        verify(exactly = 1) {
+            crashReporter.recordNonFatal(failure, AppError.UnknownError("reminder scheduler"))
+        }
+    }
+
+    @Test
+    fun `a throwing cancel inside setEnabled is reported and does not propagate`() = runTest {
+        val scheduler = newScheduler()
+        assertTrue(scheduler.arm("L1"))
+        val failure = IllegalStateException("cancel failed")
+        enqueuer.cancelFailure = failure
+
+        scheduler.setEnabled(false)
+
+        assertFalse(prefs.enabled)
+        verify(exactly = 1) {
+            crashReporter.recordNonFatal(failure, AppError.UnknownError("reminder scheduler"))
+        }
+    }
+
+    @Test
+    fun `a throwing eligibility inside onPermissionGranted is reported, returns false and does not propagate`() =
+        runTest {
+            val scheduler = newScheduler()
+            val failure = IllegalStateException("database is locked")
+            eligibility.partlyShopped = { throw failure }
+
+            assertFalse(scheduler.onPermissionGranted("L1"))
+
+            assertTrue(enqueuer.enqueued.isEmpty())
+            verify(exactly = 1) {
+                crashReporter.recordNonFatal(failure, AppError.UnknownError("reminder scheduler"))
+            }
+        }
+
     // ---- Durability and ordering ----
 
     @Test
@@ -397,6 +505,7 @@ class ReminderSchedulerTest {
         scheduler.setEnabled(false)
 
         assertEquals(1, enqueuer.cancels)
+        verify(exactly = 1) { notifier.cancel() }
         verify(exactly = 1) {
             crashReporter.recordNonFatal(
                 any<IllegalStateException>(),

@@ -43,9 +43,9 @@ class ReminderNotifier(private val context: Context, private val notifications: 
         )
     }
 
-    // POST_NOTIFICATIONS is requested and checked by the caller (the permission
-    // state is settled before a reminder is ever scheduled). Without the grant,
-    // notify() is a silent no-op rather than a crash.
+    // POST_NOTIFICATIONS is checked by the caller: ReminderWorker re-checks
+    // areNotificationsEnabled() at fire time (false on 13+ without the grant)
+    // and only then calls post, so notify() is never reached without it.
     @SuppressLint("MissingPermission")
     fun post(content: ReminderContent) {
         // Creating a channel that already exists is a no-op by platform contract,
@@ -81,8 +81,18 @@ class ReminderNotifier(private val context: Context, private val notifications: 
         notifications.notify(NOTIFICATION_ID, notification)
     }
 
-    private fun clip(name: String): String =
-        if (name.length > MAX_NAME_CHARS) name.take(MAX_NAME_CHARS - 1) + ELLIPSIS else name
+    /** Removes a posted reminder, so sign-out, toggle-off and flag-off leave nothing on screen. */
+    fun cancel() {
+        notifications.cancel(NOTIFICATION_ID)
+    }
+
+    // Counted in code points, not UTF-16 chars, so an emoji at the cut is kept
+    // or dropped whole rather than split into a lone surrogate.
+    private fun clip(name: String): String = if (name.codePointCount(0, name.length) > MAX_NAME_CHARS) {
+        name.substring(0, name.offsetByCodePoints(0, MAX_NAME_CHARS - 1)) + ELLIPSIS
+    } else {
+        name
+    }
 
     companion object {
         const val CHANNEL_ID = "reminders"

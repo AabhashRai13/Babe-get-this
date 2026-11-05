@@ -4,7 +4,8 @@
      Publish together with the app release that ships them, and set the
      effective date below to that release date.
      DO NOT publish before delete_user purges lists nobody else joined
-     (plan Task 14) — section 6 promises it. -->
+     (plan Task 14) — section 6 promises it.
+     Revised 2026-11-05 for shopping reminders (on-device notifications; nothing collected). -->
 
 Effective date: August 18, 2026
 

@@ -35,6 +35,10 @@ object ReminderIntentParser {
      * tap was already handled and the NavController has restored its back stack,
      * so re-parsing would double-count the tap and re-navigate. Returns null and
      * tracks nothing then.
+     *
+     * The same holds for [Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY]: a relaunch
+     * from Recents re-delivers the task's base intent, extras and all, for a tap
+     * that was already handled.
      */
     fun handleReminderIntent(
         intent: Intent?,
@@ -43,6 +47,7 @@ object ReminderIntentParser {
         track: (AnalyticsEvent) -> Unit,
     ): ReminderTarget? {
         if (restored) return null
+        if (intent != null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
         val target = parse(intent, startAtWelcome) ?: return null
         track(AnalyticsEvent.ReminderTapped)
         return target

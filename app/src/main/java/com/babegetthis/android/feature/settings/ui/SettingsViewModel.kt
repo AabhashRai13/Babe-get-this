@@ -121,8 +121,14 @@ class SettingsViewModel @Inject constructor(
 
     // Enabling from Settings does not arm a list: setEnabled(true) is the whole effect.
     fun onReminderSwitch(checked: Boolean) {
+        if (!checked) {
+            enableReminders(false)
+            return
+        }
+        // Branch on the state as it is now, not as last computed: the OS
+        // switch may have moved since the row was drawn.
+        refreshReminderRow()
         when {
-            !checked -> enableReminders(false)
             _reminderRow.value == ReminderRowState.Blocked ->
                 emitEvent(SettingsEvent.OpenNotificationSettings)
             permissionState == PermissionState.Requestable -> {
@@ -149,13 +155,18 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // A closed OS gate means Blocked only when the runtime permission is not
+    // the reason: on API 33+ areNotificationsEnabled() is false whenever
+    // POST_NOTIFICATIONS is not granted, so with Requestable the gate is closed
+    // by the missing grant and the row must stay askable (Off), not Blocked.
     private fun refreshReminderRow() {
+        val permissionHeld = permissionState == PermissionState.Granted ||
+            permissionState == PermissionState.NotRequired
         _reminderRow.value = when {
-            permissionState == PermissionState.PermanentlyRefused || !notificationGate.notificationsEnabled() ->
+            permissionState == PermissionState.PermanentlyRefused ||
+                (!notificationGate.notificationsEnabled() && permissionHeld) ->
                 ReminderRowState.Blocked
-            reminderPrefs.enabled &&
-                (permissionState == PermissionState.Granted || permissionState == PermissionState.NotRequired) ->
-                ReminderRowState.On
+            reminderPrefs.enabled && permissionHeld -> ReminderRowState.On
             else -> ReminderRowState.Off
         }
     }
