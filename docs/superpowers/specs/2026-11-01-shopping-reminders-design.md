@@ -228,6 +228,17 @@ existing start-up coroutine. With the flag off, `onFlagsLoaded` takes the lock,
 clears the pending record and awaits `cancelUniqueWork`. With the flag on it
 does nothing.
 
+**"Off" means known off, never "unknown".** A failed fetch (offline, timeout,
+server error) leaves the cache unloaded, and an unloaded cache neither blocks
+arming nor cancels anything: reminders are an on-device feature and must work
+for a phone that has not reached the server, including a guest who never
+signs in. A *successful* fetch whose map lacks the key is known off, so the
+kill-switch default stays "no row, no reminders". Concretely,
+`fetchFlags()` returns null on failure, the cache records whether it has ever
+loaded, and the scheduler gates on `isKnownOff(key) = loaded && flags[key] !=
+true`. (Added 2026-11-05 after the final review found that an empty map on
+failure silently killed reminders on every offline cold start.)
+
 What this does and does not guarantee: a job armed before the flip is
 cancelled on the next cold start once the flag fetch completes. If the job
 fires before that fetch (the phone was off, then the app process starts for
