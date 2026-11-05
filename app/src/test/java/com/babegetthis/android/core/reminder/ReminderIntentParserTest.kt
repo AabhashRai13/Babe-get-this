@@ -1,8 +1,14 @@
 package com.babegetthis.android.core.reminder
 
+import android.content.Intent
+import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class ReminderIntentParserTest {
 
     @Test
@@ -20,5 +26,51 @@ class ReminderIntentParserTest {
         // them would orphan notifications already posted.
         assertEquals("reminder_list_id", ReminderIntentParser.EXTRA_LIST_ID)
         assertEquals("reminder_list_name", ReminderIntentParser.EXTRA_LIST_NAME)
+    }
+
+    private fun reminderIntent(listId: String? = "list-1", listName: String? = "Weekly shop") = Intent().apply {
+        if (listId != null) putExtra(ReminderIntentParser.EXTRA_LIST_ID, listId)
+        if (listName != null) putExtra(ReminderIntentParser.EXTRA_LIST_NAME, listName)
+    }
+
+    @Test
+    fun `both extras present yields a target`() {
+        assertEquals(
+            ReminderTarget("list-1", "Weekly shop"),
+            ReminderIntentParser.parse(reminderIntent(), startAtWelcome = false),
+        )
+    }
+
+    @Test
+    fun `a missing or blank extra yields null`() {
+        assertNull(ReminderIntentParser.parse(reminderIntent(listId = null), startAtWelcome = false))
+        assertNull(ReminderIntentParser.parse(reminderIntent(listName = null), startAtWelcome = false))
+        assertNull(ReminderIntentParser.parse(reminderIntent(listId = "  "), startAtWelcome = false))
+        assertNull(ReminderIntentParser.parse(reminderIntent(listName = ""), startAtWelcome = false))
+    }
+
+    @Test
+    fun `startAtWelcome yields null even with extras`() {
+        assertNull(ReminderIntentParser.parse(reminderIntent(), startAtWelcome = true))
+    }
+
+    @Test
+    fun `a null intent yields null`() {
+        assertNull(ReminderIntentParser.parse(null, startAtWelcome = false))
+    }
+
+    @Test
+    fun `tracks ReminderTapped once when a target parses, never otherwise`() {
+        val tracked = mutableListOf<AnalyticsEvent>()
+
+        val target = ReminderIntentParser.handleReminderIntent(reminderIntent(), false, { tracked.add(it) })
+        assertEquals(ReminderTarget("list-1", "Weekly shop"), target)
+        assertEquals(listOf<AnalyticsEvent>(AnalyticsEvent.ReminderTapped), tracked)
+
+        tracked.clear()
+        assertNull(ReminderIntentParser.handleReminderIntent(reminderIntent(listId = null), false, { tracked.add(it) }))
+        assertNull(ReminderIntentParser.handleReminderIntent(reminderIntent(), true, { tracked.add(it) }))
+        assertNull(ReminderIntentParser.handleReminderIntent(null, false, { tracked.add(it) }))
+        assertEquals(emptyList<AnalyticsEvent>(), tracked)
     }
 }

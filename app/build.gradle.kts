@@ -346,6 +346,8 @@ dependencies {
     testImplementation(libs.turbine)
     // Drives ReminderWorker and the scheduler against a synchronous WorkManager.
     testImplementation(libs.androidx.work.testing)
+    // TestNavHostController drives the reminder-tap back stack without composing screens.
+    testImplementation(libs.androidx.navigation.testing)
     // Robolectric lets Compose screen tests and Room DAO tests run on the JVM,
     // so CI needs no emulator for anything except the end-to-end suite.
     testImplementation(libs.robolectric)

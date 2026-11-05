@@ -1,5 +1,6 @@
 package com.babegetthis.android.navigation
 
+import android.net.Uri
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -18,6 +19,7 @@ import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.ui.ForgotPasswordScreen
 import com.babegetthis.android.core.auth.ui.LoginScreen
 import com.babegetthis.android.core.auth.ui.RegisterScreen
+import com.babegetthis.android.core.reminder.ReminderTarget
 import com.babegetthis.android.feature.settings.ui.SettingsScreen
 import com.babegetthis.android.feature.shoppingitems.ui.ShoppingItemsScreen
 import com.babegetthis.android.feature.shoppinglist.ui.ShoppingListScreen
@@ -47,7 +49,19 @@ fun BgtNavGraph(
     authStateManager: AuthStateManager,
     navController: NavHostController = rememberNavController(),
     startAtWelcome: Boolean = false,
+    pendingReminder: ReminderTarget? = null,
+    onPendingReminderConsumed: () -> Unit = {},
 ) {
+    // A tapped reminder. The caller nulls it on consumption, so a rotation
+    // (which re-runs this composition with the same controller) does not
+    // navigate a second time.
+    LaunchedEffect(pendingReminder) {
+        if (pendingReminder != null) {
+            navController.openReminder(pendingReminder)
+            onPendingReminderConsumed()
+        }
+    }
+
     // Signing out or deleting the account takes the account's lists off the
     // phone (docs/technical-decisions/008), so it is a fresh start: Welcome,
     // with nothing to go back to. A lost session keeps the lists and stays put.
@@ -188,6 +202,17 @@ fun BgtNavGraph(
                 onRegisterSuccess = { navController.leaveAuth() },
             )
         }
+    }
+}
+
+// A reminder tap opens its list directly above the catalog, whatever the app
+// was showing: the catalog stays (popUpTo is not inclusive), anything above it
+// (another list, Settings) goes. If the catalog is not on the stack the app is
+// still on its start destination, which is the catalog. The name is encoded
+// because it is user text spliced into a route; Navigation decodes it again.
+internal fun NavHostController.openReminder(target: ReminderTarget) {
+    navigate(Routes.shoppingItems(target.listId, Uri.encode(target.listName))) {
+        popUpTo(Routes.SHOPPING_LIST)
     }
 }
 
