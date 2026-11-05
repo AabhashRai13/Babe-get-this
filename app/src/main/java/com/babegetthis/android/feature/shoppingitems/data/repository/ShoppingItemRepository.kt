@@ -5,6 +5,7 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.reminder.ReminderKicker
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toDomain
@@ -23,6 +24,7 @@ class ShoppingItemRepository @Inject constructor(
     private val categoryDao: CategoryDao,
     private val shoppingListDao: ShoppingListDao,
     private val syncKicker: SyncKicker,
+    private val reminderKicker: ReminderKicker,
 ) {
 
     // One raw lookup decides every write's sync behavior: items of account
@@ -68,6 +70,7 @@ class ShoppingItemRepository @Inject constructor(
         val synced = isSynced(listId)
         shoppingItemDao.insertItem(item.toEntity().copy(pendingSync = synced))
         if (synced) syncKicker.pushSoon()
+        reminderKicker.onLocalEdit(listId)
         id
     }
 
@@ -76,6 +79,7 @@ class ShoppingItemRepository @Inject constructor(
         val synced = isSynced(item.listId)
         shoppingItemDao.updateItem(updatedItem.toEntity().copy(pendingSync = synced))
         if (synced) syncKicker.pushSoon()
+        reminderKicker.onLocalEdit(item.listId)
     }
 
     suspend fun togglePickedUp(itemId: String, isPickedUp: Boolean): Result<Unit> = safeCall {
@@ -88,6 +92,9 @@ class ShoppingItemRepository @Inject constructor(
             pendingSync = synced,
         )
         if (synced) syncKicker.pushSoon()
+        if (listId != null) {
+            if (isPickedUp) reminderKicker.onLocalPickUp(listId) else reminderKicker.onLocalEdit(listId)
+        }
     }
 
     suspend fun deleteItem(itemId: String): Result<Unit> = safeCall {
@@ -99,6 +106,7 @@ class ShoppingItemRepository @Inject constructor(
         } else {
             shoppingItemDao.deleteItem(itemId)
         }
+        if (listId != null) reminderKicker.onLocalEdit(listId)
     }
 
     // Re-insert a previously deleted item with its original ID (for undo).
@@ -109,6 +117,7 @@ class ShoppingItemRepository @Inject constructor(
         val synced = isSynced(item.listId)
         shoppingItemDao.insertItem(item.toEntity().copy(pendingSync = synced))
         if (synced) syncKicker.pushSoon()
+        reminderKicker.onLocalEdit(item.listId)
     }
 
     // Mirrors ShoppingListRepository.requireListName — trims, and rejects blank

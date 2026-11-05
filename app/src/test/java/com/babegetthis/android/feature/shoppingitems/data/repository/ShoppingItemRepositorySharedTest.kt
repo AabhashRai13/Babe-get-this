@@ -1,6 +1,7 @@
 package com.babegetthis.android.feature.shoppingitems.data.repository
 
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
+import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -23,7 +24,7 @@ class ShoppingItemRepositorySharedTest {
 
     private var kicks = 0
     private val repository by lazy {
-        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao) { kicks++ }
+        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, { kicks++ }, FakeReminderKicker())
     }
 
     // Defaults to a shared list of account u1. Sync is decided by the owner

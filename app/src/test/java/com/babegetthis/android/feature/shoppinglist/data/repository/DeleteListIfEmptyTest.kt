@@ -5,6 +5,7 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import com.babegetthis.android.testing.FakeListOwnershipStore
+import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
 import io.mockk.coEvery
@@ -30,6 +31,7 @@ class DeleteListIfEmptyTest {
         FakeListOwnershipStore(),
         {},
         mockk(relaxed = true),
+        FakeReminderKicker(),
     )
 
     @Test

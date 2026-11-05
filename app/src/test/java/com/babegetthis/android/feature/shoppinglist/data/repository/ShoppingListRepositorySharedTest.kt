@@ -4,6 +4,7 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 import com.babegetthis.android.testing.FakeListOwnershipStore
+import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
@@ -29,6 +30,7 @@ class ShoppingListRepositorySharedTest {
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
     private var kicks = 0
+    private val reminders = FakeReminderKicker()
     private val repository by lazy {
         ShoppingListRepository(
             dbRule.listDao,
@@ -40,6 +42,7 @@ class ShoppingListRepositorySharedTest {
             // Never reached here: the lists these tests auto-delete haven't been
             // on the server (ShoppingListRepositoryTest covers the ones that have).
             mockk(relaxed = true),
+            reminders,
         )
     }
 
@@ -87,6 +90,18 @@ class ShoppingListRepositorySharedTest {
     }
 
     // --- voice add-to-list --------------------------------------------------
+
+    @Test
+    fun `addItemsToList with drafts calls onLocalEdit once, with none calls nothing`() = runTest {
+        seedShared()
+
+        repository.addItemsToList("list-1", emptyList())
+        assertTrue(reminders.edits.isEmpty())
+
+        repository.addItemsToList("list-1", listOf(TestData.draft(name = "Milk"), TestData.draft(name = "Eggs")))
+        assertEquals(listOf("list-1"), reminders.edits)
+        assertTrue(reminders.pickUps.isEmpty())
+    }
 
     @Test
     fun `voice items added to a shared list arrive dirty and kick a push`() = runTest {
