@@ -2,7 +2,7 @@ package com.babegetthis.android.core.voice.data.repository
 
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.network.NetworkMonitor
 import com.babegetthis.android.core.voice.data.remote.TranscribeApiService
 import com.babegetthis.android.core.voice.data.remote.dto.TranscribeItemDto
@@ -20,6 +20,7 @@ import javax.inject.Inject
 class RemoteVoiceRepository @Inject constructor(
     private val api: TranscribeApiService,
     private val networkMonitor: NetworkMonitor,
+    private val safeCall: SafeCall,
 ) : VoiceRepository {
 
     override suspend fun transcribeAndParse(audioFile: File): Result<List<ItemDraft>> {

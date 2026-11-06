@@ -2,11 +2,11 @@ package com.babegetthis.android.core.telemetry
 
 import com.babegetthis.android.BuildConfig
 import com.babegetthis.android.core.data.di.ApplicationScope
-import com.babegetthis.android.core.error.ErrorReportingHook
 import com.babegetthis.android.core.network.NetworkMonitor
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.Screen
 import com.babegetthis.android.core.telemetry.model.bucketCount
+import com.babegetthis.android.core.util.Throttle
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +25,9 @@ import javax.inject.Singleton
 // It reads DAOs directly. That is a layering shortcut: the repositories above
 // them expose Flows shaped for the UI, and subscribing to those from here would
 // mean holding subscriptions for the process lifetime to compute two numbers.
-// A COUNT on screen change is both cheaper and easier to reason about.
+// A COUNT on screen change is both cheaper and easier to reason about — and
+// throttled, so a quick back-and-forth between screens is not a burst of disk
+// reads for numbers that have not changed (see dataShapeRefresh).
 @Singleton
 class TelemetryContext @Inject constructor(
     private val analytics: AnalyticsRepository,
@@ -35,6 +37,8 @@ class TelemetryContext @Inject constructor(
     private val itemDao: ShoppingItemDao,
     private val listDao: ShoppingListDao,
     @ApplicationScope private val applicationScope: CoroutineScope,
+    // At most one data-shape refresh per window; bound in TelemetryModule.
+    private val dataShapeRefresh: Throttle,
 ) {
 
     // Called once from Application.onCreate. Only the genuinely static key
@@ -45,15 +49,6 @@ class TelemetryContext @Inject constructor(
         consent.applyPersisted()
         crashReporter.setKey(CrashKey.Flavor, BuildConfig.FLAVOR)
         crashReporter.setKey(CrashKey.AuthState, SIGNED_OUT)
-        // Connects safeCall to crash reporting. One assignment, at startup,
-        // covering every repository in the app — see ErrorReportingHook for why
-        // it is a property rather than an injected dependency.
-        //
-        // recordNonFatal applies ErrorReportingPolicy internally, so the
-        // filtering cannot be skipped by anything that reaches this lambda.
-        ErrorReportingHook.report = { throwable, error ->
-            crashReporter.recordNonFatal(throwable, error)
-        }
     }
 
     // Driven by the session collector in BabeGetThisApp, so analytics identity
@@ -89,10 +84,15 @@ class TelemetryContext @Inject constructor(
     // context for a crash that may happen seconds later, and it must not be
     // cancelled by the navigation that triggered it.
     //
+    // Throttled: these are three COUNT queries against Room, and navigation
+    // can fire several times a second. The keys are bucketed anyway, so being
+    // up to one window stale costs nothing a triaging engineer would notice.
+    //
     // Failure here is deliberately silent. Telemetry that can break the app it
     // is watching is worse than telemetry that occasionally misses a number,
     // and this runs on every screen change.
     private fun refreshDataShape() {
+        if (!dataShapeRefresh.tryAcquire()) return
         applicationScope.launch {
             runCatching {
                 crashReporter.setKey(

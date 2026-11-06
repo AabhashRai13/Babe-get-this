@@ -4,7 +4,7 @@ import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.reminder.ReminderKicker
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
@@ -25,6 +25,7 @@ class ShoppingItemRepository @Inject constructor(
     private val shoppingListDao: ShoppingListDao,
     private val syncKicker: SyncKicker,
     private val reminderKicker: ReminderKicker,
+    private val safeCall: SafeCall,
 ) {
 
     // One raw lookup decides every write's sync behavior: items of account

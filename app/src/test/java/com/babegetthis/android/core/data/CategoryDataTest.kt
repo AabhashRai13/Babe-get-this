@@ -8,6 +8,7 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
+import com.babegetthis.android.testing.unreportedSafeCall
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -23,7 +24,7 @@ class CategoryDataTest {
 
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
-    private val repository by lazy { CategoryRepository(dbRule.categoryDao) }
+    private val repository by lazy { CategoryRepository(dbRule.categoryDao, unreportedSafeCall()) }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data
     private fun <T> Result<T>.error(): AppError = (this as Result.Error).error

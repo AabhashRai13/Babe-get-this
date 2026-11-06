@@ -12,6 +12,7 @@ import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
+import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -56,8 +57,10 @@ class ShoppingListRepositoryTest {
             ownership,
             { auth.liveSessionUserId() },
             mockk(relaxed = true),
+            unreportedSafeCall(),
         ),
         FakeReminderKicker(),
+        unreportedSafeCall(),
     )
 
     private suspend fun seed(id: String, accountId: String? = null, shareCode: String? = null) =

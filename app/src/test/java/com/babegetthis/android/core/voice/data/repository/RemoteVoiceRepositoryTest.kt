@@ -4,6 +4,7 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.network.NetworkMonitor
 import com.babegetthis.android.core.voice.data.remote.TranscribeApiService
+import com.babegetthis.android.testing.unreportedSafeCall
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import io.mockk.every
 import io.mockk.mockk
@@ -44,7 +45,7 @@ class RemoteVoiceRepositoryTest {
             .build()
             .create(TranscribeApiService::class.java)
 
-        repository = RemoteVoiceRepository(api, networkMonitor)
+        repository = RemoteVoiceRepository(api, networkMonitor, unreportedSafeCall())
 
         audio = File.createTempFile("voice", ".m4a").apply { writeBytes(ByteArray(64)) }
     }

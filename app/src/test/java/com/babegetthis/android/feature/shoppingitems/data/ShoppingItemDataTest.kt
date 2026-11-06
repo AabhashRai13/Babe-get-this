@@ -8,6 +8,7 @@ import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingIte
 import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
+import com.babegetthis.android.testing.unreportedSafeCall
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -29,7 +30,9 @@ class ShoppingItemDataTest {
 
     private var kicks = 0
     private val repository by lazy {
-        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, { kicks++ }, FakeReminderKicker())
+        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {
+            kicks++
+        }, FakeReminderKicker(), unreportedSafeCall())
     }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data

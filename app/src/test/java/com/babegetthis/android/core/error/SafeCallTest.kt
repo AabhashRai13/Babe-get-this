@@ -1,5 +1,6 @@
 package com.babegetthis.android.core.error
 
+import com.babegetthis.android.testing.unreportedSafeCall
 import io.github.jan.supabase.exceptions.HttpRequestException
 import io.github.jan.supabase.exceptions.RestException
 import io.ktor.client.plugins.HttpRequestTimeoutException
@@ -18,6 +19,9 @@ import java.net.UnknownHostException
 import javax.net.ssl.SSLException
 
 class SafeCallTest {
+
+    // Mapping only: what the reporter receives is SafeCallReportingTest's job.
+    private val safeCall = unreportedSafeCall()
 
     @Test
     fun `returns Success when block completes normally`() = runTest {

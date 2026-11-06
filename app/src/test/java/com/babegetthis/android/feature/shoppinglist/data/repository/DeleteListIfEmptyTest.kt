@@ -8,6 +8,7 @@ import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
+import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -32,6 +33,7 @@ class DeleteListIfEmptyTest {
         {},
         mockk(relaxed = true),
         FakeReminderKicker(),
+        unreportedSafeCall(),
     )
 
     @Test

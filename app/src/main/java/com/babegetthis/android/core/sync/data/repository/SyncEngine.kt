@@ -2,7 +2,7 @@ package com.babegetthis.android.core.sync.data.repository
 
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.sync.data.mapper.isoToMillis
 import com.babegetthis.android.core.sync.data.mapper.toEntity
 import com.babegetthis.android.core.sync.data.mapper.toRow
@@ -32,6 +32,7 @@ class SyncEngine(
     private val ownership: ListOwnershipStore,
     private val currentUserId: () -> String?,
     private val crashReporter: CrashReporter,
+    private val safeCall: SafeCall,
 ) {
 
     // One operation at a time. Push, catch-up, the sign-in claim and the

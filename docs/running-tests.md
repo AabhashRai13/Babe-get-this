@@ -11,7 +11,7 @@ Two suites. Most of the time you only need the first.
 
 ```bash
 ./gradlew testDevDebugUnitTest      # everything that doesn't need a device
-./gradlew koverVerifyDevDebug       # coverage gate (fails under 100% on logic)
+./gradlew koverVerifyDevDebug       # coverage gate (fails under 100% outside the exclusions)
 ./gradlew connectedDevDebugAndroidTest   # end-to-end, needs an emulator running
 ```
 
@@ -84,10 +84,13 @@ fine in `src/test/`.
 `./gradlew koverHtmlReportDevDebug` → open
 `app/build/reports/kover/htmlDevDebug/index.html`.
 
-The gate covers the logic layer only — ViewModels, repositories, mappers, error
-handling, PIN, auth. Composables are excluded and covered by Compose tests
-instead. The threshold is one constant in `app/build.gradle.kts`; lowering it has
-to be a visible commit.
+The gate covers everything that is not explicitly excluded in `app/build.gradle.kts`
+— a denylist, so a new package is gated by default. The exclusions are generated
+code, framework entry points and Hilt wiring, declarative Compose UI (covered by
+the Compose tests instead), plain data holders, and platform wrappers the JVM
+cannot run (keystore, Play services, vendor SDKs), each with its reason next to
+it. The threshold is one constant in the same file; lowering it, or adding an
+exclusion, has to be a visible commit.
 
 It is a floor against *forgetting* to test something, not proof the tests are
 good. A line can run without being asserted on.

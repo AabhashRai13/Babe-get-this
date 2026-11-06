@@ -8,6 +8,7 @@ import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
+import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -43,6 +44,7 @@ class ShoppingListRepositorySharedTest {
             // on the server (ShoppingListRepositoryTest covers the ones that have).
             mockk(relaxed = true),
             reminders,
+            unreportedSafeCall(),
         )
     }
 

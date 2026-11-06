@@ -4,6 +4,7 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import com.babegetthis.android.testing.unreportedSafeCall
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -22,7 +23,7 @@ class ShoppingItemRepositoryReminderTest {
 
     private val reminders = FakeReminderKicker()
     private val repository by lazy {
-        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {}, reminders)
+        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {}, reminders, unreportedSafeCall())
     }
 
     private suspend fun seedList(accountId: String? = null) = dbRule.listDao.insertList(

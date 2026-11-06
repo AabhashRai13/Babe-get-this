@@ -1,10 +1,9 @@
 package com.babegetthis.android.core.telemetry.data
 
 import com.babegetthis.android.core.error.AppError
-import com.babegetthis.android.core.error.ErrorReportingHook
-import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.error.ErrorReporter
+import com.babegetthis.android.core.error.SafeCall
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -100,15 +99,17 @@ class ErrorReportingPolicyTest {
     // -- The composition, end to end --
     //
     // The policy is only worth anything if it sits on the path real failures
-    // take. These drive actual exceptions through safeCall with the same
-    // wiring TelemetryContext.onAppStart installs, and count what survives.
+    // take. These drive actual exceptions through SafeCall with the same
+    // wiring TelemetryModule binds, and count what survives.
+
+    private fun policedSafeCall(transmitted: MutableList<AppError>) = SafeCall(
+        ErrorReporter { _, error -> if (ErrorReportingPolicy.shouldReport(error)) transmitted += error },
+    )
 
     @Test
     fun `a session offline produces no non-fatals at all`() = runTest {
         val transmitted = mutableListOf<AppError>()
-        ErrorReportingHook.report = { _, error ->
-            if (ErrorReportingPolicy.shouldReport(error)) transmitted += error
-        }
+        val safeCall = policedSafeCall(transmitted)
 
         // A user on a train: every call fails, over and over.
         repeat(20) {
@@ -122,18 +123,11 @@ class ErrorReportingPolicyTest {
     @Test
     fun `one unmapped exception produces exactly one non-fatal`() = runTest {
         val transmitted = mutableListOf<AppError>()
-        ErrorReportingHook.report = { _, error ->
-            if (ErrorReportingPolicy.shouldReport(error)) transmitted += error
-        }
+        val safeCall = policedSafeCall(transmitted)
 
         safeCall { throw IllegalStateException("nobody mapped this") }
 
         assertEquals(1, transmitted.size)
         assertTrue(transmitted.single() is AppError.UnknownError)
-    }
-
-    @After
-    fun tearDown() {
-        ErrorReportingHook.reset()
     }
 }

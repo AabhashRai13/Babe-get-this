@@ -10,6 +10,7 @@ import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -32,10 +33,12 @@ class ShareRepositoryTest {
     private val ownership = FakeListOwnershipStore()
     private var userId: String? = "user-1"
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, { userId }, mockk(relaxed = true))
+        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, {
+            userId
+        }, mockk(relaxed = true), unreportedSafeCall())
     }
     private val repository by lazy {
-        ShareRepository(dbRule.listDao, remote, engine, { userId }, Random(seed = 7))
+        ShareRepository(dbRule.listDao, remote, engine, { userId }, unreportedSafeCall(), Random(seed = 7))
     }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data

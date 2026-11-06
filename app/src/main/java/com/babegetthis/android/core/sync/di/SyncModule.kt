@@ -2,6 +2,7 @@ package com.babegetthis.android.core.sync.di
 
 import android.content.Context
 import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.SyncTrigger
 import com.babegetthis.android.core.sync.data.local.PrefsListOwnershipStore
@@ -50,6 +51,7 @@ object SyncModule {
         ownership: ListOwnershipStore,
         authStateManager: AuthStateManager,
         crashReporter: CrashReporter,
+        safeCall: SafeCall,
     ): SyncEngine = SyncEngine(
         listDao,
         itemDao,
@@ -58,6 +60,7 @@ object SyncModule {
         ownership,
         { authStateManager.liveSessionUserId() },
         crashReporter,
+        safeCall,
     )
 
     @Provides
@@ -76,5 +79,6 @@ object SyncModule {
         remote: SharedListRemote,
         engine: SyncEngine,
         authStateManager: AuthStateManager,
-    ): ShareRepository = ShareRepository(listDao, remote, engine, { authStateManager.liveSessionUserId() })
+        safeCall: SafeCall,
+    ): ShareRepository = ShareRepository(listDao, remote, engine, { authStateManager.liveSessionUserId() }, safeCall)
 }

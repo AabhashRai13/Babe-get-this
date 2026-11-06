@@ -198,67 +198,76 @@ val COVERAGE_THRESHOLD = 100
 kover {
     reports {
         // Kover 0.8 allows exactly ONE filter set per report variant — a rule
-        // cannot narrow it further. So this include-list serves double duty: it
-        // is both what the report shows and what the gate measures. That means
+        // cannot narrow it further. So this filter serves double duty: it is
+        // both what the report shows and what the gate measures. That means
         // the report IS the gated surface, which is the honest reading anyway.
         //
-        // This include-list is the definition of "logic layer": code that can be
-        // logically wrong and is therefore worth 100%.
+        // DENYLIST, deliberately. Everything is gated unless excluded here, so
+        // a new package is covered by default and the only way out of the gate
+        // is a visible, reasoned line in this file. (It used to be an
+        // include-list of "logic layer" packages, which meant a new core/foo
+        // package silently bypassed verification until someone remembered to
+        // add it — issue #24.)
+        //
+        // Each exclusion below is one of three kinds, and says which:
+        //   generated  — no author wrote these lines
+        //   no-logic   — nothing here can be logically wrong (wiring, constants,
+        //                data holders, declarative UI); covered by other suites
+        //   untestable — depends on a platform the JVM cannot provide; covered
+        //                by instrumented tests instead
+        // If conditional logic ever appears inside an excluded class, the fix
+        // is to extract it into a gated one, NOT to widen this list.
         filters {
-            includes {
-                classes(
-                    "com.babegetthis.android.**.ui.viewModels.*",
-                    "com.babegetthis.android.**.ui.*ViewModel",
-                    "com.babegetthis.android.**.data.repository.*",
-                    "com.babegetthis.android.**.data.mapper.*",
-                    "com.babegetthis.android.core.error.*",
-                    "com.babegetthis.android.core.util.*",
-                    "com.babegetthis.android.core.pin.data.*",
-                    "com.babegetthis.android.core.auth.data.*",
-                    "com.babegetthis.android.core.auth.ui.AuthValidationKt",
-                    "com.babegetthis.android.**.share.*",
-                    "com.babegetthis.android.core.reminder.*",
-                    // Telemetry: only the three pieces that can be logically
-                    // wrong. The mapper decides what reaches GA4 and the
-                    // policy decides what reaches Crashlytics — both fail
-                    // silently and are discovered weeks later, which is
-                    // exactly the shape this gate exists for. The Firebase
-                    // implementations around them are SDK calls with no
-                    // branches and are covered by the exclude list below.
-                    "com.babegetthis.android.core.telemetry.data.AnalyticsEventMapper",
-                    "com.babegetthis.android.core.telemetry.data.ErrorReportingPolicy",
-                    "com.babegetthis.android.core.telemetry.model.BucketsKt",
-                )
-            }
-            // Everything NOT in the include-list above is out of the gate. The
-            // notable ones, each for a stated reason:
-            //
-            //   *.ui.* composables  — no branchy logic; covered by Compose tests
-            //                         (see specs/compose-ui-test-suite). Excluded
-            //                         from the NUMBER, not from testing.
-            //   *.di.*              — Hilt wiring; a test would assert the graph
-            //                         compiles, which the compiler already does.
-            //   *.ui.theme.*        — colour/type constants, no behavior.
-            //   *.model.*           — data holders; mappers are gated instead.
-            //   *.navigation.*      — route wiring; covered by the e2e suite.
-            //   MainActivity / App  — framework entry points; e2e covers them.
-            //
-            // If conditional logic ever appears inside an excluded package, the
-            // fix is to extract it into a gated one, NOT to widen this list.
-            //
-            // These excludes are generated code that the include-list would
-            // otherwise sweep in — no author wrote these lines.
             excludes {
                 classes(
-                    "*_Factory", "*_Factory\$*", // Dagger/Hilt generated
-                    "*_HiltModules*", "*Hilt_*", // Hilt generated
-                    "*_Impl", "*_Impl\$*", // Room generated DAOs/DB
-                    "*ComposableSingletons*", // Compose compiler generated
-                    "*\$\$serializer", // kotlinx.serialization generated
+                    // -- generated --
+                    "*_Factory", "*_Factory\$*", // Dagger/Hilt
+                    "*_HiltModules*", "*Hilt_*", "*_MembersInjector", // Hilt
+                    "*_Impl", "*_Impl\$*", // Room DAOs/DB
+                    "*ComposableSingletons*", // Compose compiler
+                    "*\$\$serializer", // kotlinx.serialization
+                    "hilt_aggregated_deps.*", "dagger.hilt.internal.**", // Hilt aggregation
+                    "com.babegetthis.android.BuildConfig",
+                    "com.babegetthis.android.R", "com.babegetthis.android.R\$*",
+                    "com.babegetthis.android.DataBinderMapperImpl*",
 
-                    // Untestable on the JVM, not untested — both are covered by
-                    // instrumented tests instead, and neither holds logic that a
-                    // JVM test could meaningfully exercise.
+                    // -- no-logic: framework entry points; the e2e suite drives them --
+                    "com.babegetthis.android.BabeGetThisApp", "com.babegetthis.android.BabeGetThisApp\$*",
+                    "com.babegetthis.android.MainActivity", "com.babegetthis.android.MainActivity\$*",
+                    "com.babegetthis.android.navigation.*", // route wiring
+
+                    // -- no-logic: Hilt wiring; the compiler proves the graph --
+                    "com.babegetthis.android.**.di.*",
+
+                    // -- no-logic: declarative Compose UI. Covered by the Compose
+                    // tests (see specs/compose-ui-test-suite), excluded from the
+                    // NUMBER, not from testing. ViewModels live in the same `ui`
+                    // packages and stay gated: only file-level composable classes
+                    // (*Kt and their lambdas), component/theme packages, and the
+                    // shared UI helpers are listed.
+                    "com.babegetthis.android.**.ui.*Kt", "com.babegetthis.android.**.ui.*Kt\$*",
+                    "com.babegetthis.android.**.ui.components.*",
+                    "com.babegetthis.android.ui.theme.*",
+                    "com.babegetthis.android.core.ui.*", "com.babegetthis.android.core.ui.haptics.*",
+
+                    // -- no-logic: data holders. Mappers are gated instead. --
+                    "com.babegetthis.android.core.auth.model.*",
+                    "com.babegetthis.android.core.model.*",
+                    "com.babegetthis.android.core.sync.data.model.*",
+                    "com.babegetthis.android.core.voice.model.*",
+                    "com.babegetthis.android.core.voice.data.remote.dto.*",
+                    "com.babegetthis.android.feature.*.model.*",
+                    // Room entities and the schema itself. Migrations are SQL,
+                    // guarded by androidTest/MigrationTest against real tables.
+                    "com.babegetthis.android.**.data.local.model.*",
+                    "com.babegetthis.android.**.data.local.dao.*",
+                    "com.babegetthis.android.core.data.local.*",
+                    // Retrofit/Supabase interface declarations and the adapters
+                    // that are call-and-forward over an SDK; the e2e suite
+                    // exercises them against a real backend.
+                    "com.babegetthis.android.**.data.remote.*",
+
+                    // -- untestable on the JVM; instrumented tests cover them --
                     //
                     // PinStore is a typed wrapper over EncryptedSharedPreferences,
                     // whose MasterKey requires the AndroidKeyStore provider.
@@ -293,9 +302,30 @@ kover {
                     // a development aid rather than product behaviour — testing it
                     // would be testing the test double.
                     "com.babegetthis.android.core.auth.data.FakeAuthRepository",
-                    // Reminder composables: no branchy logic, covered by Compose
-                    // tests like every other *.ui.* package.
-                    "com.babegetthis.android.core.reminder.ui.*",
+                    // Credential Manager needs Play services and a real Google
+                    // account for its sheet. The one piece of logic in the
+                    // requester — the nonce hash — is extracted to sha256Hex,
+                    // which is gated; LoginViewModel's Google flow is tested
+                    // through the GoogleTokenRequester seam.
+                    "com.babegetthis.android.core.auth.ui.CredentialManagerTokenRequester",
+                    "com.babegetthis.android.core.auth.ui.CredentialManagerTokenRequester\$*",
+                    // FeatureFlagRepository is the same shape as
+                    // SupabaseAuthRepository: one Postgrest call through an
+                    // extension property that is brittle to stub, with
+                    // "anything fails → empty" as its only branch. The cache it
+                    // feeds is gated.
+                    "com.babegetthis.android.core.featureflags.data.*",
+                    // Vendor SDK calls with no branches: Firebase Analytics and
+                    // Crashlytics. The decisions around them (AnalyticsEventMapper,
+                    // ErrorReportingPolicy) are gated.
+                    "com.babegetthis.android.core.telemetry.data.FirebaseAnalyticsRepository",
+                    "com.babegetthis.android.core.telemetry.data.CrashlyticsCrashReporter",
+                    // Play Core (in-app review, in-app update) and MediaRecorder:
+                    // need Play services or a microphone.
+                    "com.babegetthis.android.core.review.*",
+                    "com.babegetthis.android.core.update.*",
+                    "com.babegetthis.android.core.voice.data.AudioRecorder",
+                    "com.babegetthis.android.core.voice.data.AudioRecorder\$*",
                     // Platform passthroughs with no branches: WorkManager enqueue
                     // calls, the NotificationManagerCompat check, the process
                     // lifecycle state, and System.currentTimeMillis(). Each sits
@@ -305,14 +335,12 @@ kover {
                     "com.babegetthis.android.core.reminder.AndroidNotificationGate",
                     "com.babegetthis.android.core.reminder.ProcessForegroundState",
                     "com.babegetthis.android.core.reminder.SystemReminderClock",
-                    // Hilt wiring, same reason as every other *.di.* package.
-                    "com.babegetthis.android.core.reminder.di.*",
                 )
             }
         }
 
         verify {
-            rule("Logic layer line coverage") {
+            rule("Line coverage outside the exclusions above") {
                 bound {
                     minValue = COVERAGE_THRESHOLD
                     coverageUnits = kotlinx.kover.gradle.plugin.dsl.CoverageUnit.LINE

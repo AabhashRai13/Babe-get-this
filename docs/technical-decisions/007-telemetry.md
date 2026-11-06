@@ -47,11 +47,12 @@ core/telemetry/
 ├── AnalyticsRepository.kt      track / setUser / setCollectionEnabled
 ├── CrashReporter.kt            breadcrumb / setKey / recordNonFatal / setUser / setCollectionEnabled
 ├── TelemetryConsent.kt         the user's opt-out
-├── TelemetryContext.kt         identity, screen, custom keys, the safeCall hook
+├── TelemetryContext.kt         identity, screen, custom keys
 ├── TelemetryMarkers.kt         once-only event bookkeeping
 ├── model/                      AnalyticsEvent (the catalog), Buckets, Screen
 ├── data/                       Firebase implementations + mapper + policy
-└── di/TelemetryModule.kt       two @Binds — the entire vendor commitment
+├── di/TelemetryModule.kt       two @Binds — the entire vendor commitment
+└── di/TelemetryWiringModule.kt ErrorReporter for SafeCall + the data-shape throttle
 ```
 
 `com.google.firebase` appears in exactly two files, both under `data/`. Swapping analytics
@@ -99,19 +100,19 @@ and duplicating it means one outage arriving as thousands of client reports.
 decision rather than defaulting into silence. The policy is applied inside
 `CrashReporter.recordNonFatal`, so no call site can skip it.
 
-### Hooking `safeCall`
+### Hooking `SafeCall`
 
-Every repository failure already funnels through `safeCall` in `core/error/Result.kt`,
+Every repository failure already funnels through `SafeCall` in `core/error/SafeCall.kt`,
 which holds both the original `Throwable` and the mapped `AppError`. That is where non-fatal
 reporting belongs — reporting from ViewModels would mean a call site per screen and would
 still miss any repository whose `Result` is consumed elsewhere.
 
-`safeCall` is a top-level function, so it cannot take an injected dependency without adding
-a parameter to most of the data layer. `ErrorReportingHook` is a `@Volatile` property on an
-object, assigned once by `TelemetryContext.onAppStart()`. This is a deliberate service
-locator; it is marked `ponytail:` in the source with its upgrade path (if `safeCall` ever
-becomes a class, the dependency becomes ordinary Hilt wiring). Null by default, so tests
-report nothing without setup.
+`SafeCall` is an injectable class whose one dependency is `ErrorReporter`, a small
+interface in `core/error`. `TelemetryWiringModule` binds it to `CrashReporter.recordNonFatal`, so
+the data layer depends on the interface and never on the crash vendor. (It used to be a
+top-level function fed by a `@Volatile` service-locator property, `ErrorReportingHook`,
+assigned from `TelemetryContext.onAppStart()`; that went away when `safeCall` became a
+class.) Unit tests construct `SafeCall` with a lambda reporter and assert on what it saw.
 
 The invocation is wrapped in `runCatching`. Telemetry must never turn a handled error into
 an unhandled one.
