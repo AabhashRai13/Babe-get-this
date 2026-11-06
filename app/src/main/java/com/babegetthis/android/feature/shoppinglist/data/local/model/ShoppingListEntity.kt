@@ -23,4 +23,13 @@ data class ShoppingListEntity(
     // Dirty flag: true = this row has local changes not yet pushed. This IS
     // the outbox — no separate queue table.
     val pendingSync: Boolean = false,
+    // Ownership columns, added in DB v5 (MIGRATION_4_5) — see
+    // docs/technical-decisions/008. The account this list belongs to; NULL is
+    // a guest list that lives on this device only and never syncs. Every
+    // non-null list goes through sync, shared or not — shareCode now only
+    // means "shared".
+    val accountId: String? = null,
+    // The row exists on the server. Decides the push: a brand-new row must be
+    // a plain INSERT (see SharedListRemote.insertList), every later one an upsert.
+    val onServer: Boolean = false,
 )

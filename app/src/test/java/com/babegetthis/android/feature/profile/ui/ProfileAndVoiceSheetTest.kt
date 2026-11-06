@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import com.babegetthis.android.core.auth.data.AuthRepository
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.core.voice.data.AudioRecorder
 import com.babegetthis.android.core.voice.data.repository.VoiceRepository
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
@@ -18,8 +19,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -49,9 +52,47 @@ class ProfileAndVoiceSheetTest {
             every { userName } returns MutableStateFlow(name)
             every { userEmail } returns MutableStateFlow(email)
         }
-        val vm = ProfileViewModel(authRepository, authStateManager, mockk(relaxed = true))
+        coEvery { syncEngine.evictAccountLists(any()) } coAnswers {
+            firstArg<suspend () -> Unit>().invoke()
+            Result.Success(Unit)
+        }
+        val vm = ProfileViewModel(
+            authRepository,
+            authStateManager,
+            syncEngine,
+            mockk(relaxed = true),
+            CoroutineScope(UnconfinedTestDispatcher()),
+        )
         compose.setContent { ProfileBottomSheet(onDismiss = {}, viewModel = vm) }
         return vm
+    }
+
+    private val syncEngine = mockk<SyncEngine>(relaxed = true)
+
+    @Test
+    fun `the unsynced warning offers cancel and sign out anyway`() {
+        coEvery { syncEngine.hasUnsyncedChanges(any()) } returns true
+        coEvery { authRepository.logout() } returns Result.Success(Unit)
+        profile()
+
+        click("Log out")
+        compose.onNodeWithText("Sign out?").assertExists()
+        coVerify(exactly = 0) { authRepository.logout() }
+
+        click("Sign out anyway")
+        coVerify { authRepository.logout() }
+    }
+
+    @Test
+    fun `cancelling the unsynced warning keeps the user signed in`() {
+        coEvery { syncEngine.hasUnsyncedChanges(any()) } returns true
+        profile()
+        click("Log out")
+
+        click("Cancel")
+
+        compose.onNodeWithText("Sign out?").assertDoesNotExist()
+        coVerify(exactly = 0) { authRepository.logout() }
     }
 
     @Test

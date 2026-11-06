@@ -76,24 +76,25 @@ class SessionObserverTest {
     }
 
     @Test
-    fun `a lost session logs out locally and clears telemetry identity`() = runTest {
+    fun `a lost session expires locally and clears telemetry identity`() = runTest {
         observer().observe(status)
 
         status.value = SessionStatus.NotAuthenticated(isSignOut = false)
 
-        verify { authStateManager.logout() }
+        verify { authStateManager.expireSession() }
+        verify(exactly = 0) { authStateManager.logout() }
         verify { telemetryContext.onUserChanged(null) }
     }
 
     @Test
-    fun `a refresh failure is not a logout`() = runTest {
+    fun `a refresh failure is not a lost session`() = runTest {
         // Offline-first: Supabase keeps retrying, and the user keeps their
         // lists in the meantime.
         observer().observe(status)
 
         status.value = SessionStatus.RefreshFailure(RefreshFailureCause.NetworkError(Exception("offline")))
 
-        verify(exactly = 0) { authStateManager.logout() }
+        verify(exactly = 0) { authStateManager.expireSession() }
         verify(exactly = 0) { telemetryContext.onUserChanged(any()) }
     }
 
@@ -102,7 +103,7 @@ class SessionObserverTest {
         observer().observe(status)
 
         verify(exactly = 0) { authStateManager.refreshToken(any()) }
-        verify(exactly = 0) { authStateManager.logout() }
+        verify(exactly = 0) { authStateManager.expireSession() }
         verify(exactly = 0) { telemetryContext.onUserChanged(any()) }
     }
 

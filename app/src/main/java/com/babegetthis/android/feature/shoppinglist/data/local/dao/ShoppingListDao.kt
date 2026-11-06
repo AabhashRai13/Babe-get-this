@@ -13,12 +13,18 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ShoppingListDao {
 
-    // Returns all lists with their item counts and completion counts.
-    // Both counts are calculated live by counting rows in shopping_items.
-    // A list is "completed" when itemCount > 0 and completedItemCount == itemCount.
+    // One owner's lists with their item counts and completion counts. Both
+    // counts are calculated live by counting rows in shopping_items. A list is
+    // "completed" when itemCount > 0 and completedItemCount == itemCount.
     // Tombstoned (deletedAt set) lists and items are invisible everywhere in the
     // UI; explicit columns instead of l.* so the sync columns never leak into
     // the projection.
+    //
+    // A device shows exactly one owner's lists (docs/technical-decisions/008):
+    // the signed-in (or session-expired) account's, or — accountId null — the
+    // guest lists. A shared replica with no owner (its session was lost before
+    // lists had owners) is not a guest list: it is excluded until the account
+    // claims it once the server confirms membership.
     @Query(
         """
         SELECT l.id, l.name, l.createdAt, l.updatedAt, l.isLocked,
@@ -27,11 +33,13 @@ interface ShoppingListDao {
         FROM shopping_lists l
         LEFT JOIN shopping_items i ON l.id = i.listId AND i.deletedAt IS NULL
         WHERE l.deletedAt IS NULL
+          AND ((:accountId IS NULL AND l.accountId IS NULL AND l.shareCode IS NULL)
+               OR l.accountId = :accountId)
         GROUP BY l.id
         ORDER BY l.createdAt DESC
     """,
     )
-    fun getAllListsWithItemCount(): Flow<List<ShoppingListWithItemCount>>
+    fun getListsWithItemCount(accountId: String?): Flow<List<ShoppingListWithItemCount>>
 
     @Query("SELECT * FROM shopping_lists WHERE id = :listId AND deletedAt IS NULL")
     fun getListById(listId: String): Flow<ShoppingListEntity?>
@@ -50,11 +58,14 @@ interface ShoppingListDao {
     suspend fun unlockAll()
 
     // Counted in SQL. The repository used to collect the full
-    // getAllListsWithItemCount() flow — a LEFT JOIN and GROUP BY over every list
+    // list-with-counts flow — a LEFT JOIN and GROUP BY over every list
     // and every item — and count in Kotlin, to produce one integer that Settings
     // asks for on every open.
     @Query("SELECT COUNT(*) FROM shopping_lists WHERE isLocked = 1")
     suspend fun lockedCount(): Int
+
+    @Query("SELECT id FROM shopping_lists WHERE isLocked = 1")
+    suspend fun getLockedListIds(): List<String>
 
     // Insert a list and its items as ONE transaction, so a failure or a
     // cancellation between the two writes can't leave a list stripped of its
@@ -89,8 +100,22 @@ interface ShoppingListDao {
     )
     suspend fun deleteListIfEmpty(listId: String): Int
 
-    // ── Sync primitives (shared lists only; repositories route here when the
-    //    list has a shareCode) ──────────────────────────────────────────────
+    // ── Sync primitives (account lists only; repositories route here when the
+    //    list has an owner) ─────────────────────────────────────────────────
+
+    // Tombstone variant of deleteListIfEmpty for account lists: the deletion has
+    // to reach the account's other phones. Same single-statement guard, counting
+    // live items only — a tombstoned item is already gone for the user.
+    @Query(
+        """
+        UPDATE shopping_lists
+        SET deletedAt = :now, updatedAt = :now, pendingSync = 1
+        WHERE id = :listId
+          AND deletedAt IS NULL
+          AND NOT EXISTS (SELECT 1 FROM shopping_items WHERE listId = :listId AND deletedAt IS NULL)
+    """,
+    )
+    suspend fun softDeleteListIfEmpty(listId: String, now: Long): Int
 
     // Soft delete: the tombstone must survive locally so the deletion itself
     // can sync. deletedAt doubles as the row's last-modified time.
@@ -103,9 +128,31 @@ interface ShoppingListDao {
     )
     suspend fun softDeleteList(listId: String, now: Long)
 
-    // Everything not yet pushed — includes tombstoned rows on purpose.
-    @Query("SELECT * FROM shopping_lists WHERE pendingSync = 1")
-    suspend fun getPendingSyncLists(): List<ShoppingListEntity>
+    // One account's rows not yet pushed — includes tombstoned rows on purpose.
+    // Scoped to the account so another account's leftovers (possible after a
+    // lost session) never ride along under the wrong session.
+    @Query("SELECT * FROM shopping_lists WHERE pendingSync = 1 AND accountId = :accountId")
+    suspend fun getPendingAccountLists(accountId: String): List<ShoppingListEntity>
+
+    // What the push above would send, counted — the sign-out warning asks on
+    // every sign-out, and a row push can never send must not keep it showing.
+    @Query("SELECT COUNT(*) FROM shopping_lists WHERE pendingSync = 1 AND accountId = :accountId")
+    suspend fun countPendingAccountLists(accountId: String): Int
+
+    // Lists deleted before they ever reached the server: nobody else can have
+    // them, so there is no tombstone to deliver and the row can simply go
+    // (CASCADE takes the items). Called by the push, which is the one place
+    // serialised with the INSERT such a row might otherwise have been racing.
+    @Query("DELETE FROM shopping_lists WHERE onServer = 0 AND deletedAt IS NOT NULL")
+    suspend fun deleteNeverSentDeletedLists()
+
+    // Sharing a list that already syncs: the server set the code, record it.
+    @Query("UPDATE shopping_lists SET shareCode = :code WHERE id = :id")
+    suspend fun setShareCode(id: String, code: String)
+
+    // The first INSERT landed; every later push of this row is an upsert.
+    @Query("UPDATE shopping_lists SET onServer = 1 WHERE id = :id")
+    suspend fun markListOnServer(id: String)
 
     // Guarded clear: only if the row wasn't edited again mid-push (updatedAt
     // still matches the pushed snapshot). Otherwise the newer edit would be
@@ -117,19 +164,73 @@ interface ShoppingListDao {
     @Query("SELECT * FROM shopping_lists WHERE id = :listId")
     suspend fun getListRaw(listId: String): ShoppingListEntity?
 
-    @Query("SELECT id FROM shopping_lists WHERE shareCode IS NOT NULL AND deletedAt IS NULL")
-    suspend fun getSharedListIds(): List<String>
+    // The account's live lists — what account-wide catch-up already knows.
+    @Query("SELECT id FROM shopping_lists WHERE accountId = :accountId AND deletedAt IS NULL")
+    suspend fun getAccountListIds(accountId: String): List<String>
+
+    // Give an ownerless replica to the account the server just vouched for.
+    @Query("UPDATE shopping_lists SET accountId = :accountId, onServer = 1 WHERE id = :id AND accountId IS NULL")
+    suspend fun claimList(id: String, accountId: String)
 
     // Telemetry-only read — see ShoppingItemDao.countPendingSync for why this
-    // is a COUNT rather than the size of getPendingSyncLists().
+    // is a COUNT rather than the size of getPendingAccountLists().
     @Query("SELECT COUNT(*) FROM shopping_lists WHERE pendingSync = 1")
     suspend fun countPendingSync(): Int
 
-    // Shared-replica eviction on explicit sign-out (technical decision 004).
-    // Hard delete on purpose — eviction, not a deletion to sync; CASCADE
-    // clears the items. Local-only lists (shareCode NULL) are untouched.
-    @Query("DELETE FROM shopping_lists WHERE shareCode IS NOT NULL")
-    suspend fun deleteSharedLists()
+    // ── Claim on sign-in (docs/technical-decisions/008) ────────────────────
+
+    @Query("SELECT id FROM shopping_lists WHERE accountId IS NOT NULL AND accountId != :userId")
+    suspend fun getOtherAccountListIds(userId: String): List<String>
+
+    @Query("DELETE FROM shopping_lists WHERE accountId IS NOT NULL AND accountId != :userId")
+    suspend fun deleteOtherAccountLists(userId: String)
+
+    // Must run BEFORE claimGuestLists: afterwards the subquery matches nothing.
+    @Query(
+        """
+        UPDATE shopping_items SET pendingSync = 1
+        WHERE deletedAt IS NULL
+          AND listId IN (SELECT id FROM shopping_lists WHERE accountId IS NULL AND shareCode IS NULL)
+    """,
+    )
+    suspend fun markGuestListItemsPending()
+
+    @Query(
+        "UPDATE shopping_lists SET accountId = :userId, pendingSync = 1 WHERE accountId IS NULL AND shareCode IS NULL",
+    )
+    suspend fun claimGuestLists(userId: String): Int
+
+    @Query("UPDATE shopping_lists SET accountId = :userId WHERE accountId IS NULL AND shareCode IS NOT NULL")
+    suspend fun claimOwnerlessSharedLists(userId: String)
+
+    @Query("SELECT id FROM shopping_lists WHERE accountId IS NULL AND shareCode IS NOT NULL")
+    suspend fun getOwnerlessSharedListIds(): List<String>
+
+    // Undo a first-run claim the server didn't confirm: back to ownerless, so
+    // it is never pushed, shown, or kept past the next sign-out.
+    @Query("UPDATE shopping_lists SET accountId = NULL WHERE id IN (:ids) AND accountId = :userId")
+    suspend fun releaseClaims(ids: List<String>, userId: String)
+
+    // Everything a sign-in does to the device's lists, as one transaction so a
+    // crash can't leave half the guest lists claimed and their items unqueued.
+    // Returns how many guest lists moved into the account. Another account's
+    // replicas are dropped (the server holds them); guest lists and their live
+    // items are queued for upload; ownerless shared replicas are taken only when
+    // the caller knows they predate ownership (the first claim after the update).
+    @Transaction
+    suspend fun claimDeviceLists(userId: String, includeOwnerlessShared: Boolean): Int {
+        deleteOtherAccountLists(userId)
+        markGuestListItemsPending()
+        val claimed = claimGuestLists(userId)
+        if (includeOwnerlessShared) claimOwnerlessSharedLists(userId)
+        return claimed
+    }
+
+    // Account-list eviction on explicit sign-out (docs/technical-decisions/008).
+    // Hard delete on purpose — eviction, not a deletion to sync; CASCADE clears
+    // the items. Ownerless shared replicas go too; guest lists are untouched.
+    @Query("DELETE FROM shopping_lists WHERE accountId IS NOT NULL OR shareCode IS NOT NULL")
+    suspend fun deleteAccountLists()
 }
 
 // Room can map query results to this class automatically.

@@ -6,6 +6,8 @@
     <!-- Lets NetworkMonitor query ConnectivityManager before network calls. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Shopping reminders post notifications; runtime-gated on API 33+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- firebase-analytics pulls in play-services-measurement, which merges in the
          advertising-ID permissions. We serve no ads and profile nobody, the privacy
@@ -42,6 +44,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- WorkManager must start from BabeGetThisApp's Configuration.Provider so
+             it gets the HiltWorkerFactory. Only WorkManager's initializer is
+             removed here; ProcessLifecycleInitializer (and any other
+             androidx.startup entry) must stay, because the process-lifecycle
+             observer depends on it. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>

@@ -1,5 +1,6 @@
 package com.babegetthis.android.testing
 
+import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.data.local.model.CategoryEntity
 import com.babegetthis.android.core.model.Category
 import com.babegetthis.android.core.voice.model.ItemDraft
@@ -121,3 +122,13 @@ object TestData {
         shop = shop,
     )
 }
+
+// An AuthStateManager already past Loading, backed by in-memory storage:
+// signed out (null), signed in as [userId], or that user with an expired
+// session. Repositories read whose lists to show and write from it.
+fun authStateFor(userId: String?, expired: Boolean = false): AuthStateManager =
+    AuthStateManager(inMemoryTokenManager()).apply {
+        initialize()
+        if (userId != null) login(token = "token", userId = userId, userName = "Test", userEmail = "t@e.st")
+        if (expired) expireSession()
+    }

@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Babe, Get This</string>
 
     <!-- Shopping List Screen -->
@@ -73,6 +73,18 @@
     <string name="shopping_list_edit_title">Rename List</string>
 
     <!-- Auth Screens -->
+    <!-- Lost session and lists moved into the account (docs/technical-decisions/008) -->
+    <string name="session_expired_banner">You\'ve been signed out. Sign in again to keep your lists in sync.</string>
+    <string name="session_expired_sign_in">Sign in</string>
+    <plurals name="adoption_notice">
+        <item quantity="one">Your list is now saved to your account, so it\'s backed up and shows up on any phone you sign in on.</item>
+        <item quantity="other">Your %d lists are now saved to your account, so they\'re backed up and show up on any phone you sign in on.</item>
+    </plurals>
+    <string name="adoption_notice_ok">OK</string>
+    <string name="adoption_notice_privacy">Privacy policy</string>
+    <!-- Welcome: first launch, signed out (docs/technical-decisions/008) -->
+    <string name="welcome_sign_in">Sign in</string>
+    <string name="welcome_continue_as_guest">Continue as guest</string>
     <string name="auth_welcome">Welcome to</string>
     <string name="auth_login_subtitle">Sign in to sync your lists with your partner</string>
     <string name="auth_register_subtitle">Create an account to start sharing lists</string>
@@ -103,6 +115,11 @@
     <string name="profile_name">Name</string>
     <string name="profile_no_email">No email</string>
     <string name="profile_logout">Log out</string>
+    <!-- Signing out with changes that never reached the server (docs/technical-decisions/008) -->
+    <string name="sign_out_unsynced_title">Sign out?</string>
+    <string name="sign_out_unsynced_body">Some changes haven\'t been saved to your account yet. If you sign out now, they\'ll be lost.</string>
+    <string name="sign_out_unsynced_confirm">Sign out anyway</string>
+    <string name="delete_account_body">This permanently deletes your account and can\'t be undone. Your lists are removed from this phone and our server; lists you shared stay with the people you shared them with.</string>
 
     <!-- Settings -->
     <string name="settings">Settings</string>
@@ -129,6 +146,26 @@
     <string name="settings_privacy_policy_subtitle">What is collected and how it is used</string>
     <string name="settings_rate_title">Rate the app</string>
     <string name="settings_rate_subtitle">Leave a review on Google Play</string>
+
+    <!-- Shopping reminders -->
+    <string name="reminder_channel_name">Shopping reminders</string>
+    <string name="reminder_title">Forget something on %1$s?</string>
+    <string name="reminder_body_one">%1$s is still unticked</string>
+    <string name="reminder_body_two">%1$s and %2$s are still unticked</string>
+    <!-- "N more" is always 1 or more here; the verb agrees with the whole phrase, not N, so a plural would not help. -->
+    <string name="reminder_body_more" tools:ignore="PluralsCandidate">%1$s, %2$s and %3$d more are still unticked</string>
+    <plurals name="reminder_body_locked">
+        <item quantity="one">%d item is still unticked</item>
+        <item quantity="other">%d items are still unticked</item>
+    </plurals>
+    <string name="reminder_prompt_title">Forget something?</string>
+    <string name="reminder_prompt_body">Get one nudge if you leave items unticked after a shop.</string>
+    <string name="reminder_prompt_accept">Remind me</string>
+    <string name="reminder_prompt_decline">Not now</string>
+    <string name="settings_reminders_section">Reminders</string>
+    <string name="settings_reminders_title">Shopping reminders</string>
+    <string name="settings_reminders_subtitle">A nudge when you leave items unticked after a shop</string>
+    <string name="settings_reminders_blocked_subtitle">Allow notifications in system settings to turn this on</string>
 
     <!-- PIN entry -->
     <string name="pin_label">PIN</string>

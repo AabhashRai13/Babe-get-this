@@ -1,9 +1,14 @@
 package com.babegetthis.android.core.auth.data
 
 import com.babegetthis.android.core.auth.model.AuthState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.runningFold
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -12,12 +17,47 @@ import javax.inject.Singleton
 //
 // On app start, it checks TokenManager for a saved token.
 // Navigation observes authState to decide: show login or show main app.
-// On 401 from server, AuthAuthenticator calls logout() → nav auto-redirects to login.
+// A lost session (Supabase gives up, or a 401) calls expireSession(), not
+// logout(): the account's lists stay on screen until the user signs in again
+// (docs/technical-decisions/008).
 
 @Singleton
 class AuthStateManager @Inject constructor(private val tokenManager: TokenManager) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    // Whose lists this device shows: the account while signed in or after a
+    // lost session, nobody (guest lists) when signed out. Loading is skipped so
+    // nothing renders guest lists for the instant before initialize() runs.
+    val dataOwner: Flow<String?> = authState
+        .filter { it !is AuthState.Loading }
+        .map { it.ownerId() }
+        .distinctUntilChanged()
+
+    fun dataOwnerId(): String? = _authState.value.ownerId()
+
+    // Emits each time an account is signed out — explicitly or by deleting it
+    // — which takes the account's lists off the phone, so the app goes back to
+    // Welcome. A lost session keeps the lists and does not count.
+    val signOuts: Flow<Unit> = authState
+        .filter { it !is AuthState.Loading }
+        .runningFold<AuthState, Pair<AuthState?, AuthState?>>(null to null) { (_, previous), current ->
+            previous to
+                current
+        }
+        .filter { (previous, current) -> previous?.ownerId() != null && current is AuthState.Unauthenticated }
+        .map { }
+
+    // Server work needs a live session, not just a known user: after a lost
+    // session the user id is still stored, but a push or share would only
+    // 401. Sync and share wait for a fresh sign-in.
+    fun liveSessionUserId(): String? = (_authState.value as? AuthState.Authenticated)?.userId
+
+    private fun AuthState.ownerId(): String? = when (this) {
+        is AuthState.Authenticated -> userId
+        is AuthState.SessionExpired -> userId
+        AuthState.Loading, AuthState.Unauthenticated -> null
+    }
 
     // The signed-in user's display name, or null when logged out.
     // Kept as its own flow because AuthState only carries the userId — the UI
@@ -32,15 +72,21 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
     private val _userEmail = MutableStateFlow(tokenManager.getUserEmail())
     val userEmail: StateFlow<String?> = _userEmail.asStateFlow()
 
+    // Every state transition below is @Synchronized: Supabase reports a lost
+    // session on a background thread while sign-in and sign-out run on Main,
+    // and a read-then-write interleaved with another transition would leave a
+    // stale state behind (e.g. a signed-out user stuck as "session expired").
+
     // Call this once when the app starts (e.g., from MainActivity or Application)
+    @Synchronized
     fun initialize() {
         val token = tokenManager.getToken()
         val userId = tokenManager.getUserId()
 
-        _authState.value = if (token != null && userId != null) {
-            AuthState.Authenticated(userId)
-        } else {
-            AuthState.Unauthenticated
+        _authState.value = when {
+            userId == null -> AuthState.Unauthenticated
+            token == null -> AuthState.SessionExpired(userId)
+            else -> AuthState.Authenticated(userId)
         }
         _userName.value = tokenManager.getUserName()
         _userEmail.value = tokenManager.getUserEmail()
@@ -48,6 +94,7 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
 
     // Called after successful login or register.
     // Persists token, user ID, name, and email so they survive app restarts.
+    @Synchronized
     fun login(token: String, userId: String, userName: String, userEmail: String) {
         tokenManager.saveToken(token)
         tokenManager.saveUserId(userId)
@@ -65,7 +112,22 @@ class AuthStateManager @Inject constructor(private val tokenManager: TokenManage
         tokenManager.saveToken(token)
     }
 
-    // Called on explicit logout or when server returns 401
+    // The session is gone but the user never signed out. Keeps the user id (and
+    // with it the account's lists) and drops only the dead token. A no-op when
+    // no user id is stored, so it can never undo an explicit sign-out, which
+    // fires this same event when it clears the Supabase session. In Loading,
+    // storage is updated and initialize() derives SessionExpired from it.
+    @Synchronized
+    fun expireSession() {
+        val userId = tokenManager.getUserId() ?: return
+        tokenManager.clearToken()
+        if (_authState.value !is AuthState.Loading) {
+            _authState.value = AuthState.SessionExpired(userId)
+        }
+    }
+
+    // Called on explicit sign-out and account deletion only.
+    @Synchronized
     fun logout() {
         tokenManager.clear()
         _authState.value = AuthState.Unauthenticated

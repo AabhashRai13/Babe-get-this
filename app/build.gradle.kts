@@ -49,13 +49,13 @@ val releaseKeyPassword: String? = localProperties.getProperty("RELEASE_KEY_PASSW
 android {
     namespace = "com.babegetthis.android"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.babegetthis.android"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 10
         versionName = "1.1.0"
 
@@ -326,6 +326,15 @@ kover {
                     "com.babegetthis.android.core.update.*",
                     "com.babegetthis.android.core.voice.data.AudioRecorder",
                     "com.babegetthis.android.core.voice.data.AudioRecorder\$*",
+                    // Platform passthroughs with no branches: WorkManager enqueue
+                    // calls, the NotificationManagerCompat check, the process
+                    // lifecycle state, and System.currentTimeMillis(). Each sits
+                    // behind an interface so the gated logic is tested against a
+                    // fake instead.
+                    "com.babegetthis.android.core.reminder.WorkManagerEnqueuer",
+                    "com.babegetthis.android.core.reminder.AndroidNotificationGate",
+                    "com.babegetthis.android.core.reminder.ProcessForegroundState",
+                    "com.babegetthis.android.core.reminder.SystemReminderClock",
                 )
             }
         }
@@ -363,6 +372,10 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
+    // Drives ReminderWorker and the scheduler against a synchronous WorkManager.
+    testImplementation(libs.androidx.work.testing)
+    // TestNavHostController drives the reminder-tap back stack without composing screens.
+    testImplementation(libs.androidx.navigation.testing)
     // Robolectric lets Compose screen tests and Room DAO tests run on the JVM,
     // so CI needs no emulator for anything except the end-to-end suite.
     testImplementation(libs.robolectric)
@@ -394,6 +407,8 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.hilt.android.testing)
+    // Initialises WorkManager with the Hilt worker factory in instrumented tests.
+    androidTestImplementation(libs.androidx.work.testing)
     kspAndroidTest(libs.hilt.android.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(libs.androidx.room.runtime)
@@ -402,6 +417,12 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+    // Shopping reminders are scheduled through WorkManager (list sync
+    // deliberately is not). hilt-work lets @HiltWorker workers take injected
+    // dependencies; its compiler generates the assisted factories.
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
     implementation(libs.androidx.navigation.compose)
 
     // Networking — Retrofit + OkHttp (like Dio in Flutter)

@@ -15,8 +15,9 @@ fun Long.millisToIso(): String = Instant.fromEpochMilliseconds(this).toString()
 fun ShoppingListEntity.toRow(createdBy: String): ListRow = ListRow(
     id = id,
     name = name,
-    shareCode = requireNotNull(shareCode) { "only shared lists are pushed" },
+    shareCode = shareCode,
     createdBy = createdBy,
+    createdAt = createdAt.millisToIso(),
     deletedAt = deletedAt?.millisToIso(),
 )
 
@@ -36,17 +37,28 @@ fun ShoppingItemEntity.toRow(): ItemRow = ItemRow(
 // carries the SERVER clock in millis — that's what later LWW comparisons run
 // against. `local` is the row currently in Room (any state, may be null):
 // device-local concerns (createdAt ordering, the PIN lock) survive from it.
-fun ListRow.toEntity(local: ShoppingListEntity?): ShoppingListEntity {
+// A list row from the server is the signed-in account's and is on the server
+// by definition; a list this device had locked before sign-out evicted it
+// comes back locked (`lockedIds`, docs/technical-decisions/008).
+fun ListRow.toEntity(local: ShoppingListEntity?, accountId: String, lockedIds: Set<String>): ShoppingListEntity {
     val serverMs = requireNotNull(updatedAt) { "server rows always carry updated_at" }.isoToMillis()
     return ShoppingListEntity(
         id = id,
         name = name,
-        createdAt = local?.createdAt ?: serverMs,
+        // This phone's own record of when the list was made wins, then the
+        // server's, so a list that comes back after sign-out (or onto another
+        // phone) keeps its place on the lists screen. The server's value is
+        // whatever new-version phone pushed first — on a list from before
+        // migration 003 that may be a joiner, whose date is only when it first
+        // pulled the list; a row already here never jumps to that date.
+        createdAt = local?.createdAt ?: createdAt?.isoToMillis() ?: serverMs,
         updatedAt = serverMs,
-        isLocked = local?.isLocked ?: false, // per-device, never synced
+        isLocked = local?.isLocked ?: (id in lockedIds), // per-device, never synced
         shareCode = shareCode,
         deletedAt = deletedAt?.isoToMillis(),
         pendingSync = false,
+        accountId = accountId,
+        onServer = true,
     )
 }
 

@@ -4,32 +4,41 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+// isKnownOff separates "the fetch said off" from "no fetch has landed yet", so
+// an offline cold start does not read as a remote kill switch.
 class FeatureFlagCacheTest {
 
-    private val cache = FeatureFlagCache()
-
     @Test
-    fun `an unknown flag is off`() {
-        // The fetch is best-effort and comes back empty offline, so "not
-        // present" has to mean "off" or a flag could switch itself on by
-        // losing signal.
-        assertFalse(cache.isEnabled("voice_input"))
+    fun `an unloaded cache does not know the key is off`() {
+        val cache = FeatureFlagCache()
+
+        assertFalse(cache.isKnownOff(KEY))
+        assertFalse(cache.isEnabled(KEY))
     }
 
     @Test
-    fun `update makes a fetched flag visible`() {
-        cache.update(mapOf("voice_input" to true, "in_app_review" to false))
+    fun `a loaded cache with the key true is not known off`() {
+        val cache = FeatureFlagCache().apply { update(mapOf(KEY to true)) }
 
-        assertTrue(cache.isEnabled("voice_input"))
-        assertFalse(cache.isEnabled("in_app_review"))
+        assertFalse(cache.isKnownOff(KEY))
+        assertTrue(cache.isEnabled(KEY))
     }
 
     @Test
-    fun `update replaces the previous set rather than merging`() {
-        cache.update(mapOf("voice_input" to true))
+    fun `a loaded cache with the key false is known off`() {
+        val cache = FeatureFlagCache().apply { update(mapOf(KEY to false)) }
 
-        cache.update(mapOf("in_app_review" to true))
+        assertTrue(cache.isKnownOff(KEY))
+    }
 
-        assertFalse(cache.isEnabled("voice_input"))
+    @Test
+    fun `a loaded cache without the key is known off`() {
+        val cache = FeatureFlagCache().apply { update(mapOf("other" to true)) }
+
+        assertTrue(cache.isKnownOff(KEY))
+    }
+
+    private companion object {
+        const val KEY = "some_flag"
     }
 }

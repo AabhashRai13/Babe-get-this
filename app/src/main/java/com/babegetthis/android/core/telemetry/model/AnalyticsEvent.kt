@@ -86,6 +86,11 @@ sealed interface AnalyticsEvent {
     // Question: does an install become a user, and how fast?
     // The "first" events fire once per user, guarded by a persisted marker.
 
+    // The first-launch Welcome screen (docs/technical-decisions/008).
+    // Question: what share of new installs try the app as a guest versus
+    // signing in? Guests keep lists on one phone; accounts sync and share.
+    data class WelcomeChoiceMade(val choice: WelcomeChoice) : AnalyticsEvent
+
     data object AccountRegistered : AnalyticsEvent
 
     data object AccountLoggedIn : AnalyticsEvent
@@ -118,6 +123,20 @@ sealed interface AnalyticsEvent {
     data class CategoryAutoAssigned(val categoryId: String?) : AnalyticsEvent
 
     data class CategoryCorrected(val fromCategoryId: String?, val toCategoryId: String?) : AnalyticsEvent
+
+    // -- Shopping reminders ------------------------------------------------
+    // Question: does a scheduled reminder get seen and acted on, and does
+    // the delay bucket tell "ignored on time" apart from "arrived late"?
+    // Posted plus tapped is the engagement rate; the delay separates a
+    // reminder the user ignored from one Android held back under Doze.
+
+    // The reminder notification was posted. delayMillis is the elapsed time
+    // from when it was armed to when it actually posted; only its bucket is
+    // sent, since the raw value is a fingerprint.
+    data class ReminderPosted(val delayMillis: Long) : AnalyticsEvent
+
+    // The user tapped the reminder notification and opened the app.
+    data object ReminderTapped : AnalyticsEvent
 }
 
 // How an item got into the list. The whole voice bet is measured by the
@@ -164,6 +183,12 @@ enum class VoiceFailureReason(val value: String) {
             else -> Unknown
         }
     }
+}
+
+// Which button a new install picked on the Welcome screen.
+enum class WelcomeChoice(val value: String) {
+    Guest("guest"),
+    SignIn("sign_in"),
 }
 
 // Why joining a shared list failed. Mirrors what ShareRepository.join can

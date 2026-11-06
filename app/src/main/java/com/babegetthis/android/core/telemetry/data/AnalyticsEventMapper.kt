@@ -4,6 +4,7 @@ import com.babegetthis.android.core.data.local.DEFAULT_CATEGORIES
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.bucketCount
 import com.babegetthis.android.core.telemetry.model.bucketMillis
+import com.babegetthis.android.core.telemetry.model.bucketReminderDelay
 
 // A vendor-shaped event: a name plus parameters, split by type because GA4
 // treats them differently — strings become dimensions you can segment by,
@@ -107,6 +108,11 @@ object AnalyticsEventMapper {
 
         AnalyticsEvent.SharedListFirstEditByJoiner -> ev("shared_list_first_edit")
 
+        is AnalyticsEvent.WelcomeChoiceMade -> ev(
+            name = "welcome_choice",
+            text = mapOf("choice" to event.choice.value),
+        )
+
         // -- Activation --------------------------------------------------
         AnalyticsEvent.AccountRegistered -> ev("account_registered")
 
@@ -151,6 +157,14 @@ object AnalyticsEventMapper {
                 "to_category" to categoryLabel(event.toCategoryId),
             ),
         )
+
+        // -- Shopping reminders ------------------------------------------
+        is AnalyticsEvent.ReminderPosted -> ev(
+            name = "reminder_posted",
+            text = mapOf("delay_bucket" to bucketReminderDelay(event.delayMillis)),
+        )
+
+        AnalyticsEvent.ReminderTapped -> ev("reminder_tapped")
     }
 
     // Only ids from our own shipped taxonomy pass through as themselves.

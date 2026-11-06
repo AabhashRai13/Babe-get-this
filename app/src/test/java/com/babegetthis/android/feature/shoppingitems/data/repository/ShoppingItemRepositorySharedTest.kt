@@ -1,6 +1,7 @@
 package com.babegetthis.android.feature.shoppingitems.data.repository
 
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
+import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.unreportedSafeCall
 import kotlinx.coroutines.flow.first
@@ -24,16 +25,21 @@ class ShoppingItemRepositorySharedTest {
 
     private var kicks = 0
     private val repository by lazy {
-        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, { kicks++ }, unreportedSafeCall())
+        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {
+            kicks++
+        }, FakeReminderKicker(), unreportedSafeCall())
     }
 
-    private suspend fun seedList(shareCode: String? = "ABC234") = dbRule.listDao.insertList(
+    // Defaults to a shared list of account u1. Sync is decided by the owner
+    // now, not the share code (docs/technical-decisions/008).
+    private suspend fun seedList(shareCode: String? = "ABC234", accountId: String? = "u1") = dbRule.listDao.insertList(
         ShoppingListEntity(
             id = "list-1",
             name = "Groceries",
             createdAt = 1L,
             updatedAt = 2L,
             shareCode = shareCode,
+            accountId = accountId,
         ),
     )
 
@@ -45,17 +51,27 @@ class ShoppingItemRepositorySharedTest {
 
         repository.addItem("list-1", name = "Milk", quantity = "1")
 
-        assertTrue(dbRule.itemDao.getPendingSyncItems().single().name == "Milk")
+        assertTrue(dbRule.itemDao.getPendingSyncItemsForAccount("u1").single().name == "Milk")
+        assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `adding to an unshared account list marks the item dirty and kicks`() = runTest {
+        seedList(shareCode = null)
+
+        repository.addItem("list-1", name = "Milk", quantity = "1")
+
+        assertEquals("Milk", dbRule.itemDao.getPendingSyncItemsForAccount("u1").single().name)
         assertEquals(1, kicks)
     }
 
     @Test
     fun `adding to a local-only list stays clean and quiet`() = runTest {
-        seedList(shareCode = null)
+        seedList(shareCode = null, accountId = null)
 
         repository.addItem("list-1", name = "Milk", quantity = "1")
 
-        assertTrue(dbRule.itemDao.getPendingSyncItems().isEmpty())
+        assertTrue(dbRule.itemDao.getPendingSyncItemsForAccount("u1").isEmpty())
         assertEquals(0, kicks)
     }
 
@@ -64,11 +80,13 @@ class ShoppingItemRepositorySharedTest {
         seedList()
         repository.addItem("list-1", name = "Milk", quantity = "1")
         kicks = 0
-        dbRule.itemDao.getPendingSyncItems().forEach { dbRule.itemDao.markItemSynced(it.id, it.updatedAt) }
+        dbRule.itemDao.getPendingSyncItemsForAccount("u1").forEach {
+            dbRule.itemDao.markItemSynced(it.id, it.updatedAt)
+        }
 
         repository.updateItem(domainItem().copy(name = "Oat milk"))
 
-        val row = dbRule.itemDao.getPendingSyncItems().single()
+        val row = dbRule.itemDao.getPendingSyncItemsForAccount("u1").single()
         assertEquals("Oat milk", row.name)
         assertEquals(1, kicks)
     }
@@ -79,7 +97,9 @@ class ShoppingItemRepositorySharedTest {
         repository.addItem("list-1", name = "Milk", quantity = "1")
         val id = dbRule.itemDao.getItemsByListIdOnce("list-1").single().id
         kicks = 0
-        dbRule.itemDao.getPendingSyncItems().forEach { dbRule.itemDao.markItemSynced(it.id, it.updatedAt) }
+        dbRule.itemDao.getPendingSyncItemsForAccount("u1").forEach {
+            dbRule.itemDao.markItemSynced(it.id, it.updatedAt)
+        }
 
         repository.togglePickedUp(id, isPickedUp = true)
 
@@ -91,7 +111,7 @@ class ShoppingItemRepositorySharedTest {
 
     @Test
     fun `ticking a local-only item stays clean and quiet`() = runTest {
-        seedList(shareCode = null)
+        seedList(shareCode = null, accountId = null)
         repository.addItem("list-1", name = "Milk", quantity = "1")
         val id = dbRule.itemDao.getItemsByListIdOnce("list-1").single().id
 
@@ -126,7 +146,7 @@ class ShoppingItemRepositorySharedTest {
 
     @Test
     fun `deleting a local-only item still hard-deletes`() = runTest {
-        seedList(shareCode = null)
+        seedList(shareCode = null, accountId = null)
         repository.addItem("list-1", name = "Milk", quantity = "1")
         val id = dbRule.itemDao.getItemsByListIdOnce("list-1").single().id
 

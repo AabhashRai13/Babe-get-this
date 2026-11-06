@@ -24,6 +24,10 @@ object TestTags {
     // on visible text.
     fun listCard(listId: String) = "shoppinglist.card.$listId"
 
+    // The lost-session banner has its own "Sign in" button while the top bar
+    // shows another "Sign in" pill; the tag tells them apart.
+    const val SESSION_EXPIRED_BANNER = "shoppinglist.sessionExpiredBanner"
+
     fun listTab(index: Int) = "shoppinglist.tab.$index"
 
     // --- shoppingitems ---

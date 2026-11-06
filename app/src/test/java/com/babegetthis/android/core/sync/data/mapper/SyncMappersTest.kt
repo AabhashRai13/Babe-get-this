@@ -60,10 +60,13 @@ class SyncMappersTest {
     }
 
     @Test
-    fun `list toRow refuses a local-only list`() {
-        assertThrows(IllegalArgumentException::class.java) {
-            listEntity(shareCode = null).toRow(createdBy = "user-9")
-        }
+    fun `an unshared list maps to a row with a null share code`() {
+        // Every account list syncs now; only shared ones carry a code
+        // (docs/technical-decisions/008).
+        val row = listEntity(shareCode = null).toRow(createdBy = "user-9")
+
+        assertEquals(null, row.shareCode)
+        assertEquals("user-9", row.createdBy)
     }
 
     @Test
@@ -95,13 +98,64 @@ class SyncMappersTest {
             name = "Groceries",
             shareCode = "ABC123",
             updatedAt = iso,
-        ).toEntity(local = null)
+        ).toEntity(local = null, accountId = "user-1", lockedIds = emptySet())
 
         assertEquals(ms, entity.updatedAt)
         assertEquals("no local row → server time becomes createdAt", ms, entity.createdAt)
         assertFalse(entity.isLocked)
         assertFalse(entity.pendingSync)
         assertEquals("ABC123", entity.shareCode)
+    }
+
+    // The lists screen sorts and groups by creation date. A list coming back
+    // after sign-out, or onto a second phone, must keep its own date — not
+    // become "created" whenever it was last edited.
+    @Test
+    fun `a pushed row carries the list's creation time`() {
+        val row = ShoppingListEntity(id = "l", name = "n", createdAt = 1_000L, updatedAt = 2_000L)
+            .toRow(createdBy = "user-9")
+
+        assertEquals("1970-01-01T00:00:01Z", row.createdAt)
+    }
+
+    @Test
+    fun `a rediscovered list keeps its creation date`() {
+        val entity = ListRow(id = "l", name = "n", createdAt = "2026-01-01T00:00:00Z", updatedAt = iso)
+            .toEntity(local = null, accountId = "user-1", lockedIds = emptySet())
+
+        assertEquals(1_767_225_600_000L, entity.createdAt)
+    }
+
+    // created_at is write-once on the server and set by whichever new-version
+    // phone pushed first — on a list from before migration 003 that may be a
+    // joiner, whose date is only when it first pulled the list. A row already
+    // on this phone keeps its own date rather than jumping to that one.
+    @Test
+    fun `a list already here keeps its own creation date over the server's`() {
+        val entity = ListRow(id = "list-1", name = "n", createdAt = "2026-01-01T00:00:00Z", updatedAt = iso)
+            .toEntity(local = listEntity(), accountId = "user-1", lockedIds = emptySet())
+
+        assertEquals(1L, entity.createdAt)
+    }
+
+    // Whatever the server sends is the signed-in account's list, and it is
+    // on the server by definition (docs/technical-decisions/008).
+    @Test
+    fun `a server row becomes an owned, on-server entity`() {
+        val entity = ListRow(id = "list-1", name = "Groceries", updatedAt = iso)
+            .toEntity(local = null, accountId = "user-1", lockedIds = emptySet())
+
+        assertEquals("user-1", entity.accountId)
+        assertTrue(entity.onServer)
+        assertEquals(null, entity.shareCode)
+    }
+
+    @Test
+    fun `a returning list is re-locked if this device had locked it`() {
+        val row = ListRow(id = "list-1", name = "Groceries", updatedAt = iso)
+
+        assertTrue(row.toEntity(local = null, accountId = "user-1", lockedIds = setOf("list-1")).isLocked)
+        assertFalse(row.toEntity(local = null, accountId = "user-1", lockedIds = setOf("other")).isLocked)
     }
 
     @Test
@@ -111,7 +165,7 @@ class SyncMappersTest {
             name = "Renamed",
             shareCode = "ABC123",
             updatedAt = iso,
-        ).toEntity(local = listEntity())
+        ).toEntity(local = listEntity(), accountId = "user-1", lockedIds = emptySet())
 
         assertEquals("Renamed", entity.name)
         assertEquals("createdAt preserved", 1L, entity.createdAt)
@@ -141,7 +195,7 @@ class SyncMappersTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             ListRow(id = "l", name = "n", shareCode = "c", updatedAt = null)
-                .toEntity(local = null)
+                .toEntity(local = null, accountId = "user-1", lockedIds = emptySet())
         }
     }
 }

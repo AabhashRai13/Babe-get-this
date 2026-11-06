@@ -1,5 +1,6 @@
 package com.babegetthis.android
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,12 +22,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.onboarding.data.repository.WelcomeRepository
+import com.babegetthis.android.core.reminder.ReminderIntentParser
+import com.babegetthis.android.core.reminder.ReminderTarget
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
 import com.babegetthis.android.core.telemetry.TelemetryContext
 import com.babegetthis.android.core.telemetry.model.Screen
 import com.babegetthis.android.core.update.InAppUpdateManager
 import com.babegetthis.android.navigation.BgtNavGraph
 import com.babegetthis.android.ui.theme.BabeGetThisTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -40,6 +46,16 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var telemetryContext: TelemetryContext
 
+    @Inject lateinit var welcomeRepository: WelcomeRepository
+
+    @Inject lateinit var analytics: AnalyticsRepository
+
+    // The list a tapped reminder wants opened. Nulled by the nav graph once
+    // consumed, so a rotation does not navigate again.
+    private val pendingReminder = MutableStateFlow<ReminderTarget?>(null)
+
+    private var startAtWelcome = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super.onCreate, deliberately: this is what swaps the launch
         // theme (Theme.BabeGetThis.Starting) for the app theme. Called any later
@@ -50,6 +66,13 @@ class MainActivity : ComponentActivity() {
 
         // Check if user has a saved token — this determines the start screen
         authStateManager.initialize()
+        startAtWelcome = welcomeRepository.shouldShowWelcome(authStateManager.authState.value)
+        pendingReminder.value = ReminderIntentParser.handleReminderIntent(
+            intent,
+            startAtWelcome,
+            restored = savedInstanceState != null,
+            analytics::track,
+        )
 
         setContent {
             BabeGetThisTheme {
@@ -71,9 +94,13 @@ class MainActivity : ComponentActivity() {
                         onDispose { navController.removeOnDestinationChangedListener(listener) }
                     }
 
+                    val reminder by pendingReminder.collectAsStateWithLifecycle()
                     BgtNavGraph(
                         authStateManager = authStateManager,
                         navController = navController,
+                        startAtWelcome = startAtWelcome,
+                        pendingReminder = reminder,
+                        onPendingReminderConsumed = { pendingReminder.value = null },
                     )
 
                     val snackbarHostState = remember { SnackbarHostState() }
@@ -100,6 +127,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    // The reminder's intent is SINGLE_TOP | CLEAR_TOP, so a tap while the app is
+    // running delivers here instead of starting a second activity.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Re-read, not the value from onCreate: the user may have signed out
+        // since, and a tap must then be ignored rather than land an evicted
+        // list on top of Welcome. Kept local on purpose: the startAtWelcome
+        // field feeds NavHost's startDestination, and changing it would make
+        // the next recomposition swap the graph and reset the back stack.
+        val welcomeNow = welcomeRepository.shouldShowWelcome(authStateManager.authState.value)
+        pendingReminder.value =
+            ReminderIntentParser.handleReminderIntent(intent, welcomeNow, restored = false, analytics::track)
     }
 
     override fun onResume() {

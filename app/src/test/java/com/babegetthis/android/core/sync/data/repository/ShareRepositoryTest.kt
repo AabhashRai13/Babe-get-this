@@ -6,6 +6,7 @@ import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
+import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
@@ -13,6 +14,7 @@ import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -28,27 +30,32 @@ class ShareRepositoryTest {
 
     private val remote = FakeSharedListRemote()
     private val syncPoints = FakeSyncPointStore()
+    private val ownership = FakeListOwnershipStore()
     private var userId: String? = "user-1"
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, {
+        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, {
             userId
         }, mockk(relaxed = true), unreportedSafeCall())
     }
     private val repository by lazy {
-        ShareRepository(dbRule.listDao, dbRule.itemDao, remote, engine, {
-            userId
-        }, unreportedSafeCall(), Random(seed = 7))
+        ShareRepository(dbRule.listDao, remote, engine, { userId }, unreportedSafeCall(), Random(seed = 7))
     }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data
     private fun <T> Result<T>.error(): AppError = (this as Result.Error).error
 
-    private fun localList(id: String = "list-1") = ShoppingListEntity(
-        id = id,
-        name = "Groceries",
-        createdAt = 1L,
-        updatedAt = 2L,
-    )
+    // Sharing only happens signed in, so every list here is an account list
+    // (docs/technical-decisions/008); onServer says whether it has synced yet.
+    private fun accountList(id: String = "list-1", onServer: Boolean = true, pendingSync: Boolean = false) =
+        ShoppingListEntity(
+            id = id,
+            name = "Groceries",
+            createdAt = 1L,
+            updatedAt = 2L,
+            accountId = "user-1",
+            onServer = onServer,
+            pendingSync = pendingSync,
+        )
 
     private fun localItem(id: String = "item-1") = ShoppingItemEntity(
         id = id,
@@ -62,36 +69,60 @@ class ShareRepositoryTest {
     // --- share --------------------------------------------------------------
 
     @Test
-    fun `share uploads the list and items and persists a well-formed code`() = runTest {
-        dbRule.listDao.insertList(localList())
-        dbRule.itemDao.insertItem(localItem())
+    fun `sharing a list already on the server sets its code and keeps its items`() = runTest {
+        dbRule.listDao.insertList(accountList())
+        dbRule.itemDao.insertItem(localItem("item-1"))
+        dbRule.itemDao.insertItem(localItem("item-2"))
 
         val code = repository.share("list-1").data()
 
         assertTrue("code from the safe alphabet", code.matches(Regex("^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$")))
-        assertEquals("first share INSERTS, never upserts", code, remote.insertedLists.single().shareCode)
-        assertEquals("item-1", remote.upsertedItems.single().id)
+        assertEquals(listOf("list-1" to code), remote.shareCodeRequests)
+        assertTrue("the row already exists", remote.insertedLists.isEmpty())
+        assertTrue("items already synced with the list", remote.upsertedItems.isEmpty())
         assertEquals(code, dbRule.listDao.getListRaw("list-1")!!.shareCode)
+        assertNotNull("no REPLACE cascade", dbRule.itemDao.getItemRaw("item-1"))
+        assertNotNull(dbRule.itemDao.getItemRaw("item-2"))
     }
 
     @Test
-    fun `share adopts the server's code when a half-finished share left one behind`() = runTest {
-        dbRule.listDao.insertList(localList())
-        remote.listAlreadyExists = true
-        remote.listRows = listOf(
-            ListRow(id = "list-1", name = "Groceries", shareCode = "OLDCOD", updatedAt = "2026-08-01T10:00:00Z"),
-        )
+    fun `sharing a list not yet on the server pushes it first`() = runTest {
+        dbRule.listDao.insertList(accountList(onServer = false, pendingSync = true))
 
         val code = repository.share("list-1").data()
 
-        assertEquals("server row is the truth", "OLDCOD", code)
-        assertEquals("OLDCOD", dbRule.listDao.getListRaw("list-1")!!.shareCode)
+        assertEquals(listOf("list-1"), remote.insertedLists.map { it.id })
+        assertEquals(listOf("list-1" to code), remote.shareCodeRequests)
+        assertTrue(dbRule.listDao.getListRaw("list-1")!!.onServer)
     }
 
     @Test
-    fun `share fails cleanly when the leftover server row cannot be read`() = runTest {
-        dbRule.listDao.insertList(localList())
-        remote.listAlreadyExists = true
+    fun `sharing offline fails cleanly and shows no code`() = runTest {
+        dbRule.listDao.insertList(accountList(onServer = false, pendingSync = true))
+        remote.failUpserts = true
+
+        val error = repository.share("list-1").error()
+
+        assertEquals(AppError.NetworkError("Couldn't share — check your connection."), error)
+        assertTrue(remote.shareCodeRequests.isEmpty())
+        assertNull(dbRule.listDao.getListRaw("list-1")!!.shareCode)
+    }
+
+    @Test
+    fun `when another phone shared first, its code wins`() = runTest {
+        dbRule.listDao.insertList(accountList())
+        remote.serverShareCode = "ZZZ999"
+
+        val code = repository.share("list-1").data()
+
+        assertEquals("ZZZ999", code)
+        assertEquals("ZZZ999", dbRule.listDao.getListRaw("list-1")!!.shareCode)
+    }
+
+    @Test
+    fun `share fails cleanly when the server row cannot be read`() = runTest {
+        dbRule.listDao.insertList(accountList())
+        remote.shareCodeRowMissing = true
 
         val error = repository.share("list-1").error()
 
@@ -101,33 +132,25 @@ class ShareRepositoryTest {
 
     @Test
     fun `share is idempotent — the code is static per list`() = runTest {
-        dbRule.listDao.insertList(localList())
+        dbRule.listDao.insertList(accountList())
 
         val first = repository.share("list-1").data()
         val second = repository.share("list-1").data()
 
         assertEquals(first, second)
-        assertEquals("no re-upload on reopen", 1, remote.insertedLists.size)
-    }
-
-    @Test
-    fun `share with no items skips the item upload`() = runTest {
-        dbRule.listDao.insertList(localList())
-
-        repository.share("list-1").data()
-
-        assertTrue(remote.upsertedItems.isEmpty())
+        assertEquals("no second request on reopen", 1, remote.shareCodeRequests.size)
     }
 
     @Test
     fun `share requires sign-in and uploads nothing without it`() = runTest {
         userId = null
-        dbRule.listDao.insertList(localList())
+        dbRule.listDao.insertList(accountList(onServer = false, pendingSync = true))
 
         val error = repository.share("list-1").error()
 
         assertTrue(error is AppError.AuthError)
         assertTrue(remote.insertedLists.isEmpty())
+        assertTrue(remote.shareCodeRequests.isEmpty())
         assertNull(dbRule.listDao.getListRaw("list-1")!!.shareCode)
     }
 
@@ -137,8 +160,8 @@ class ShareRepositoryTest {
     }
 
     @Test
-    fun `failed upload leaves the list local-only so share can be retried`() = runTest {
-        dbRule.listDao.insertList(localList())
+    fun `a failed share leaves the list unshared so it can be retried`() = runTest {
+        dbRule.listDao.insertList(accountList())
         remote.failUpserts = true
 
         val result = repository.share("list-1")

@@ -5,6 +5,7 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.SafeCall
+import com.babegetthis.android.core.reminder.ReminderKicker
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toDomain
@@ -23,13 +24,14 @@ class ShoppingItemRepository @Inject constructor(
     private val categoryDao: CategoryDao,
     private val shoppingListDao: ShoppingListDao,
     private val syncKicker: SyncKicker,
+    private val reminderKicker: ReminderKicker,
     private val safeCall: SafeCall,
 ) {
 
-    // One raw lookup decides every write's sync behavior: items of shared
-    // lists are marked pendingSync and kick a push; local-only items behave
-    // exactly as before this feature existed.
-    private suspend fun isShared(listId: String): Boolean = shoppingListDao.getListRaw(listId)?.shareCode != null
+    // One raw lookup decides every write's sync behavior: items of account
+    // lists (shared or not — docs/technical-decisions/008) are marked
+    // pendingSync and kick a push; guest-list items never leave the device.
+    private suspend fun isSynced(listId: String): Boolean = shoppingListDao.getListRaw(listId)?.accountId != null
 
     fun getItemsByListId(listId: String): Flow<List<ShoppingItem>> = combine(
         shoppingItemDao.getItemsByListId(listId),
@@ -66,50 +68,57 @@ class ShoppingItemRepository @Inject constructor(
             createdAt = now,
             updatedAt = now,
         )
-        val shared = isShared(listId)
-        shoppingItemDao.insertItem(item.toEntity().copy(pendingSync = shared))
-        if (shared) syncKicker.pushSoon()
+        val synced = isSynced(listId)
+        shoppingItemDao.insertItem(item.toEntity().copy(pendingSync = synced))
+        if (synced) syncKicker.pushSoon()
+        reminderKicker.onLocalEdit(listId)
         id
     }
 
     suspend fun updateItem(item: ShoppingItem): Result<Unit> = safeCall {
         val updatedItem = item.copy(updatedAt = System.currentTimeMillis())
-        val shared = isShared(item.listId)
-        shoppingItemDao.updateItem(updatedItem.toEntity().copy(pendingSync = shared))
-        if (shared) syncKicker.pushSoon()
+        val synced = isSynced(item.listId)
+        shoppingItemDao.updateItem(updatedItem.toEntity().copy(pendingSync = synced))
+        if (synced) syncKicker.pushSoon()
+        reminderKicker.onLocalEdit(item.listId)
     }
 
     suspend fun togglePickedUp(itemId: String, isPickedUp: Boolean): Result<Unit> = safeCall {
         val listId = shoppingItemDao.getItemRaw(itemId)?.listId
-        val shared = listId != null && isShared(listId)
+        val synced = listId != null && isSynced(listId)
         shoppingItemDao.updatePickedUpStatus(
             itemId = itemId,
             isPickedUp = isPickedUp,
             updatedAt = System.currentTimeMillis(),
-            pendingSync = shared,
+            pendingSync = synced,
         )
-        if (shared) syncKicker.pushSoon()
+        if (synced) syncKicker.pushSoon()
+        if (listId != null) {
+            if (isPickedUp) reminderKicker.onLocalPickUp(listId) else reminderKicker.onLocalEdit(listId)
+        }
     }
 
     suspend fun deleteItem(itemId: String): Result<Unit> = safeCall {
         val listId = shoppingItemDao.getItemRaw(itemId)?.listId
-        if (listId != null && isShared(listId)) {
+        if (listId != null && isSynced(listId)) {
             // Tombstone, not DELETE: the deletion itself must sync.
             shoppingItemDao.softDeleteItem(itemId, now = System.currentTimeMillis())
             syncKicker.pushSoon()
         } else {
             shoppingItemDao.deleteItem(itemId)
         }
+        if (listId != null) reminderKicker.onLocalEdit(listId)
     }
 
     // Re-insert a previously deleted item with its original ID (for undo).
-    // For shared items the row is tombstoned, not gone — the REPLACE insert
+    // For account-list items the row is tombstoned, not gone — the REPLACE insert
     // clears deletedAt, and the dirty flag pushes the revival to members
     // (explicit-null serialization carries deleted_at = null to the server).
     suspend fun restoreItem(item: ShoppingItem): Result<Unit> = safeCall {
-        val shared = isShared(item.listId)
-        shoppingItemDao.insertItem(item.toEntity().copy(pendingSync = shared))
-        if (shared) syncKicker.pushSoon()
+        val synced = isSynced(item.listId)
+        shoppingItemDao.insertItem(item.toEntity().copy(pendingSync = synced))
+        if (synced) syncKicker.pushSoon()
+        reminderKicker.onLocalEdit(item.listId)
     }
 
     // Mirrors ShoppingListRepository.requireListName — trims, and rejects blank

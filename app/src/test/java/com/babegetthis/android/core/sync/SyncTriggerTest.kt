@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -55,25 +56,41 @@ class SyncTriggerTest {
         trigger.pushSoon()
 
         coVerify(exactly = 1) { engine.push() }
-        coVerify(exactly = 0) { engine.catchUpAllShared() }
+        coVerify(exactly = 0) { engine.catchUpAccount() }
     }
 
     @Test
-    fun `signing in pushes and catches up`() {
-        // Discovery is what materialises the account's shared lists after
-        // login, and login changes neither foreground state nor connectivity.
+    fun `every auth state is handed to the engine`() {
+        // The engine decides what a state means for this device's lists
+        // (claiming, first-run bookkeeping); the trigger only relays it.
+        authState.value = AuthState.Authenticated("user-1")
+
+        coVerify { engine.onAuthState(AuthState.Unauthenticated) }
+        coVerify { engine.onAuthState(AuthState.Authenticated("user-1")) }
+    }
+
+    @Test
+    fun `a live session kicks a push and a catch-up`() {
+        // Discovery is what materialises the account's lists after login,
+        // and login changes neither foreground state nor connectivity.
+        coEvery { engine.onAuthState(AuthState.Authenticated("user-1")) } returns true
+
         authState.value = AuthState.Authenticated("user-1")
 
         coVerify(exactly = 1) { engine.push() }
-        coVerify(exactly = 1) { engine.catchUpAllShared() }
+        coVerify(exactly = 1) { engine.catchUpAccount() }
     }
 
     @Test
-    fun `signing out is not a kick`() {
-        authState.value = AuthState.Authenticated("user-1")
+    fun `a state without a live session is not a kick`() {
+        // An expired session would only 401 on every push.
+        coEvery { engine.onAuthState(any()) } returns false
+
+        authState.value = AuthState.SessionExpired("user-1")
         authState.value = AuthState.Unauthenticated
 
-        coVerify(exactly = 1) { engine.catchUpAllShared() }
+        coVerify(exactly = 0) { engine.push() }
+        coVerify(exactly = 0) { engine.catchUpAccount() }
     }
 
     @Test
@@ -81,7 +98,7 @@ class SyncTriggerTest {
         networkCallback().onAvailable(mockk())
 
         coVerify(exactly = 1) { engine.push() }
-        coVerify(exactly = 1) { engine.catchUpAllShared() }
+        coVerify(exactly = 1) { engine.catchUpAccount() }
     }
 
     @Test
@@ -91,7 +108,7 @@ class SyncTriggerTest {
         Robolectric.buildActivity(Activity::class.java)
             .create().start().resume().pause().saveInstanceState(Bundle()).stop().destroy()
 
-        coVerify(exactly = 1) { engine.catchUpAllShared() }
+        coVerify(exactly = 1) { engine.catchUpAccount() }
     }
 
     @Test
@@ -100,13 +117,13 @@ class SyncTriggerTest {
         // A second Activity starting while the first is up is not a new
         // foreground.
         val second = Robolectric.buildActivity(Activity::class.java).create().start()
-        coVerify(exactly = 1) { engine.catchUpAllShared() }
+        coVerify(exactly = 1) { engine.catchUpAccount() }
 
         // Backgrounded, then foregrounded again.
         first.stop()
         second.stop()
         first.restart()
 
-        coVerify(exactly = 2) { engine.catchUpAllShared() }
+        coVerify(exactly = 2) { engine.catchUpAccount() }
     }
 }

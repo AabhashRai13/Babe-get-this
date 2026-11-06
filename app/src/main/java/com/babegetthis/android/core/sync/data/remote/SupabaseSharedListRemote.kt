@@ -6,7 +6,9 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Order
 import io.github.jan.supabase.postgrest.query.filter.FilterOperator
+import io.github.jan.supabase.postgrest.query.filter.PostgrestFilterBuilder
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
@@ -35,6 +37,12 @@ class SupabaseSharedListRemote(private val client: SupabaseClient) : SharedListR
         if (duplicate) false else throw e
     }
 
+    override suspend fun setShareCode(listId: String, code: String): String? =
+        client.from("lists").update({ set("share_code", code) }) {
+            select()
+            filter { eq("id", listId) }
+        }.decodeList<ListRow>().firstOrNull()?.shareCode
+
     override suspend fun upsertLists(rows: List<ListRow>) {
         client.from("lists").upsert(rows)
     }
@@ -43,6 +51,7 @@ class SupabaseSharedListRemote(private val client: SupabaseClient) : SharedListR
         client.from("items").upsert(rows)
     }
 
+    // One row by primary key: never more than a page.
     override suspend fun fetchList(listId: String, sinceIso: String?): List<ListRow> = client.from("lists").select {
         filter {
             eq("id", listId)
@@ -50,14 +59,60 @@ class SupabaseSharedListRemote(private val client: SupabaseClient) : SharedListR
         }
     }.decodeList<ListRow>()
 
-    override suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow> = client.from("items").select {
-        filter {
+    override suspend fun fetchItems(listId: String, sinceIso: String?): List<ItemRow> =
+        fetchAll<ItemRow>("items", cursorOf = { it.updatedAt to it.id }) {
             eq("list_id", listId)
             if (sinceIso != null) gte("updated_at", sinceIso)
         }
-    }.decodeList<ItemRow>()
 
-    override suspend fun fetchAllLists(): List<ListRow> = client.from("lists").select().decodeList<ListRow>()
+    override suspend fun fetchAccountItems(sinceIso: String?): List<ItemRow> =
+        fetchAll<ItemRow>("items", cursorOf = { it.updatedAt to it.id }) {
+            if (sinceIso != null) gte("updated_at", sinceIso)
+        }
+
+    override suspend fun fetchAllLists(): List<ListRow> = fetchAll<ListRow>("lists", cursorOf = {
+        it.updatedAt to it.id
+    }) {}
+
+    // The whole result, a page at a time. Keyset paging on (updated_at, id)
+    // rather than offsets: a row updated while paging moves to the end of the
+    // order, and with offsets that shifts every row behind it by one — the
+    // one that slips across the page boundary is never returned. With a cursor
+    // the moved row simply shows up in a later page (or the next pass).
+    // Stops at the first short page; a page the server cut short at max_rows
+    // would look complete, so PAGE_SIZE must not exceed it.
+    private suspend inline fun <reified T : Any> fetchAll(
+        table: String,
+        cursorOf: (T) -> Pair<String?, String>,
+        crossinline where: PostgrestFilterBuilder.() -> Unit,
+    ): List<T> {
+        val rows = mutableListOf<T>()
+        var after: Pair<String?, String>? = null
+        while (true) {
+            val cursor = after
+            val page = client.from(table).select {
+                filter {
+                    where()
+                    val (stamp, id) = cursor ?: return@filter
+                    // Everything strictly after the last row seen, in the same
+                    // order the rows are returned in.
+                    or {
+                        gt("updated_at", stamp ?: "")
+                        and {
+                            eq("updated_at", stamp ?: "")
+                            gt("id", id)
+                        }
+                    }
+                }
+                order("updated_at", Order.ASCENDING)
+                order("id", Order.ASCENDING)
+                limit(PAGE_SIZE.toLong())
+            }.decodeList<T>()
+            rows += page
+            if (page.size < PAGE_SIZE) return rows
+            after = cursorOf(page.last())
+        }
+    }
 
     override suspend fun joinListByCode(code: String): String? = try {
         client.postgrest.rpc(
@@ -94,5 +149,12 @@ class SupabaseSharedListRemote(private val client: SupabaseClient) : SharedListR
         } finally {
             withContext(NonCancellable) { client.realtime.removeChannel(channel) }
         }
+    }
+
+    private companion object {
+        // Rows per request. Equal to Supabase's default PostgREST max_rows so
+        // a full page is exactly one request; it must never be set above the
+        // project's max_rows (see fetchAll).
+        const val PAGE_SIZE = 1000
     }
 }

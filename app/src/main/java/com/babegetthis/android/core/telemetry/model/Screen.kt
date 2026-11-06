@@ -17,6 +17,7 @@ enum class Screen(val screenName: String) {
     Register("register"),
     ForgotPassword("forgot_password"),
     Settings("settings"),
+    Welcome("welcome"),
 
     // A route the enum does not know. Reported rather than dropped: a spike
     // here means someone added a screen and forgot this file, which is worth
@@ -35,6 +36,7 @@ enum class Screen(val screenName: String) {
             route.startsWith("register") -> Register
             route.startsWith("login") -> Login
             route.startsWith("settings") -> Settings
+            route.startsWith("welcome") -> Welcome
             else -> Unknown
         }
     }

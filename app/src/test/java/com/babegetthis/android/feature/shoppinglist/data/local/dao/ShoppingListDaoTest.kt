@@ -25,14 +25,28 @@ class ShoppingListDaoTest {
     private val listDao get() = dbRule.listDao
     private val itemDao get() = dbRule.itemDao
 
+    // One query for both owners (docs/technical-decisions/008): null is the
+    // guest's lists, an id the account's. An ownerless shared replica is
+    // neither.
     @Test
-    fun `getAllListsWithItemCount counts items and completions`() = runTest {
+    fun `getListsWithItemCount shows one owner's lists`() = runTest {
+        listDao.insertList(TestData.listEntity(id = "guest"))
+        listDao.insertList(TestData.listEntity(id = "mine").copy(accountId = "u1"))
+        listDao.insertList(TestData.listEntity(id = "theirs").copy(accountId = "u2"))
+        listDao.insertList(TestData.listEntity(id = "orphan").copy(shareCode = "ABC234"))
+
+        assertEquals(listOf("guest"), listDao.getListsWithItemCount(null).first().map { it.id })
+        assertEquals(listOf("mine"), listDao.getListsWithItemCount("u1").first().map { it.id })
+    }
+
+    @Test
+    fun `getListsWithItemCount counts items and completions`() = runTest {
         listDao.insertList(TestData.listEntity(id = "l1"))
         itemDao.insertItem(TestData.itemEntity(id = "i1", listId = "l1", isPickedUp = true))
         itemDao.insertItem(TestData.itemEntity(id = "i2", listId = "l1", isPickedUp = true))
         itemDao.insertItem(TestData.itemEntity(id = "i3", listId = "l1", isPickedUp = false))
 
-        val row = listDao.getAllListsWithItemCount().first().single()
+        val row = listDao.getListsWithItemCount(null).first().single()
 
         assertEquals(3, row.itemCount)
         assertEquals(2, row.completedItemCount)
@@ -44,7 +58,7 @@ class ShoppingListDaoTest {
     fun `list with no items reports zero counts`() = runTest {
         listDao.insertList(TestData.listEntity(id = "l1"))
 
-        val row = listDao.getAllListsWithItemCount().first().single()
+        val row = listDao.getListsWithItemCount(null).first().single()
 
         assertEquals(0, row.itemCount)
         assertEquals(0, row.completedItemCount)
@@ -55,7 +69,7 @@ class ShoppingListDaoTest {
         listDao.insertList(TestData.listEntity(id = "old", createdAt = TestData.T0))
         listDao.insertList(TestData.listEntity(id = "new", createdAt = TestData.T0 + TestData.DAY))
 
-        val ids = listDao.getAllListsWithItemCount().first().map { it.id }
+        val ids = listDao.getListsWithItemCount(null).first().map { it.id }
 
         assertEquals(listOf("new", "old"), ids)
     }
@@ -68,7 +82,7 @@ class ShoppingListDaoTest {
         itemDao.insertItem(TestData.itemEntity(id = "i2", listId = "l2"))
         itemDao.insertItem(TestData.itemEntity(id = "i3", listId = "l2"))
 
-        val byId = listDao.getAllListsWithItemCount().first().associateBy { it.id }
+        val byId = listDao.getListsWithItemCount(null).first().associateBy { it.id }
 
         assertEquals(1, byId.getValue("l1").itemCount)
         assertEquals(2, byId.getValue("l2").itemCount)
@@ -105,7 +119,7 @@ class ShoppingListDaoTest {
 
         listDao.unlockAll()
 
-        assertTrue(listDao.getAllListsWithItemCount().first().none { it.isLocked })
+        assertTrue(listDao.getListsWithItemCount(null).first().none { it.isLocked })
     }
 
     @Test
@@ -162,7 +176,7 @@ class ShoppingListDaoTest {
         listDao.insertList(TestData.listEntity(id = "l1", name = "First"))
         listDao.insertList(TestData.listEntity(id = "l1", name = "Second"))
 
-        val rows = listDao.getAllListsWithItemCount().first()
+        val rows = listDao.getListsWithItemCount(null).first()
         assertEquals(1, rows.size)
         assertEquals("Second", rows.single().name)
     }

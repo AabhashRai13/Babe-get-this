@@ -10,7 +10,7 @@ import org.junit.rules.ExternalResource
 // Repository tests run against real SQL rather than mocked DAOs, because the
 // behavior worth testing there IS the SQL: the CASCADE on list delete, the
 // atomic check-and-delete in deleteListIfEmpty, the item-count aggregation in
-// getAllListsWithItemCount. A mocked DAO would assert that we call the method we
+// the list-with-counts queries. A mocked DAO would assert that we call the method we
 // wrote, which proves nothing.
 //
 // Foreign keys are enabled explicitly — SQLite has them OFF by default, and the
