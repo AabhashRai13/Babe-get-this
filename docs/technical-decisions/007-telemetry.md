@@ -51,7 +51,8 @@ core/telemetry/
 ├── TelemetryMarkers.kt         once-only event bookkeeping
 ├── model/                      AnalyticsEvent (the catalog), Buckets, Screen
 ├── data/                       Firebase implementations + mapper + policy
-└── di/TelemetryModule.kt       two @Binds + the ErrorReporter binding for SafeCall
+├── di/TelemetryModule.kt       two @Binds — the entire vendor commitment
+└── di/TelemetryWiringModule.kt ErrorReporter for SafeCall + the data-shape throttle
 ```
 
 `com.google.firebase` appears in exactly two files, both under `data/`. Swapping analytics
@@ -107,7 +108,7 @@ reporting belongs — reporting from ViewModels would mean a call site per scree
 still miss any repository whose `Result` is consumed elsewhere.
 
 `SafeCall` is an injectable class whose one dependency is `ErrorReporter`, a small
-interface in `core/error`. `TelemetryModule` binds it to `CrashReporter.recordNonFatal`, so
+interface in `core/error`. `TelemetryWiringModule` binds it to `CrashReporter.recordNonFatal`, so
 the data layer depends on the interface and never on the crash vendor. (It used to be a
 top-level function fed by a `@Volatile` service-locator property, `ErrorReportingHook`,
 assigned from `TelemetryContext.onAppStart()`; that went away when `safeCall` became a
