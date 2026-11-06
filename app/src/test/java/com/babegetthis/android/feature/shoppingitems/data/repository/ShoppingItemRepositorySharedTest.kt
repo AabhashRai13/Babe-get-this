@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.shoppingitems.data.repository
 
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import com.babegetthis.android.testing.unreportedSafeCall
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -23,7 +24,7 @@ class ShoppingItemRepositorySharedTest {
 
     private var kicks = 0
     private val repository by lazy {
-        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao) { kicks++ }
+        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, { kicks++ }, unreportedSafeCall())
     }
 
     private suspend fun seedList(shareCode: String? = "ABC234") = dbRule.listDao.insertList(

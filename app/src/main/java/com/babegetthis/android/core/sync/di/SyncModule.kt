@@ -2,6 +2,7 @@ package com.babegetthis.android.core.sync.di
 
 import android.content.Context
 import com.babegetthis.android.core.auth.data.TokenManager
+import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.SyncTrigger
 import com.babegetthis.android.core.sync.data.local.PrefsSyncPointStore
@@ -42,6 +43,7 @@ object SyncModule {
         syncPoints: SyncPointStore,
         tokenManager: TokenManager,
         crashReporter: CrashReporter,
+        safeCall: SafeCall,
     ): SyncEngine = SyncEngine(
         listDao,
         itemDao,
@@ -49,6 +51,7 @@ object SyncModule {
         syncPoints,
         { tokenManager.getUserId() },
         crashReporter,
+        safeCall,
     )
 
     @Provides
@@ -70,5 +73,6 @@ object SyncModule {
         remote: SharedListRemote,
         engine: SyncEngine,
         tokenManager: TokenManager,
-    ): ShareRepository = ShareRepository(listDao, itemDao, remote, engine, { tokenManager.getUserId() })
+        safeCall: SafeCall,
+    ): ShareRepository = ShareRepository(listDao, itemDao, remote, engine, { tokenManager.getUserId() }, safeCall)
 }

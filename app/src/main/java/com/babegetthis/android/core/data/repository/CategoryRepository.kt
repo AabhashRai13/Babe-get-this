@@ -6,7 +6,7 @@ import com.babegetthis.android.core.data.mapper.toEntity
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.model.Category
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -15,7 +15,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class CategoryRepository @Inject constructor(private val categoryDao: CategoryDao) {
+class CategoryRepository @Inject constructor(private val categoryDao: CategoryDao, private val safeCall: SafeCall) {
     fun getAllCategories(): Flow<List<Category>> = categoryDao.getAllCategories().map { list ->
         list.map { it.toDomain() }
     }

@@ -4,7 +4,7 @@ import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.AppErrorException
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.voice.model.ItemDraft
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
@@ -28,6 +28,7 @@ class ShoppingListRepository @Inject constructor(
     private val shoppingItemDao: ShoppingItemDao,
     private val categoryDao: CategoryDao,
     private val syncKicker: SyncKicker,
+    private val safeCall: SafeCall,
 ) {
     // Flows don't need Result wrapping — Room handles errors internally
     // and the Flow just stops emitting. We wrap write operations only.

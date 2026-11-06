@@ -5,6 +5,7 @@ import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingLis
 import com.babegetthis.android.feature.shoppinglist.model.ShoppingList
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
+import com.babegetthis.android.testing.unreportedSafeCall
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -27,7 +28,7 @@ class ShoppingListRepositorySharedTest {
 
     private var kicks = 0
     private val repository by lazy {
-        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao) { kicks++ }
+        ShoppingListRepository(dbRule.listDao, dbRule.itemDao, dbRule.categoryDao, { kicks++ }, unreportedSafeCall())
     }
 
     private fun sharedList(id: String = "list-1") = ShoppingListEntity(

@@ -2,7 +2,6 @@ package com.babegetthis.android.core.telemetry
 
 import com.babegetthis.android.BuildConfig
 import com.babegetthis.android.core.data.di.ApplicationScope
-import com.babegetthis.android.core.error.ErrorReportingHook
 import com.babegetthis.android.core.network.NetworkMonitor
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.Screen
@@ -45,15 +44,6 @@ class TelemetryContext @Inject constructor(
         consent.applyPersisted()
         crashReporter.setKey(CrashKey.Flavor, BuildConfig.FLAVOR)
         crashReporter.setKey(CrashKey.AuthState, SIGNED_OUT)
-        // Connects safeCall to crash reporting. One assignment, at startup,
-        // covering every repository in the app — see ErrorReportingHook for why
-        // it is a property rather than an injected dependency.
-        //
-        // recordNonFatal applies ErrorReportingPolicy internally, so the
-        // filtering cannot be skipped by anything that reaches this lambda.
-        ErrorReportingHook.report = { throwable, error ->
-            crashReporter.recordNonFatal(throwable, error)
-        }
     }
 
     // Driven by the session collector in BabeGetThisApp, so analytics identity

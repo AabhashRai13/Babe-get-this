@@ -1,7 +1,7 @@
 package com.babegetthis.android.core.sync.data.repository
 
 import com.babegetthis.android.core.error.Result
-import com.babegetthis.android.core.error.safeCall
+import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.sync.data.mapper.isoToMillis
 import com.babegetthis.android.core.sync.data.mapper.toEntity
 import com.babegetthis.android.core.sync.data.mapper.toRow
@@ -28,6 +28,7 @@ class SyncEngine(
     private val syncPoints: SyncPointStore,
     private val currentUserId: () -> String?,
     private val crashReporter: CrashReporter,
+    private val safeCall: SafeCall,
 ) {
 
     // Upsert everything pendingSync. Lists strictly before items: the server's

@@ -9,6 +9,7 @@ import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingLis
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -32,7 +33,9 @@ class SyncEngineTest {
     private val syncPoints = FakeSyncPointStore()
     private var userId: String? = "user-1"
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, { userId }, mockk(relaxed = true))
+        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, {
+            userId
+        }, mockk(relaxed = true), unreportedSafeCall())
     }
 
     private val t10 = "2026-08-01T10:00:00Z"
