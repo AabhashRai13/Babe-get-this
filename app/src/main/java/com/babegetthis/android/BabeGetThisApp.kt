@@ -1,7 +1,8 @@
 package com.babegetthis.android
 
 import android.app.Application
-import com.babegetthis.android.core.auth.data.AuthStateManager
+import com.babegetthis.android.core.auth.data.SessionObserver
+import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.core.featureflags.data.FeatureFlagRepository
 import com.babegetthis.android.core.sync.SyncTrigger
@@ -9,10 +10,7 @@ import com.babegetthis.android.core.telemetry.TelemetryContext
 import dagger.hilt.android.HiltAndroidApp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -24,7 +22,7 @@ class BabeGetThisApp : Application() {
 
     @Inject lateinit var supabaseClient: SupabaseClient
 
-    @Inject lateinit var authStateManager: AuthStateManager
+    @Inject lateinit var sessionObserver: SessionObserver
 
     @Inject lateinit var featureFlagRepository: FeatureFlagRepository
 
@@ -34,9 +32,11 @@ class BabeGetThisApp : Application() {
 
     @Inject lateinit var telemetryContext: TelemetryContext
 
-    // App-scoped so it lives for the whole process (survives Activity recreation),
-    // unlike collecting in MainActivity.
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // The one process-wide scope (CoroutinesModule), shared with everything
+    // else that outlives a screen — not a second private one that happened to
+    // live equally long.
+    @Inject @ApplicationScope
+    lateinit var applicationScope: CoroutineScope
 
     override fun onCreate() {
         super.onCreate()
@@ -49,41 +49,14 @@ class BabeGetThisApp : Application() {
         syncTrigger.register(this)
         // Fetch once per process start — non-realtime by design, see
         // docs/technical-decisions/003-in-app-update-and-feature-flags.md.
-        appScope.launch {
+        // A Retrofit suspend call, so the network wait happens on OkHttp's
+        // own threads and the cache update is in-memory: Default is fine.
+        applicationScope.launch {
             featureFlagCache.update(featureFlagRepository.fetchFlags())
         }
-        // Supabase auto-refreshes the session in the background and rotates the
-        // access token. Persist each rotated token so AuthInterceptor stops
-        // sending the stale one cached at login (the "session expired" bug).
-        appScope.launch {
-            supabaseClient.auth.sessionStatus.collect { status ->
-                when (status) {
-                    is SessionStatus.Authenticated -> {
-                        authStateManager.refreshToken(status.session.accessToken)
-                        // Telemetry identity rides the same signal as auth
-                        // identity so the two cannot drift apart. The Supabase
-                        // UUID and nothing else — never the email, which this
-                        // session object also carries.
-                        telemetryContext.onUserChanged(status.session.user?.id)
-                    }
-                    // Supabase has definitively lost the session (refresh token
-                    // expired/revoked). Mirror it locally — otherwise TokenManager
-                    // keeps serving a dead token and the user finds out mid-action
-                    // via a 401 ("records audio, then session expired"). Harmless
-                    // for logged-out users: logout() on empty prefs is a no-op.
-                    // Deliberately does NOT evict shared-list replicas: data
-                    // never leaves the device over a technicality. Only the
-                    // explicit sign-out in ProfileViewModel evicts (see
-                    // docs/technical-decisions/004).
-                    is SessionStatus.NotAuthenticated -> {
-                        authStateManager.logout()
-                        telemetryContext.onUserChanged(null)
-                    }
-                    // RefreshFailure (offline/flaky network) is deliberately NOT a
-                    // logout: we're offline-first and Supabase keeps retrying.
-                    else -> Unit // Initializing / RefreshFailure
-                }
-            }
-        }
+        // Token rotation and session loss, mirrored into local auth state and
+        // telemetry identity. See SessionObserver for the transitions and for
+        // why it runs on the IO dispatcher.
+        sessionObserver.observe(supabaseClient.auth.sessionStatus)
     }
 }
