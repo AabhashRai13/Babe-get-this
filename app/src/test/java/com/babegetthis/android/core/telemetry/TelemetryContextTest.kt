@@ -48,6 +48,67 @@ class TelemetryContextTest {
     }
 
     @Test
+    fun `app start applies the persisted consent before anything is recorded`() {
+        // A user who opted out last run must not have this launch collected
+        // while we get around to asking.
+        val consent = mockk<TelemetryConsent>(relaxed = true)
+        val context = TelemetryContext(
+            analytics = mockk(relaxed = true),
+            crashReporter = crashReporter,
+            networkMonitor = networkMonitor,
+            consent = consent,
+            itemDao = itemDao,
+            listDao = listDao,
+            applicationScope = CoroutineScope(UnconfinedTestDispatcher()),
+            dataShapeRefresh = Throttle(windowMillis = 30_000L) { now },
+        )
+
+        context.onAppStart()
+
+        verify { consent.applyPersisted() }
+        verify { crashReporter.setKey(CrashKey.Flavor, any()) }
+        verify { crashReporter.setKey(CrashKey.AuthState, "signed_out") }
+    }
+
+    @Test
+    fun `a signed-in user is identified by id in both analytics and crash reports`() {
+        val analytics = mockk<AnalyticsRepository>(relaxed = true)
+        val context = TelemetryContext(
+            analytics = analytics,
+            crashReporter = crashReporter,
+            networkMonitor = networkMonitor,
+            consent = mockk(relaxed = true),
+            itemDao = itemDao,
+            listDao = listDao,
+            applicationScope = CoroutineScope(UnconfinedTestDispatcher()),
+            dataShapeRefresh = Throttle(windowMillis = 30_000L) { now },
+        )
+
+        context.onUserChanged("user-1")
+
+        verify { analytics.setUser("user-1") }
+        verify { crashReporter.setUser("user-1") }
+        verify { crashReporter.setKey(CrashKey.AuthState, "signed_in") }
+    }
+
+    @Test
+    fun `signing out clears the identity`() {
+        context.onUserChanged(null)
+
+        verify { crashReporter.setUser(null) }
+        verify { crashReporter.setKey(CrashKey.AuthState, "signed_out") }
+    }
+
+    @Test
+    fun `an offline screen change records the network state as offline`() {
+        every { networkMonitor.isOnline() } returns false
+
+        context.onScreen(Screen.ShoppingList)
+
+        verify { crashReporter.setKey(CrashKey.NetworkState, "offline") }
+    }
+
+    @Test
     fun `the first screen change queries the data shape`() {
         context.onScreen(Screen.ShoppingList)
 
