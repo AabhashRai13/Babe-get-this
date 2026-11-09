@@ -1,6 +1,6 @@
 # Got This — design
 
-**Date:** 2026-11-09 · **Status:** draft, second revision after review, awaiting approval · **Branch:** `feat/got-this`
+**Date:** 2026-11-09 · **Status:** draft, third revision after review, awaiting approval · **Branch:** `feat/got-this`
 
 ## Summary
 
@@ -57,10 +57,13 @@ Recorded with the alternative that was rejected, so they are not re-argued.
 | D12 | **Doubt means silence** (as in the reminders spec, D9): an item that does not meet every rule shows nothing, and a notification that cannot be confirmed as the person's only one this week is not sent. | Hedged suggestions for borderline items — wrong reminders train people to ignore all of them. |
 | D13 | **Nothing is counted for Plus in this release. When Plus ships, everyone using the app at that point starts with the Plus trial.** | Count free weeks now on the phone — lost on reinstall and doubled across two phones. Count them on the server — a table and an RPC built for a product that does not exist yet, when a trial for everyone keeps the same promise. |
 | D14 | **A 10% holdout per person for the first 8 weeks after release**: history is recorded, nothing is shown, and telemetry logs what would have been shown. A signed-in person's group comes from their account id; a guest's from a number drawn once on the phone. The holdout ends when the `got_this_holdout` flag is switched off. | No holdout — nothing to compare removal and add rates against. Per install — one person's two phones could land in different groups. A holdout period per person — new users after the measurement window would sit in it for no purpose. |
-| D15 | **Clearing history deletes it.** The person's purchases up to the moment they pressed Clear are deleted on the server and every phone, along with what was learned from them on the phone. A reset time, which only ever moves forward, stops older ticks still waiting on an offline phone from bringing them back. Purchases after the reset are kept. | A tombstone that blanks the name — keeps item ids, categories and times, so it is not what "clear" says. Clearing on one phone only — the next sync brings it back. Deleting everything on each phone when a reset arrives — loses ticks made after it. |
+| D15 | **Clearing history deletes it.** The person's purchases up to the moment they pressed Clear are deleted on the server and every phone, along with what was learned from them on the phone. A reset time, which only ever moves forward, stops older ticks still waiting on an offline phone from bringing them back. Purchases after the reset are kept. Tick events not yet sent are **not** cleared: they still owe other people on the list their purchases, and the reset stops them creating the person's own. | A tombstone that blanks the name — keeps item ids, categories and times, so it is not what "clear" says. Clearing on one phone only — the next sync brings it back. Deleting everything on each phone when a reset arrives — loses ticks made after it. Dropping unsent tick events with the history — the partner would never get the milk this person bought. |
 | D16 | **"At most one notification a week" is per person.** A signed-in phone claims the week on the server before posting; whichever phone claims first posts. Guests count on the phone. | Per phone — two phones on one account would both post. |
 | D17 | **The database triggers and RPCs have executable tests** (pgTAP, run in CI against a local Supabase). | Manual checks written as SQL comments, as in earlier migrations — the history rules live in those functions, and a regression there produces plausible wrong answers that no UI test notices. |
 | D18 | **List members are trusted with each other's tick events**, as they already are with the list (every member is a full editor, `001_realtime_list_sharing.sql`). The server checks what it can: the caller is a member of the item's list, the item is on that list, the event is no more than 30 days old, and an undo is within 2 hours of the tick by the event's own times. | Proof of when an untick happened — the server only has the phone's clock either way. A member who fabricates times can at most undo a tick from the last 30 days, which is less than they can already do by deleting items. |
+| D19 | **Ticks on a list that never reached the server become the person's own purchases.** When the push drops such a list (`deleteNeverSentDeletedLists`), its unsent tick events are turned into uploads through `upload_own_purchases` first, in the same transaction. Only its creator was ever on it, since sharing needs the server, so nobody else is owed anything. Lists and items that did reach the server are only tombstoned, never purged (`001_realtime_list_sharing.sql`), so their events still validate after deletion. | Uploading the deleted list to validate its events — the push deliberately never sends such lists, because their rows would come back on every discovery. Letting the events expire — the person loses that shop. |
+| D20 | **Unsent tick events count as unsynced changes.** The sign-out warning (`hasUnsyncedChanges`) counts them, so signing out offline with unsent ticks is the same warned choice as with unsent edits (008). | Keeping them across sign-out — they belong to the account, and the next person on the phone must not send them. |
+| D21 | **Privileged database functions are not callable by clients.** Internal helpers live in a `got_this_private` schema that PostgREST does not expose, with `EXECUTE` revoked from `public`, `anon` and `authenticated`. Every `security definer` function sets `search_path` to an empty value and names objects with their schema. RPCs grant `EXECUTE` to `authenticated` only, as `join_list_by_code` does. | Relying on the RPC being the only caller — Postgres grants `EXECUTE` to `public` by default, so a helper in `public` would be callable directly and skip every check in `record_ticks`. |
 
 ## History invariants
 
@@ -73,7 +76,7 @@ tests (D17) and the repository tests check them directly.
 | I2 | A tick produces at most one purchase per person: `purchase_id = id(person, tick_id)`. |
 | I3 | The people credited with a tick are the list's creator and the members whose `joined_at` is at or before the tick time. Nothing else changes who is credited. |
 | I4 | A tick that is undone has no live purchases, whichever of its tick and undo reaches the server first. An undo affects that tick's purchases and nothing else. |
-| I5 | Every tick made on a current app version reaches the server as its own event, carrying the name and category the item had when it was ticked. |
+| I5 | Every tick made on a current app version reaches the server as its own event, carrying the name and category the item had when it was ticked, provided the phone reconnects within 30 days of the tick and the person does not choose to sign out with it unsent (D20). A tick on a list that never reached the server reaches it as that person's own purchase instead (D19). Clearing history never discards an unsent event. |
 | I6 | After a person's reset time, they have no purchase with a tick time at or before it, on the server or any phone. Purchases with a later tick time are kept. |
 | I7 | A person's reset time only moves forward. |
 
@@ -290,15 +293,22 @@ layout.
 | `domain/ShopDay` | Purchase days → usual shopping weekday or none | `GotThisRules` |
 | `data/local/PurchaseDao`, entities | Room access, including the tick and untick transactions | Room |
 | `data/GotThisRepository` | Hints for a list's items, due items for an owner, clearing history | DAO, judge |
-| `data/GotThisSync` | Tick outbox push, guest-purchase upload, pending clear, purchases pull, reset handling | remote, DAO |
+| `data/GotThisSync` | Tick outbox push, own-purchase upload, pending clear, never-sent list conversion (D19), purchases pull, reset handling | remote, DAO |
 | `data/GotThisBackfill` | One-time guest backfill and key recompute | DAO, prefs |
 | `data/GotThisAccess` | Whether hints and running-low may show: kill switch, holdout, the Settings switches. The seam Plus will extend. | flags, prefs |
 | `reminder/RunningLowWorker`, `RunningLowScheduler` | Daily 18:00 check and the weekly notification | WorkManager, repository, remote |
 | `ui/BoughtHintLine`, `ui/UsualsRow` | The two pieces of UI | view models |
 
 `ItemProfile` is computed on demand. With at most a few thousand purchases
-per person, the list screen reads the purchases for the keys on that list in
-one query; the daily worker reads all of the owner's.
+per person, this stays in memory and in one or two queries:
+
+- **List screen:** read the owner's distinct item keys (one query on the
+  `accountId, itemKey` index, observed as a Flow so a pull refreshes it).
+  Match each unticked item's key against that set in memory with
+  `ItemKey.matches`, which is where one-typo matches like "bannana" are
+  found. Then read the purchases for the matched keys in one query.
+- **Daily worker:** read all of the owner's live purchases and group them by
+  key.
 
 ### Repository hooks
 
@@ -362,7 +372,7 @@ New table `purchases`:
 | `categoryId` | TEXT, null | the item's category at tick time |
 | `boughtAt` | INTEGER | the tick time, epoch millis |
 | `deletedAt` | INTEGER, null | tombstone from an undo |
-| `pendingUpload` | INTEGER | a guest-era purchase to upload after sign-in |
+| `pendingUpload` | INTEGER | to send with `upload_own_purchases`: a guest-era purchase after sign-in, or a tick on a list that never reached the server (D19) |
 
 New table `tick_outbox`, the events not yet accepted by the server:
 
@@ -431,8 +441,9 @@ at a time), and the two Settings switches.
 
    An update can only take a row from live to undone (step 8), so purchases
    are only ever created by the first copy of a live event.
-8. **`ticks` rows are written only through `record_tick_rows`** (an internal
-   function used by the RPC, the legacy path and the backfill): `insert ... on
+8. **`ticks` rows are written only through `got_this_private.record_tick_rows`**
+   (an internal function used by the RPC, the legacy path and the backfill,
+   not callable by clients, D21): `insert ... on
    conflict (id) do update set undone_at = coalesce(ticks.undone_at,
    excluded.undone_at)`. The name, category and tick time are write-once; the
    first copy to arrive keeps them. Once undone, a tick stays undone, so an
@@ -441,7 +452,12 @@ at a time), and the two Settings switches.
 
 **RPCs**
 
-9. **`record_ticks(p_events jsonb)`**: for each event, accept it only when
+9. **`record_ticks(p_events jsonb)`**: at most 500 events per call, or the
+   whole call is rejected (the phone sends in batches of 500). For each
+   event, accept it only when
+   - its `id` equals the tick id recomputed from `item_id` and `ticked_at`
+     (I1), so a caller cannot choose ids;
+   - `name` is 1 to 500 characters and `category_id` at most 100;
    - the caller is in `list_members` for `list_id` (creators always are:
      `add_creator_membership` adds them when the list is created);
    - an item with `item_id` exists on that list (items are pushed before
@@ -452,14 +468,17 @@ at a time), and the two Settings switches.
      hours` (D9, D18); an undo outside that is ignored and the tick kept.
 
    Accepted events go through `record_tick_rows` with `source = 'app'`. The
-   reply lists the accepted tick ids and, separately, those to retry. The
-   same call deletes `ticks` rows older than 60 days, which no event can
-   reach any more (the 30-day limit).
-10. **`upload_guest_purchases(p_rows jsonb)`**: for the caller only, insert
-    each guest-era purchase with the account-form id, skipping rows at or
-    before the caller's `reset_at`, `on conflict (id) do nothing`. Guest
-    history never goes through `ticks`: those ticks were made before the
-    lists were on the server.
+   reply lists the accepted tick ids, those to retry, and those rejected for
+   good (which the phone drops).
+10. **`upload_own_purchases(p_rows jsonb)`**: for the caller only, insert
+    each purchase with the account-form id, which the server recomputes from
+    the caller and the row's tick id, skipping rows at or before the caller's
+    `reset_at`, `on conflict (id) do nothing`. At most 500 rows per call, with
+    the same name and category limits as step 9. It carries the two kinds of
+    history that cannot go through `ticks`: guest-era purchases, made before
+    their lists were on the server, and ticks on lists that never reached it
+    (D19). It credits only the caller, which is right for both: nobody else
+    was on those lists.
 11. **`clear_purchase_history(p_cleared_at timestamptz)`**: with `t =
     least(p_cleared_at, now())`, delete the caller's purchases with
     `bought_at <= t`, then set their `reset_at = greatest(existing reset_at,
@@ -468,7 +487,21 @@ at a time), and the two Settings switches.
     arrive in reverse order, moves the reset back.
 12. **`claim_running_low_week(p_week text) returns boolean`**: insert the
     caller's row for that week, `on conflict do nothing`; true only when this
-    call inserted it.
+    call inserted it. `p_week` must match `YYYY-Www`.
+
+**Permissions and cleanup**
+
+- Every RPC above is `security definer` with `set search_path = ''`, checks
+  `auth.uid()` is not null, and is granted to `authenticated` only (revoked
+  from `public` and `anon`). Trigger functions follow the same `search_path`
+  rule.
+- `got_this_private` holds `record_tick_rows` and the id helpers. It is not in
+  PostgREST's exposed schemas, `usage` on it is revoked from `public`, `anon`
+  and `authenticated`, and so is `execute` on its functions.
+- A daily `pg_cron` job (`got_this_purge_ticks`, 03:00 UTC) deletes `ticks`
+  rows older than 60 days, whether or not anyone is active. No event can
+  reach them by then (the 30-day limit), and the privacy policy promises 60
+  days. It also deletes `running_low_notices` rows older than 8 weeks.
 
 **Old app versions**
 
@@ -506,13 +539,23 @@ the tick time.
 
 ### Push
 
-In this order, after the existing item push in `SyncEngine.pushLocked`:
+Before `deleteNeverSentDeletedLists` in `SyncEngine.pushLocked`, in the same
+transaction as that deletion: the outbox events of the lists about to be
+dropped are deleted, and their live local purchases are marked
+`pendingUpload` (D19). Undone ones are already tombstoned and stay local.
+
+Then, after the existing item push, in this order:
 
 1. A pending clear goes to `clear_purchase_history` with its stored time.
-2. Every `tick_outbox` row goes to `record_ticks` in one call. Accepted rows
-   are deleted only if their `revision` is unchanged since they were read, so
-   an undo made during the call is sent next time. Rows to retry stay.
-3. Guest-era purchases with `pendingUpload` go to `upload_guest_purchases`.
+2. `tick_outbox` rows go to `record_ticks` in batches of 500. Accepted and
+   rejected rows are deleted only if their `revision` is unchanged since they
+   were read, so an undo made during the call is sent next time. Rows to
+   retry stay.
+3. Purchases with `pendingUpload` (guest-era, and D19) go to
+   `upload_own_purchases` in batches of 500.
+
+`hasUnsyncedChanges` also counts outbox rows, `pendingUpload` purchases and a
+pending clear for the account (D20).
 
 Item rows carry `picked_up_at` as before. An untick sends the same
 `picked_up_at`, which changes nothing on the server.
@@ -523,8 +566,9 @@ Item rows carry `picked_up_at` as before. An untick sends the same
 
 1. Read the caller's `purchase_history_resets` row. If it is newer than the
    reset time this phone last applied for the account: delete the account's
-   purchases with `boughtAt <= reset_at`, and outbox events with `tickedAt <=
-   reset_at` (the server would skip them anyway); clear the mutes, hint
+   purchases with `boughtAt <= reset_at`, but **not** outbox events, which
+   other people on the list are still owed (the server skips this person for
+   them, I6); clear the mutes, hint
    impressions and pending follow-up, since they were learned from the
    deleted history; clear the purchases sync point; store the new reset time.
    Purchases with a later tick time stay (I6).
@@ -543,7 +587,9 @@ Item rows carry `picked_up_at` as before. An untick sends the same
 - **Explicit sign-out** (`evictAccountLists`): the account's purchases, outbox
   events, mutes and impressions leave the phone with the lists, after the
   final push the eviction already attempts; the purchases sync point is
-  cleared, so signing back in pulls the history again.
+  cleared, so signing back in pulls the history again. Unsent events are part
+  of the existing unsynced-changes warning (D20); a person who signs out
+  offline anyway loses them, as with unsent edits.
 - **Session lost** (008 D6): history stays and keeps working; the outbox
   waits.
 
@@ -557,11 +603,12 @@ and arrive with the next pull.
 
 ### Clearing history
 
-- **Signed in:** the phone deletes the account's purchases and outbox events
-  up to now, plus the mutes, impressions and follow-up, stores the clear time
-  as pending and sends it on the next push. Other phones apply the reset on
-  their next pull. Ticks from before the clear that are still waiting on an
-  offline phone create nothing when they arrive (I6).
+- **Signed in:** the phone deletes the account's purchases up to now, plus
+  the mutes, impressions and follow-up, stores the clear time as pending and
+  sends it on the next push, before any tick events (push step 1). Unsent tick
+  events stay in the outbox: when they arrive they still create purchases for
+  the other people on the list, and none for this person (I6). Other phones
+  apply the reset on their next pull.
 - **Guest:** the same local deletion; nothing to send.
 
 ## Measuring whether it works
@@ -638,7 +685,12 @@ history will never be gated.
   deletion, that it is shared with the people on the list it was ticked on at
   that time, that "Clear purchase history" deletes it, that account deletion
   deletes it, and that it is never sold or used for advertising. Tick events
-  themselves are list data, kept at most 60 days.
+  themselves are list data, deleted by a daily job once they are 60 days
+  old.
+- **`pg_cron`:** the migration enables the extension if it is not already on
+  (`create extension if not exists pg_cron`) on staging and production, and
+  schedules the purge job. The local stack used by the database tests has it
+  too.
 - **Play Data safety form:** declare purchase history (Financial info →
   Purchase history, the closest category; confirm at submission), collected,
   not shared, for app functionality, deletable. Both change **before**
@@ -681,8 +733,14 @@ history will never be gated.
   outbox until the clock is fixed or they age past 30 days.
 - **An outbox event older than 30 days:** rejected by the server; the phone
   drops it, and its purchase stays on that phone only.
-- **Item deleted after the tick:** the purchase stays (no foreign key). The
-  item is still on the server when its tick is sent, as a tombstone.
+- **Item or list deleted after the tick:** the purchase stays (no foreign
+  key). If the item or list reached the server, it is still there as a
+  tombstone when its tick is sent, so the event validates. If the list never
+  reached the server, its ticks go up as the person's own purchases (D19).
+- **Clear history with ticks still unsent:** the ticks still reach the other
+  people on the list; this person gets nothing from them (D15, I6).
+- **Sign out offline with ticks unsent:** the existing warning lists them as
+  unsynced changes (D20).
 - **A partner on an old app version:** their ticks count through step 13;
   their unticks never undo, so an accidental tick by them stands.
 - **Weekly claim fails (offline, server error):** no notification that day
@@ -720,10 +778,17 @@ exercised, not bypassed.
 | An old-app push that edits or unticks | nothing changes in history |
 | A new-app push with `picked_up_at` null or older | `picked_up_at` unchanged |
 | A new-app tick (newer `picked_up_at`) plus its event | exactly one tick, source `app` |
-| A guest item with a backfilled tick, then claim and `upload_guest_purchases` | exactly one purchase; no legacy tick |
+| A guest item with a backfilled tick, then claim and `upload_own_purchases` | exactly one purchase; no legacy tick |
 | Clear history, then an event from before the reset | no purchase (I6); an event after it creates one |
 | A clear sent late with an earlier `p_cleared_at` | purchases ticked after that time survive |
 | Two clears arriving in reverse order | `reset_at` is the later one (I7) |
+| A clears history, then A's event from before the clear arrives on a list shared with B | B gets the purchase; A does not |
+| An event whose `id` is not the recomputed tick id | rejected |
+| 501 events in one call, or a 501-character name | rejected |
+| `upload_own_purchases` with a row for another user's id | only the caller's purchase is created, under the recomputed id |
+| An authenticated client calls `got_this_private.record_tick_rows` directly | permission denied |
+| `anon` calls any Got This RPC | permission denied |
+| The purge job | removes `ticks` older than 60 days and keeps newer ones |
 | B cannot select A's purchases, resets or notices, or any ticks | zero rows |
 | `claim_running_low_week` twice for one week | true, then false |
 | Backfill | one backfill tick per ticked item, `updated_at` unchanged, purchases only for people on the list then |
@@ -763,9 +828,18 @@ exercised, not bypassed.
   on the next push.
 - Guest backfill then claim produces one pending upload per purchase with
   account-form ids, and items carry the same tick times.
-- Reset handling: a newer reset deletes purchases and outbox events at or
-  before it and keeps later ones, and clears mutes, impressions and the
+- Reset handling: a newer reset deletes purchases at or before it and keeps
+  later ones, keeps every outbox event, and clears mutes, impressions and the
   follow-up; an older or equal reset does nothing.
+- Clear with ticks unsent: local purchases go, outbox events stay, and the
+  next push sends the clear before the events.
+- A list created, ticked and deleted offline: the push turns its ticks into
+  `pendingUpload` purchases in the same transaction that drops the list, and
+  sends them with `upload_own_purchases`.
+- `hasUnsyncedChanges` is true with only an outbox event, a pending upload or
+  a pending clear.
+- List screen lookup: an unticked "bannana" finds purchases stored under
+  "banana".
 - Key version change recomputes keys and clears mutes, impressions and the
   follow-up.
 - `RunningLowWorker`: posts at most once per ISO week, only after the claim
