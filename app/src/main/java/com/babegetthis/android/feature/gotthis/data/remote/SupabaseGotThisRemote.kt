@@ -7,9 +7,7 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
 
 class SupabaseGotThisRemote(private val client: SupabaseClient) : GotThisRemote {
@@ -17,7 +15,7 @@ class SupabaseGotThisRemote(private val client: SupabaseClient) : GotThisRemote 
     override suspend fun recordTicks(events: List<TickEventRow>): TickReply = client.postgrest.rpc(
         function = "record_ticks",
         parameters = buildJsonObject {
-            put("p_events", Json.encodeToJsonElement(events))
+            put("p_events", encodeTickEvents(events))
         },
     ).decodeAs<TickReplyDto>().let { TickReply(it.accepted, it.retry, it.rejected) }
 
@@ -25,7 +23,7 @@ class SupabaseGotThisRemote(private val client: SupabaseClient) : GotThisRemote 
         client.postgrest.rpc(
             function = "upload_own_purchases",
             parameters = buildJsonObject {
-                put("p_rows", Json.encodeToJsonElement(rows))
+                put("p_rows", encodeOwnPurchases(rows))
             },
         )
     }
