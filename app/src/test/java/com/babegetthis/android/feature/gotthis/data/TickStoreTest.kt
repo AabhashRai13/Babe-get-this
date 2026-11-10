@@ -4,10 +4,14 @@ import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import com.babegetthis.android.feature.gotthis.domain.ItemKey
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
+import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
+import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.coEvery
 import io.mockk.spyk
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -245,6 +249,30 @@ class TickStoreTest {
         assertEquals(second, item().pickedUpAt)
         assertEquals(1, dbRule.purchaseDao.byTickId(tickId(first)).size)
         assertEquals(1, dbRule.purchaseDao.byTickId(tickId(second)).size)
+    }
+
+    @Test
+    fun `an untick within two hours of a tick still undoes after the item was edited`() = runTest {
+        seed()
+        val items = ShoppingItemRepository(
+            dbRule.itemDao,
+            dbRule.categoryDao,
+            dbRule.listDao,
+            {},
+            FakeReminderKicker(),
+            unreportedSafeCall(),
+            store,
+        )
+        val tickedAt = now
+        store.tick("i1")
+        val edited = items.getItemsByListId("list-1").first().single().copy(quantity = "2")
+        items.updateItem(edited)
+        now += hour
+
+        val result = store.untick("i1")!!
+
+        assertTrue(result.undone)
+        assertEquals(now, dbRule.purchaseDao.byTickId(tickId(tickedAt)).single().deletedAt)
     }
 
     @Test

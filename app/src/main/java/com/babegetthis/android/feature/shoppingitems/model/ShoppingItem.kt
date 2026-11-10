@@ -12,4 +12,7 @@ data class ShoppingItem(
     val shop: String? = null,
     val createdAt: Long,
     val updatedAt: Long,
+    // The current or most recent tick time; every full-row write carries it
+    // back, or an edit would make a ticked item look never ticked.
+    val pickedUpAt: Long? = null,
 )

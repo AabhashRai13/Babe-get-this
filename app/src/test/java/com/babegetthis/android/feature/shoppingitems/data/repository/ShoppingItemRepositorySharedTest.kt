@@ -180,6 +180,39 @@ class ShoppingItemRepositorySharedTest {
         assertEquals(1, kicks)
     }
 
+    // A full-row write must carry the tick time, or the item looks never ticked.
+    @Test
+    fun `editing a ticked item keeps its tick time`() = runTest {
+        seedList()
+        val id = (repository.addItem("list-1", name = "Milk", quantity = "1") as Result.Success).data
+        repository.togglePickedUp(id, isPickedUp = true)
+        val tickedAt = dbRule.itemDao.getItemRaw(id)!!.pickedUpAt
+        assertNotNull(tickedAt)
+
+        repository.updateItem(domainItem().copy(quantity = "2"))
+
+        val row = dbRule.itemDao.getItemRaw(id)!!
+        assertEquals("2", row.quantity)
+        assertTrue(row.isPickedUp)
+        assertEquals(tickedAt, row.pickedUpAt)
+    }
+
+    @Test
+    fun `undoing the delete of a ticked item keeps its tick time`() = runTest {
+        seedList()
+        val id = (repository.addItem("list-1", name = "Milk", quantity = "1") as Result.Success).data
+        repository.togglePickedUp(id, isPickedUp = true)
+        val tickedAt = dbRule.itemDao.getItemRaw(id)!!.pickedUpAt
+        val item = domainItem()
+        repository.deleteItem(id)
+
+        repository.restoreItem(item)
+
+        val row = dbRule.itemDao.getItemRaw(id)!!
+        assertNull(row.deletedAt)
+        assertEquals(tickedAt, row.pickedUpAt)
+    }
+
     @Test
     fun `togglePickedUp on an account list returns the tick result and records the purchase`() = runTest {
         seedList()
