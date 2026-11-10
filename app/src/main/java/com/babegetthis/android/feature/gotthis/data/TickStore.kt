@@ -37,12 +37,14 @@ class TickStore(
         val item = itemDao.getItemRaw(itemId) ?: return@withTransaction null
         val ownerId = listDao.getListRaw(item.listId)?.accountId
         val synced = ownerId != null
+        val itemKey = ItemKey.of(item.name.take(GotThisRules.MAX_NAME_CHARS))
+        // A repeated tap before the UI catches up must not make a second tick.
+        if (item.isPickedUp) return@withTransaction TickResult(item.listId, synced, ownerId, itemKey, undone = false)
         val now = clock.now()
         itemDao.setPickedUp(itemId, isPickedUp = true, pickedUpAt = now, updatedAt = now, pendingSync = synced)
 
         val name = item.name.take(GotThisRules.MAX_NAME_CHARS)
         val tickId = GotThisIds.tickId(itemId, now)
-        val itemKey = ItemKey.of(name)
         val purchaseId = if (ownerId !=
             null
         ) {
@@ -81,13 +83,7 @@ class TickStore(
                 ),
             )
         }
-        TickResult(
-            item.listId,
-            synced,
-            ownerId,
-            ItemKey.of(item.name.take(GotThisRules.MAX_NAME_CHARS)),
-            undone = false,
-        )
+        TickResult(item.listId, synced, ownerId, itemKey, undone = false)
     }
 
     // Null when the item is gone. Undoes the tick's purchase only inside the
@@ -96,6 +92,9 @@ class TickStore(
         val item = itemDao.getItemRaw(itemId) ?: return@withTransaction null
         val ownerId = listDao.getListRaw(item.listId)?.accountId
         val synced = ownerId != null
+        val itemKey = ItemKey.of(item.name.take(GotThisRules.MAX_NAME_CHARS))
+        // Already unticked: a second untick must not move the tombstone or the revision.
+        if (!item.isPickedUp) return@withTransaction TickResult(item.listId, synced, ownerId, itemKey, undone = false)
         val now = clock.now()
         itemDao.setPickedUp(
             itemId,
@@ -108,7 +107,7 @@ class TickStore(
         val pickedUpAt = item.pickedUpAt
         val undone = pickedUpAt != null && now - pickedUpAt in 0 until GotThisRules.UNDO_WINDOW_MILLIS
         if (undone) undo(item, requireNotNull(pickedUpAt), ownerId, now)
-        TickResult(item.listId, synced, ownerId, ItemKey.of(item.name.take(GotThisRules.MAX_NAME_CHARS)), undone)
+        TickResult(item.listId, synced, ownerId, itemKey, undone)
     }
 
     private suspend fun undo(item: ShoppingItemEntity, pickedUpAt: Long, ownerId: String?, now: Long) {

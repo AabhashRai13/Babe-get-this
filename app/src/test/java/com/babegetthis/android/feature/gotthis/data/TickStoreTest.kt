@@ -314,4 +314,53 @@ class TickStoreTest {
         assertNull(item().pickedUpAt)
         assertTrue(dbRule.purchaseDao.all().isEmpty())
     }
+
+    @Test
+    fun `a second tick writes nothing`() = runTest {
+        seed()
+        val tickedAt = now
+        store.tick("i1")
+        now += hour
+
+        val result = store.tick("i1")
+
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        assertEquals(tickedAt, item().pickedUpAt)
+        assertEquals(1, dbRule.purchaseDao.all().size)
+        assertEquals(1, dbRule.purchaseDao.countOutbox("u1"))
+        assertEquals(0, dbRule.purchaseDao.outboxByTickId(tickId(tickedAt))!!.revision)
+    }
+
+    @Test
+    fun `a second untick writes nothing`() = runTest {
+        seed()
+        val tickedAt = now
+        store.tick("i1")
+        now += hour
+        val undoneAt = now
+        store.untick("i1")
+        now += hour / 2
+
+        val result = store.untick("i1")
+
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        val tid = tickId(tickedAt)
+        assertEquals(undoneAt, dbRule.purchaseDao.byTickId(tid).single().deletedAt)
+        val outbox = dbRule.purchaseDao.outboxByTickId(tid)!!
+        assertEquals(undoneAt, outbox.undoneAt)
+        assertEquals(1, outbox.revision)
+        assertEquals(undoneAt, item().updatedAt)
+    }
+
+    @Test
+    fun `untick of a never ticked item writes nothing`() = runTest {
+        seed()
+
+        val result = store.untick("i1")
+
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        assertEquals(2L, item().updatedAt)
+        assertTrue(dbRule.purchaseDao.all().isEmpty())
+        assertEquals(0, dbRule.purchaseDao.countOutbox("u1"))
+    }
 }

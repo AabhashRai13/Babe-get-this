@@ -62,15 +62,6 @@ interface ShoppingItemDao {
     @Query("DELETE FROM shopping_items WHERE id = :itemId")
     suspend fun deleteItem(itemId: String)
 
-    @Query(
-        """
-        UPDATE shopping_items
-        SET isPickedUp = :isPickedUp, updatedAt = :updatedAt, pendingSync = :pendingSync
-        WHERE id = :itemId
-    """,
-    )
-    suspend fun updatePickedUpStatus(itemId: String, isPickedUp: Boolean, updatedAt: Long, pendingSync: Boolean)
-
     // A tick or untick: also records the tick time (kept on untick, so the
     // caller passes the existing time then).
     @Query(

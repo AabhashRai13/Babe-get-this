@@ -157,11 +157,11 @@ class ShoppingItemDataTest {
     }
 
     @Test
-    fun `updatePickedUpStatus writes the flag and a new timestamp`() = runTest {
+    fun `setPickedUp writes the flag and a new timestamp`() = runTest {
         seedList()
         dbRule.itemDao.insertItem(TestData.itemEntity(id = "i1", isPickedUp = false, updatedAt = 1L))
 
-        dbRule.itemDao.updatePickedUpStatus("i1", isPickedUp = true, updatedAt = 999L, pendingSync = false)
+        dbRule.itemDao.setPickedUp("i1", isPickedUp = true, pickedUpAt = null, updatedAt = 999L, pendingSync = false)
 
         val stored = dbRule.itemDao.getItemsByListIdOnce("list-1").single()
         assertTrue(stored.isPickedUp)

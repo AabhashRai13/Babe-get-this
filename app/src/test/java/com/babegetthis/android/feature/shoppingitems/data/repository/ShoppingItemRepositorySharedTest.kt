@@ -1,6 +1,9 @@
 package com.babegetthis.android.feature.shoppingitems.data.repository
 
+import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.feature.gotthis.data.TickResult
 import com.babegetthis.android.feature.gotthis.data.TickStore
+import com.babegetthis.android.feature.gotthis.domain.ItemKey
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
@@ -25,13 +28,14 @@ class ShoppingItemRepositorySharedTest {
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
     private var kicks = 0
+    private val reminders = FakeReminderKicker()
     private val tickStore by lazy {
         TickStore(dbRule.db, dbRule.itemDao, dbRule.listDao, dbRule.purchaseDao) { System.currentTimeMillis() }
     }
     private val repository by lazy {
         ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {
             kicks++
-        }, FakeReminderKicker(), unreportedSafeCall(), tickStore)
+        }, reminders, unreportedSafeCall(), tickStore)
     }
 
     // Defaults to a shared list of account u1. Sync is decided by the owner
@@ -174,5 +178,27 @@ class ShoppingItemRepositorySharedTest {
         assertNull("alive again", row.deletedAt)
         assertTrue("revival must sync to members", row.pendingSync)
         assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `togglePickedUp on an account list returns the tick result and records the purchase`() = runTest {
+        seedList()
+        val id = (repository.addItem("list-1", name = "Milk", quantity = "1") as Result.Success).data
+        kicks = 0
+
+        val result = (repository.togglePickedUp(id, isPickedUp = true) as Result.Success).data
+
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        assertEquals(1, dbRule.purchaseDao.live("u1").size)
+        assertEquals(1, kicks)
+    }
+
+    @Test
+    fun `togglePickedUp of an unknown item succeeds with null and kicks nothing`() = runTest {
+        val result = repository.togglePickedUp("ghost", isPickedUp = true)
+
+        assertNull((result as Result.Success).data)
+        assertEquals(0, kicks)
+        assertTrue(reminders.pickUps.isEmpty() && reminders.edits.isEmpty())
     }
 }
