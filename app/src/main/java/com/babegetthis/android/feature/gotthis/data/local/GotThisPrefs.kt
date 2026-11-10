@@ -37,6 +37,10 @@ interface GotThisPrefs {
     var holdoutOn: Boolean
 }
 
+/** The later of the last applied reset and a pending clear; null with neither. */
+fun GotThisPrefs.watermark(accountId: String): Long? =
+    listOfNotNull(lastAppliedReset(accountId), pendingClear(accountId)).maxOrNull()
+
 // Plain SharedPreferences, like the reminder record. None of these values guards
 // a race, so writes use apply().
 class SharedPrefsGotThisPrefs(context: Context, private val random: Random = Random.Default) : GotThisPrefs {

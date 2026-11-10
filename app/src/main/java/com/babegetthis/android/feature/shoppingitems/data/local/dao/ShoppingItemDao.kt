@@ -79,6 +79,16 @@ interface ShoppingItemDao {
         pendingSync: Boolean,
     )
 
+    // Ticked items that predate pickedUpAt (the start-up backfill).
+    @Query(
+        "SELECT * FROM shopping_items WHERE listId = :listId AND isPickedUp = 1 AND deletedAt IS NULL AND pickedUpAt IS NULL",
+    )
+    suspend fun tickedWithoutTime(listId: String): List<ShoppingItemEntity>
+
+    // Leaves updatedAt and pendingSync alone: the backfill is not an edit.
+    @Query("UPDATE shopping_items SET pickedUpAt = :pickedUpAt WHERE id = :itemId")
+    suspend fun setPickedUpAt(itemId: String, pickedUpAt: Long)
+
     // Names of one owner's live, unticked items (null is the guest's lists).
     @Query(
         """

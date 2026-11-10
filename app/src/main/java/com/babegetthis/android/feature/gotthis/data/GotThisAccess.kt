@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.gotthis.data
 
 import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
+import com.babegetthis.android.feature.gotthis.data.local.watermark
 import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import com.babegetthis.android.feature.gotthis.domain.GotThisRules
 
@@ -30,8 +31,7 @@ class GotThisAccess(private val flags: FeatureFlagCache, private val prefs: GotT
     fun shadows(accountId: String?): Boolean = !prefs.killed && isHoldout(accountId)
 
     /** The later of the last applied reset and a pending clear; null with neither. */
-    fun watermark(accountId: String): Long? =
-        listOfNotNull(prefs.lastAppliedReset(accountId), prefs.pendingClear(accountId)).maxOrNull()
+    fun watermark(accountId: String): Long? = prefs.watermark(accountId)
 
     companion object {
         const val FLAG_GOT_THIS = "got_this"

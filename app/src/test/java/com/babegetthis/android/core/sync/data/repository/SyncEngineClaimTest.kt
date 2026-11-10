@@ -2,6 +2,7 @@ package com.babegetthis.android.core.sync.data.repository
 
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.FakeListOwnershipStore
@@ -83,6 +84,20 @@ class SyncEngineClaimTest {
         assertTrue("the list has to be uploaded", row.pendingSync)
         assertTrue(dbRule.itemDao.getItemRaw("live")!!.pendingSync)
         assertFalse("a deleted item stays deleted, unsent", dbRule.itemDao.getItemRaw("gone")!!.pendingSync)
+    }
+
+    @Test
+    fun `guest history moves into the account with the lists`() = runTest {
+        seedList("guest")
+        dbRule.purchaseDao.upsert(
+            listOf(PurchaseEntity("g1", "t1", null, "i", "Milk", "milk", null, 1L, null, false)),
+        )
+
+        engine.claimDeviceLists("user-1")
+
+        val purchase = dbRule.purchaseDao.byTickId("t1").single()
+        assertEquals("user-1", purchase.accountId)
+        assertTrue(purchase.pendingUpload)
     }
 
     @Test

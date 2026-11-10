@@ -111,6 +111,7 @@ class SyncEngine(
             // discovery keeps the ones the server returns (catchUpAccount).
             if (firstClaim) ownership.setUnverifiedListIds(listDao.getOwnerlessSharedListIds().toSet())
             val claimed = listDao.claimDeviceLists(userId, includeOwnerlessShared = firstClaim)
+            gotThis.claimGuestHistory(userId)
             finishFirstRun()
             if (claimed > 0) ownership.setAdoptionNotice(ownership.adoptionNotice.value + claimed)
             // Count only. Which lists moved is the user's business.
@@ -238,6 +239,7 @@ class SyncEngine(
             // known list only gets items newer than the account sync point. If
             // the pull fails, the row stays out and the next pass tries again.
             fresh.forEach { apply(userId, listOf(it), remote.fetchItems(it.id, sinceIso = null)) }
+            gotThis.pull(userId)
             // Counts only, like every other sync breadcrumb.
             crashReporter.breadcrumb("sync: account catch-up over ${known.size} lists, ${discovered.size} discovered")
         }
@@ -258,6 +260,7 @@ class SyncEngine(
             safeCall { pushLocked() }
             // Hard local delete, not tombstones: this is eviction, not a deletion
             // to sync. CASCADE clears the items.
+            gotThis.evict()
             listDao.deleteAccountLists()
             syncPoints.clear()
             crashReporter.breadcrumb("sync: evicted account lists")

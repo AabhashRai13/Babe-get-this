@@ -6,6 +6,7 @@ import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
 import com.babegetthis.android.feature.gotthis.data.GotThisAccess
+import com.babegetthis.android.feature.gotthis.data.GotThisBackfill
 import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
@@ -56,4 +57,9 @@ object GotThisModule {
         syncPoints: SyncPointStore,
         clock: ReminderClock,
     ): GotThisSync = GotThisSync(db, remote, prefs, syncPoints, clock)
+
+    @Provides
+    @Singleton
+    fun provideGotThisBackfill(db: AppDatabase, prefs: GotThisPrefs, clock: ReminderClock): GotThisBackfill =
+        GotThisBackfill(db, prefs, clock)
 }

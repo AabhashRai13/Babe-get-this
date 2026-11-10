@@ -168,6 +168,9 @@ interface ShoppingListDao {
     suspend fun getListRaw(listId: String): ShoppingListEntity?
 
     // The account's live lists — what account-wide catch-up already knows.
+    @Query("SELECT id FROM shopping_lists WHERE accountId IS NULL AND deletedAt IS NULL")
+    suspend fun getGuestListIds(): List<String>
+
     @Query("SELECT id FROM shopping_lists WHERE accountId = :accountId AND deletedAt IS NULL")
     suspend fun getAccountListIds(accountId: String): List<String>
 

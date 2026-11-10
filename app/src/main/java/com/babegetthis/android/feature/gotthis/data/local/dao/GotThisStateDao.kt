@@ -51,6 +51,40 @@ interface GotThisStateDao {
     @Query("DELETE FROM reminder_followups WHERE accountId = :accountId")
     suspend fun deleteFollowUps(accountId: String)
 
+    // Sign-out: every account's state, the guest's ("") stays.
+    @Query("DELETE FROM item_mutes WHERE accountId != ''")
+    suspend fun deleteAccountMutes()
+
+    @Query("DELETE FROM hint_impressions WHERE accountId != ''")
+    suspend fun deleteAccountImpressions()
+
+    @Query("DELETE FROM reminder_followups WHERE accountId != ''")
+    suspend fun deleteAccountFollowUps()
+
+    @Transaction
+    suspend fun clearAccountState() {
+        deleteAccountMutes()
+        deleteAccountImpressions()
+        deleteAccountFollowUps()
+    }
+
+    // Key recompute: the state was learned from keys that no longer mean the same.
+    @Query("DELETE FROM item_mutes")
+    suspend fun deleteAllMutes()
+
+    @Query("DELETE FROM hint_impressions")
+    suspend fun deleteAllImpressions()
+
+    @Query("DELETE FROM reminder_followups")
+    suspend fun deleteAllFollowUps()
+
+    @Transaction
+    suspend fun clearAllState() {
+        deleteAllMutes()
+        deleteAllImpressions()
+        deleteAllFollowUps()
+    }
+
     @Transaction
     suspend fun clearState(accountId: String) {
         deleteMutes(accountId)

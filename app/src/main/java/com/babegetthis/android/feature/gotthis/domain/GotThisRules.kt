@@ -23,6 +23,7 @@ object GotThisRules {
     const val MAX_NOTIFICATION_NAMES = 3
     const val NOT_NOW_MILLIS = 24L * 60 * 60 * 1000
     const val IMPRESSION_PRUNE_DAYS = 30
+    const val IMPRESSION_PRUNE_MILLIS = IMPRESSION_PRUNE_DAYS * 24L * 60 * 60 * 1000
     const val FOLLOW_UP_DAYS = 7
     const val UNKNOWN_WINDOW_DAYS = 7
     const val HOLDOUT_PERCENT = 10

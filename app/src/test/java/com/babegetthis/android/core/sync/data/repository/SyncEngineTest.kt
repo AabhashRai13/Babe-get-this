@@ -6,6 +6,7 @@ import com.babegetthis.android.core.sync.data.mapper.isoToMillis
 import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
 import com.babegetthis.android.feature.gotthis.data.TickStore
+import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.FakeGotThisRemote
@@ -509,6 +510,23 @@ class SyncEngineTest {
         engine.evictAccountLists()
 
         assertNull(dbRule.listDao.getListRaw("shared-1"))
+    }
+
+    @Test
+    fun `eviction removes the account's purchase history before the sign-out`() = runTest {
+        dbRule.listDao.insertList(listEntity(id = "shared-1"))
+        dbRule.purchaseDao.upsert(
+            listOf(
+                PurchaseEntity("p1", "t1", "user-1", "i", "Milk", "milk", null, 1L, null, false),
+                PurchaseEntity("p2", "t2", null, "i", "Milk", "milk", null, 1L, null, false),
+            ),
+        )
+        var leftAtSignOut = -1
+
+        engine.evictAccountLists { leftAtSignOut = dbRule.purchaseDao.live("user-1").size }
+
+        assertEquals(0, leftAtSignOut)
+        assertEquals(1, dbRule.purchaseDao.guestPurchases().size)
     }
 
     @Test

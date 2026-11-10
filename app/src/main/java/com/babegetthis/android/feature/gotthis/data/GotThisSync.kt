@@ -7,11 +7,16 @@ import com.babegetthis.android.core.sync.data.mapper.isoToMillis
 import com.babegetthis.android.core.sync.data.mapper.millisToIso
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
+import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.TickOutboxEntity
+import com.babegetthis.android.feature.gotthis.data.local.watermark
 import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
 import com.babegetthis.android.feature.gotthis.data.remote.OwnPurchaseRow
+import com.babegetthis.android.feature.gotthis.data.remote.PurchaseRow
 import com.babegetthis.android.feature.gotthis.data.remote.TickEventRow
+import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import com.babegetthis.android.feature.gotthis.domain.GotThisRules
+import com.babegetthis.android.feature.gotthis.domain.ItemKey
 import kotlinx.coroutines.CancellationException
 
 // The sync half of purchase history. Called by SyncEngine, which holds the sync
@@ -25,6 +30,7 @@ class GotThisSync(
 ) {
 
     private val purchaseDao = db.purchaseDao()
+    private val stateDao = db.gotThisStateDao()
     private val listDao = db.shoppingListDao()
 
     // A list deleted before it reached the server is about to be dropped, so
@@ -55,6 +61,86 @@ class GotThisSync(
 
     // Stays pending until the server answers; a failure must not hold back the
     // tick events behind it.
+    // Brings purchases down behind the account's watermark (I6): nothing at or
+    // before the last applied reset or the pending clear is ever written, even
+    // when the server has not heard of the clear yet.
+    suspend fun pull(userId: String) {
+        applyServerReset(userId)
+        val watermark = prefs.watermark(userId)
+        val fetched = remote.fetchPurchases(syncPoints.get(POINT))
+        if (fetched.isEmpty()) return
+        val kept = fetched.filter { watermark == null || it.boughtAt.isoToMillis() > watermark }
+        db.withTransaction {
+            // A live server row must not undo an undo this phone has yet to send.
+            val undoPending = kept.filter { it.deletedAt == null }
+                .map { it.tickId }
+                .chunked(GotThisRules.SQL_IN_CHUNK)
+                .flatMap { purchaseDao.undoneOutboxTickIds(it) }
+                .toSet()
+            purchaseDao.upsert(
+                kept.filter { it.deletedAt != null || it.tickId !in undoPending }.map { it.toEntity(userId) },
+            )
+        }
+        syncPoints.set(POINT, fetched.maxOf { it.updatedAt })
+    }
+
+    private suspend fun applyServerReset(userId: String) {
+        val reset = remote.fetchResetAt()?.isoToMillis() ?: return
+        val applied = prefs.lastAppliedReset(userId)
+        if (applied != null && reset <= applied) return
+        db.withTransaction {
+            purchaseDao.deleteUpTo(userId, reset)
+            stateDao.clearState(userId)
+        }
+        // Before the new reset is stored, so a crash in between redoes this
+        // rather than leaving a point that skips rows.
+        syncPoints.remove(POINT)
+        prefs.setLastAppliedReset(userId, reset)
+    }
+
+    // Sign-in from guest: the guest's history becomes the account's. Live rows
+    // are sent up; the server has none of it.
+    suspend fun claimGuestHistory(userId: String) {
+        db.withTransaction {
+            val guest = purchaseDao.guestPurchases()
+            purchaseDao.deleteGuestPurchases()
+            purchaseDao.upsert(
+                guest.map {
+                    it.copy(
+                        id = GotThisIds.purchaseId(userId, it.tickId),
+                        accountId = userId,
+                        pendingUpload = it.deletedAt == null,
+                    )
+                },
+            )
+            stateDao.moveGuestState(userId)
+        }
+    }
+
+    // Sign-out: the account's history leaves the phone with its lists. A pending
+    // clear stays in prefs, to be sent when the account next syncs (R9).
+    suspend fun evict() {
+        db.withTransaction {
+            purchaseDao.deleteAccountPurchases()
+            purchaseDao.deleteAllOutbox()
+            stateDao.clearAccountState()
+        }
+        syncPoints.remove(POINT)
+    }
+
+    private fun PurchaseRow.toEntity(userId: String) = PurchaseEntity(
+        id = id,
+        tickId = tickId,
+        accountId = userId,
+        sourceItemId = sourceItemId,
+        name = name,
+        itemKey = ItemKey.of(name),
+        categoryId = categoryId,
+        boughtAt = boughtAt.isoToMillis(),
+        deletedAt = deletedAt?.isoToMillis(),
+        pendingUpload = false,
+    )
+
     private suspend fun pushPendingClear(userId: String) {
         val pending = prefs.pendingClear(userId) ?: return
         try {
@@ -114,4 +200,8 @@ class GotThisSync(
         categoryId = categoryId,
         undoneAt = undoneAt?.millisToIso(),
     )
+
+    private companion object {
+        const val POINT = "purchases"
+    }
 }

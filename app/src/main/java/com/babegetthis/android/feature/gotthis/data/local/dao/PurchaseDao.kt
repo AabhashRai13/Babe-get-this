@@ -68,6 +68,13 @@ interface PurchaseDao {
     @Query("SELECT * FROM purchases WHERE accountId IS NULL")
     suspend fun guestPurchases(): List<PurchaseEntity>
 
+    @Query("DELETE FROM purchases WHERE accountId IS NULL")
+    suspend fun deleteGuestPurchases()
+
+    // Sign-out: everything an account owns. Guest rows stay.
+    @Query("DELETE FROM purchases WHERE accountId IS NOT NULL")
+    suspend fun deleteAccountPurchases()
+
     @Query(
         """
         SELECT * FROM purchases WHERE accountId = :accountId AND pendingUpload = 1
@@ -109,6 +116,13 @@ interface PurchaseDao {
 
     @Query("DELETE FROM tick_outbox WHERE accountId = :accountId")
     suspend fun deleteOutboxFor(accountId: String)
+
+    @Query("DELETE FROM tick_outbox")
+    suspend fun deleteAllOutbox()
+
+    // Ticks whose undo is still waiting to be sent.
+    @Query("SELECT tickId FROM tick_outbox WHERE undoneAt IS NOT NULL AND tickId IN (:tickIds)")
+    suspend fun undoneOutboxTickIds(tickIds: List<String>): List<String>
 
     @Query("SELECT COUNT(*) FROM tick_outbox WHERE accountId = :accountId")
     suspend fun countOutbox(accountId: String): Int
