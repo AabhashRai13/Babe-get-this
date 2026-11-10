@@ -1,6 +1,6 @@
 # Got This — design
 
-**Date:** 2026-11-09 · **Status:** approved 2026-11-10; aligned with the implementation plan · **Branch:** `feat/got-this`
+**Date:** 2026-11-09 · **Status:** approved 2026-11-10; updated 2026-11-10 with decisions made during the build · **Branch:** `feat/got-this`
 
 ## Summary
 
@@ -126,6 +126,9 @@ due:
   expands the row.
 - When notifications are not allowed, the row ends with **Get a weekly
   heads-up**, which opens the existing permission sheet with Got This copy.
+  This request is separate from the shopping-reminder one: saying no to it
+  does not snooze the shopping-reminder prompt, and saying yes does not arm
+  a shopping reminder.
 
 ### The weekly notification
 
@@ -138,8 +141,10 @@ person's usual shopping day:
 - It names up to 3 items that are due by the next day, most overdue first.
   With more than 3: "Eggs, milk, bread and 2 more".
 - Tapping it opens the items screen of the most recently edited list, finished
-  or not, where the suggestions row is. With no lists at all, it opens the
-  list catalog with the create-list dialog open; the new list shows the row.
+  or not, where the suggestions row is. "Edited" counts changes to the
+  list's items as well as to the list itself. With no lists at all, it opens
+  the list catalog with the create-list dialog open; the new list shows the
+  row. Reopening the app from Recents does not repeat either.
 - With no clear usual shopping day (see Running low), it goes out at about
   18:00 on the first day something becomes due, still at most once a week.
 - A week is an ISO week (Monday to Sunday) in the phone's time zone.
@@ -153,7 +158,9 @@ A new **Got This** section:
 - **Bought-recently hints** — switch, on by default.
 - **Running-low reminders** — switch, on by default. Shows "Notifications are
   off for this app" with a link to system settings when the permission is
-  missing, like the shopping reminders row.
+  missing, like the shopping reminders row. The switch stays on in that
+  state, because it also controls the in-app suggestions row, which works
+  without notifications.
 - **Clear purchase history** — confirmation dialog: "This deletes your
   purchase history on all your devices. Your lists stay as they are, and
   people you share lists with keep their own history."
@@ -175,7 +182,9 @@ data on the JVM. The numbers are starting values, set in one file
 `ItemKey.of(name)` turns a name into a key:
 
 1. Unicode NFKD, strip accents, lowercase with `Locale.ROOT`.
-2. Punctuation to spaces, collapse whitespace, trim.
+2. Punctuation to spaces, collapse whitespace, trim. Letters, digits and
+   the combining marks of any script are kept, so names in Devanagari or
+   Arabic stay whole.
 3. Drop a leading or trailing quantity: numbers, fractions, and the units
    `x g kg ml l pack packs bag bags bottle bottles can cans box boxes dozen`,
    plus a following "of". "2 bags of rice" → "rice", "milk 2l" → "milk".
@@ -353,7 +362,8 @@ purchase and its outbox entry disagreeing.
   signed-in user, or the guest) with the ids from I1 and I2, and, on an
   account list, insert an outbox event with the item's current name and
   category. The local purchase is the same row the server will create, so
-  the pull overwrites it rather than adding one.
+  the pull overwrites it rather than adding one. A tick on an item that is
+  already ticked (a double tap before the screen updates) writes nothing.
 - **Untick** (`togglePickedUp(itemId, false)`): clear `isPickedUp`; leave
   `pickedUpAt` as it is. If the tick was less than 2 hours ago (0 ≤ now −
   `pickedUpAt` < 2 hours; a tick time that is now in the future, after a
@@ -364,8 +374,11 @@ purchase and its outbox entry disagreeing.
     The name and category come from the local purchase, which holds the
     values at tick time;
   - on a guest list, delete the purchase.
+
+  An untick of an item that is already unticked writes nothing.
 - The `ShoppingItemsViewModel` tick and delete handlers report the hint
-  outcome when the item has a hint impression.
+  outcome when the item has a hint impression, after their own work is
+  done. Telemetry never throws into them.
 
 ## Data model
 
@@ -633,10 +646,13 @@ and still returns the old purchases.
    them, I6); clear the mutes, hint impressions and pending follow-ups, since
    they were learned from the deleted history; clear the purchases sync
    point; store the new reset time. Purchases with a later tick time stay.
-2. Fetch purchases changed since the `purchases` sync point, paged like every
-   multi-row read (`fetchAll`, PostgREST's 1000-row cap). Discard every row
-   with `boughtAt` at or before the watermark. Upsert the rest into Room by
-   id with their keys computed locally; a tombstone replaces the row. The
+2. Fetch purchases changed since the account's purchases sync point
+   (`purchases:<user id>`; one per account, so a second account on the phone
+   never starts from the first one's point), paged like every multi-row read
+   (`fetchAll`, PostgREST's 1000-row cap). Discard every row with `boughtAt`
+   at or before the watermark. Upsert the rest into Room by id with their
+   keys computed locally; a tombstone replaces the row, but a live row does
+   not replace a local tombstone whose undo is still in the outbox. The
    point moves only after everything landed, as for items; discarded rows
    need no second look, because the server deletes them when the clear
    arrives.
@@ -647,21 +663,29 @@ and still returns the old purchases.
   the account-form id (from the unchanged tick id), and `pendingUpload =
   true`. The uploaded guest lists' items carry their `picked_up_at`, which is
   newer than the server's null, so step 13 writes no legacy tick for them.
-  Exactly one purchase exists per guest tick.
+  Exactly one purchase exists per guest tick. The guest backfill (below)
+  always runs before a claim, so no guest item is uploaded ticked without a
+  tick time. Guest purchases at or before the account's watermark are
+  dropped, not claimed. If another account's history is still on the phone
+  (its session was lost and a different account signs in), that history, its
+  outbox and its sync point are removed first, as its lists already are.
 - **Explicit sign-out** (`evictAccountLists`): the account's purchases, outbox
   events, mutes, impressions and follow-ups leave the phone with the lists,
   after the
   final push the eviction already attempts; the purchases sync point is
   cleared, so signing back in pulls the history again. Unsent events are part
   of the existing unsynced-changes warning (D20); a person who signs out
-  offline anyway loses them, as with unsent edits.
+  offline anyway loses them, as with unsent edits. An unsent clear is the
+  exception: it stays stored for its account and is sent when that account
+  next syncs, so signing out cannot bring cleared history back (I6).
 - **Session lost** (008 D6): history stays and keeps working; the outbox
   waits.
 
 ### Backfill on the phone
 
-`GotThisBackfill` runs once at start-up, off the main thread, for guest lists
-only. Every item with `isPickedUp`, no `deletedAt` and no `pickedUpAt` gets
+`GotThisBackfill` runs once, off the main thread, for guest lists only: at
+start-up, or at the start of a sign-in claim if that comes first. The two
+are serialised. Every item with `isPickedUp`, no `deletedAt` and no `pickedUpAt` gets
 `pickedUpAt = updatedAt`, and a guest purchase with that tick time, in one
 transaction per list. Account lists are backfilled on the server (step 14)
 and arrive with the next pull.
@@ -746,7 +770,8 @@ the thresholds. Without a usable dataset, the release relies on
 Both are copied to `GotThisPrefs` when the flags load in the UI process, and
 every reader, including the background worker, uses that copy: the flag
 cache is empty on a background cold start (reminders spec, D8). Before any
-load, the feature is on and the holdout applies.
+load, the feature is on and the holdout applies. A failed fetch leaves the
+stored copy as it was.
 
 Plus adds its own flag and gate in `GotThisAccess` in its own spec. Hints and
 history will never be gated.
