@@ -71,6 +71,10 @@ interface PurchaseDao {
     @Query("DELETE FROM purchases WHERE accountId IS NULL")
     suspend fun deleteGuestPurchases()
 
+    // Another account signed in over a lost session: its rows can never be sent.
+    @Query("DELETE FROM purchases WHERE accountId IS NOT NULL AND accountId != :userId")
+    suspend fun deleteOtherAccountPurchases(userId: String)
+
     // Sign-out: everything an account owns. Guest rows stay.
     @Query("DELETE FROM purchases WHERE accountId IS NOT NULL")
     suspend fun deleteAccountPurchases()
@@ -116,6 +120,9 @@ interface PurchaseDao {
 
     @Query("DELETE FROM tick_outbox WHERE accountId = :accountId")
     suspend fun deleteOutboxFor(accountId: String)
+
+    @Query("DELETE FROM tick_outbox WHERE accountId != :userId")
+    suspend fun deleteOtherAccountOutbox(userId: String)
 
     @Query("DELETE FROM tick_outbox")
     suspend fun deleteAllOutbox()

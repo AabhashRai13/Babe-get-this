@@ -27,6 +27,7 @@ class GotThisSync(
     private val prefs: GotThisPrefs,
     private val syncPoints: SyncPointStore,
     private val clock: ReminderClock,
+    private val backfill: GotThisBackfill,
 ) {
 
     private val purchaseDao = db.purchaseDao()
@@ -59,15 +60,13 @@ class GotThisSync(
         purchaseDao.countPendingUploads(accountId) +
         if (prefs.pendingClear(accountId) != null) 1 else 0
 
-    // Stays pending until the server answers; a failure must not hold back the
-    // tick events behind it.
     // Brings purchases down behind the account's watermark (I6): nothing at or
     // before the last applied reset or the pending clear is ever written, even
     // when the server has not heard of the clear yet.
     suspend fun pull(userId: String) {
         applyServerReset(userId)
         val watermark = prefs.watermark(userId)
-        val fetched = remote.fetchPurchases(syncPoints.get(POINT))
+        val fetched = remote.fetchPurchases(syncPoints.get(point(userId)))
         if (fetched.isEmpty()) return
         val kept = fetched.filter { watermark == null || it.boughtAt.isoToMillis() > watermark }
         db.withTransaction {
@@ -81,7 +80,7 @@ class GotThisSync(
                 kept.filter { it.deletedAt != null || it.tickId !in undoPending }.map { it.toEntity(userId) },
             )
         }
-        syncPoints.set(POINT, fetched.maxOf { it.updatedAt })
+        syncPoints.set(point(userId), fetched.maxOf { it.updatedAt })
     }
 
     private suspend fun applyServerReset(userId: String) {
@@ -94,15 +93,27 @@ class GotThisSync(
         }
         // Before the new reset is stored, so a crash in between redoes this
         // rather than leaving a point that skips rows.
-        syncPoints.remove(POINT)
+        syncPoints.remove(point(userId))
         prefs.setLastAppliedReset(userId, reset)
     }
+
+    // Runs under the sync lock before a claim: guest ticks that predate tick
+    // times must become guest purchases first, or a pushed item without a tick
+    // time makes the server write a second tick for a purchase that is also
+    // uploaded.
+    suspend fun prepareClaim() = backfill.backfillGuestTicks()
 
     // Sign-in from guest: the guest's history becomes the account's. Live rows
     // are sent up; the server has none of it.
     suspend fun claimGuestHistory(userId: String) {
         db.withTransaction {
-            val guest = purchaseDao.guestPurchases()
+            // Another account that lost its session leaves its history behind;
+            // it is neither this person's nor sendable by them.
+            purchaseDao.deleteOtherAccountPurchases(userId)
+            purchaseDao.deleteOtherAccountOutbox(userId)
+            stateDao.clearOtherAccountState(userId)
+            val watermark = prefs.watermark(userId)
+            val guest = purchaseDao.guestPurchases().filter { watermark == null || it.boughtAt > watermark }
             purchaseDao.deleteGuestPurchases()
             purchaseDao.upsert(
                 guest.map {
@@ -118,14 +129,14 @@ class GotThisSync(
     }
 
     // Sign-out: the account's history leaves the phone with its lists. A pending
-    // clear stays in prefs, to be sent when the account next syncs (R9).
+    // clear stays in prefs, to be sent when the account next syncs (R9). The
+    // purchases sync points go with SyncEngine's clearing of every point.
     suspend fun evict() {
         db.withTransaction {
             purchaseDao.deleteAccountPurchases()
             purchaseDao.deleteAllOutbox()
             stateDao.clearAccountState()
         }
-        syncPoints.remove(POINT)
     }
 
     private fun PurchaseRow.toEntity(userId: String) = PurchaseEntity(
@@ -141,6 +152,8 @@ class GotThisSync(
         pendingUpload = false,
     )
 
+    // Stays pending until the server answers; a failure must not hold back the
+    // tick events behind it.
     private suspend fun pushPendingClear(userId: String) {
         val pending = prefs.pendingClear(userId) ?: return
         try {
@@ -201,7 +214,6 @@ class GotThisSync(
         undoneAt = undoneAt?.millisToIso(),
     )
 
-    private companion object {
-        const val POINT = "purchases"
-    }
+    // One per account, so a pull never starts from another account's stamp.
+    private fun point(userId: String) = "purchases:$userId"
 }

@@ -2,6 +2,7 @@ package com.babegetthis.android.testing
 
 import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
+import com.babegetthis.android.feature.gotthis.data.GotThisBackfill
 import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
@@ -111,4 +112,5 @@ fun gotThisSyncFor(
     prefs: GotThisPrefs = FakeGotThisPrefs(),
     syncPoints: SyncPointStore = FakeSyncPointStore(),
     clock: ReminderClock = ReminderClock { 0L },
-) = GotThisSync(dbRule.db, remote, prefs, syncPoints, clock)
+    backfill: GotThisBackfill = GotThisBackfill(dbRule.db, prefs, clock),
+) = GotThisSync(dbRule.db, remote, prefs, syncPoints, clock, backfill)

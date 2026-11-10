@@ -2,9 +2,17 @@ package com.babegetthis.android.core.sync.data.repository
 
 import com.babegetthis.android.core.auth.model.AuthState
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.reminder.ReminderClock
+import com.babegetthis.android.feature.gotthis.data.GotThisBackfill
+import com.babegetthis.android.feature.gotthis.data.local.model.HintImpressionEntity
+import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
+import com.babegetthis.android.feature.gotthis.data.local.model.ReminderFollowUpEntity
+import com.babegetthis.android.feature.gotthis.data.local.model.TickOutboxEntity
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
+import com.babegetthis.android.testing.FakeGotThisPrefs
+import com.babegetthis.android.testing.FakeGotThisRemote
 import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
@@ -34,10 +42,20 @@ class SyncEngineClaimTest {
     private val remote = FakeSharedListRemote()
     private val syncPoints = FakeSyncPointStore()
     private val ownership = FakeListOwnershipStore()
+    private val gotThisRemote = FakeGotThisRemote()
+    private val gotThisPrefs = FakeGotThisPrefs()
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, gotThisSyncFor(dbRule), {
-            "user-1"
-        }, mockk(relaxed = true), unreportedSafeCall())
+        SyncEngine(
+            dbRule.listDao,
+            dbRule.itemDao,
+            remote,
+            syncPoints,
+            ownership,
+            gotThisSyncFor(dbRule, gotThisRemote, gotThisPrefs, syncPoints),
+            { "user-1" },
+            mockk(relaxed = true),
+            unreportedSafeCall(),
+        )
     }
 
     private suspend fun seedList(
@@ -98,6 +116,78 @@ class SyncEngineClaimTest {
         val purchase = dbRule.purchaseDao.byTickId("t1").single()
         assertEquals("user-1", purchase.accountId)
         assertTrue(purchase.pendingUpload)
+    }
+
+    // A session lost under one account, then another signs in without a
+    // sign-out: the first account's history must not linger or move the pull.
+    @Test
+    fun `another account's history and purchase sync point are removed on claim`() = runTest {
+        seedList("guest")
+        dbRule.purchaseDao.upsert(
+            listOf(
+                PurchaseEntity("p-theirs", "t-theirs", "user-2", "i", "Milk", "milk", null, 1L, null, false),
+                PurchaseEntity("p-guest", "t-guest", null, "i", "Milk", "milk", null, 1L, null, false),
+            ),
+        )
+        dbRule.purchaseDao.insertOutbox(TickOutboxEntity("o-theirs", "user-2", "i", "l", 1L, "Milk", null, null, 0))
+        dbRule.stateDao.upsertMute(ItemMuteEntity("user-2", "milk", 2, 5L))
+        dbRule.stateDao.insertImpressionIfAbsent(HintImpressionEntity("imp", "user-2", "milk", 1L, false))
+        dbRule.stateDao.insertFollowUp(ReminderFollowUpEntity("user-2", "2026-W45", 1L, "milk", false))
+        syncPoints.set("purchases:user-2", "2026-08-01T10:00:00Z")
+
+        engine.claimDeviceLists("user-1")
+        gotThisSyncFor(dbRule, gotThisRemote, gotThisPrefs, syncPoints).pull("user-1")
+
+        assertTrue(dbRule.purchaseDao.byTickId("t-theirs").isEmpty())
+        assertNull(dbRule.purchaseDao.outboxByTickId("o-theirs"))
+        assertTrue(dbRule.stateDao.mutes("user-2").isEmpty())
+        assertNull(dbRule.stateDao.impression("imp"))
+        assertTrue(dbRule.stateDao.followUps("user-2").isEmpty())
+        assertEquals("user-1", dbRule.purchaseDao.byTickId("t-guest").single().accountId)
+        assertEquals(listOf<String?>(null), gotThisRemote.fetchSince)
+    }
+
+    @Test
+    fun `a guest purchase at or before the watermark is dropped, not claimed`() = runTest {
+        seedList("guest")
+        gotThisPrefs.setLastAppliedReset("user-1", 100L)
+        dbRule.purchaseDao.upsert(
+            listOf(
+                PurchaseEntity("g1", "t-old", null, "i", "Milk", "milk", null, 100L, null, false),
+                PurchaseEntity("g2", "t-new", null, "i", "Milk", "milk", null, 101L, null, false),
+            ),
+        )
+
+        engine.claimDeviceLists("user-1")
+
+        assertTrue(dbRule.purchaseDao.byTickId("t-old").isEmpty())
+        assertEquals("user-1", dbRule.purchaseDao.byTickId("t-new").single().accountId)
+    }
+
+    // The start-up backfill is not serialised with the claim, so the claim runs it.
+    @Test
+    fun `the guest backfill runs before a claim and is not repeated`() = runTest {
+        seedList("guest")
+        dbRule.itemDao.insertItem(
+            ShoppingItemEntity(
+                id = "ticked",
+                listId = "guest",
+                name = "Milk",
+                quantity = "1",
+                isPickedUp = true,
+                createdAt = 1L,
+                updatedAt = 5_000L,
+            ),
+        )
+
+        engine.claimDeviceLists("user-1")
+        GotThisBackfill(dbRule.db, gotThisPrefs, ReminderClock { 0L }).runOnce()
+
+        assertEquals(5_000L, dbRule.itemDao.getItemRaw("ticked")!!.pickedUpAt)
+        val purchase = dbRule.purchaseDao.live("user-1").single()
+        assertEquals("user-1", purchase.accountId)
+        assertTrue(purchase.pendingUpload)
+        assertTrue(dbRule.purchaseDao.guestPurchases().isEmpty())
     }
 
     @Test

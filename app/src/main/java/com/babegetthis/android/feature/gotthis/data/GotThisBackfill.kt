@@ -8,6 +8,8 @@ import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import com.babegetthis.android.feature.gotthis.domain.GotThisRules
 import com.babegetthis.android.feature.gotthis.domain.ItemKey
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 // Start-up housekeeping for purchase history, off the main thread. Account
 // lists are backfilled on the server and arrive with the next pull.
@@ -18,13 +20,22 @@ class GotThisBackfill(private val db: AppDatabase, private val prefs: GotThisPre
     private val purchaseDao = db.purchaseDao()
     private val stateDao = db.gotThisStateDao()
 
+    // Held with the done flag, so the start-up run and a claim-time call
+    // neither interleave nor both do the work.
+    private val guestMutex = Mutex()
+
     suspend fun runOnce() {
-        if (!prefs.backfillDone) {
+        backfillGuestTicks()
+        if (prefs.keyVersion != ItemKey.VERSION) recomputeKeys()
+        stateDao.pruneImpressions(clock.now() - GotThisRules.IMPRESSION_PRUNE_MILLIS)
+    }
+
+    suspend fun backfillGuestTicks() {
+        guestMutex.withLock {
+            if (prefs.backfillDone) return
             listDao.getGuestListIds().forEach { backfillList(it) }
             prefs.backfillDone = true
         }
-        if (prefs.keyVersion != ItemKey.VERSION) recomputeKeys()
-        stateDao.pruneImpressions(clock.now() - GotThisRules.IMPRESSION_PRUNE_MILLIS)
     }
 
     // Items ticked before this feature have no tick time; their last change is

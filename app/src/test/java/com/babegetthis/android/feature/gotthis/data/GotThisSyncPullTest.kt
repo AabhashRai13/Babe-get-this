@@ -95,7 +95,7 @@ class GotThisSyncPullTest {
         assertEquals(false, t2.pendingUpload)
         assertEquals(t11.isoToMillis(), t2.boughtAt)
         assertEquals(listOf("t1", "t2"), ids())
-        assertEquals(t12, syncPoints.get("purchases"))
+        assertEquals(t12, syncPoints.get("purchases:u1"))
         assertEquals(listOf(null), remote.fetchSince)
     }
 
@@ -112,22 +112,31 @@ class GotThisSyncPullTest {
 
     @Test
     fun `a failed fetch moves nothing`() = runTest {
-        syncPoints.set("purchases", t09)
+        syncPoints.set("purchases:u1", t09)
         remote.failFetch = true
 
         runCatching { sync.pull("u1") }
 
-        assertEquals(t09, syncPoints.get("purchases"))
+        assertEquals(t09, syncPoints.get("purchases:u1"))
         assertNull(dao.live("u1").firstOrNull())
     }
 
     @Test
-    fun `no rows leaves the point where it was`() = runTest {
-        syncPoints.set("purchases", t09)
+    fun `another account's sync point is not used`() = runTest {
+        syncPoints.set("purchases:u2", t12)
 
         sync.pull("u1")
 
-        assertEquals(t09, syncPoints.get("purchases"))
+        assertEquals(listOf<String?>(null), remote.fetchSince)
+    }
+
+    @Test
+    fun `no rows leaves the point where it was`() = runTest {
+        syncPoints.set("purchases:u1", t09)
+
+        sync.pull("u1")
+
+        assertEquals(t09, syncPoints.get("purchases:u1"))
         assertEquals(listOf(t09), remote.fetchSince)
     }
 
@@ -136,7 +145,7 @@ class GotThisSyncPullTest {
         dao.upsert(listOf(local("old", t09), local("edge", t10), local("late", t12)))
         dao.insertOutbox(TickOutboxEntity("o1", "u1", "i", "l", t09.isoToMillis(), "Milk", null, null, 0))
         seedState()
-        syncPoints.set("purchases", t09)
+        syncPoints.set("purchases:u1", t09)
         remote.resetAt = t10
 
         sync.pull("u1")
@@ -157,7 +166,7 @@ class GotThisSyncPullTest {
         prefs.setLastAppliedReset("u1", t10.isoToMillis())
         dao.upsert(listOf(local("t1", t09), local("t2", t11)))
         seedState()
-        syncPoints.set("purchases", t09)
+        syncPoints.set("purchases:u1", t09)
         remote.resetAt = t10
 
         sync.pull("u1")
@@ -179,7 +188,7 @@ class GotThisSyncPullTest {
         assertEquals(listOf("t11"), ids())
         assertTrue(dao.byTickId("t09").isEmpty())
         // Discarded rows still count for the point.
-        assertEquals(t11, syncPoints.get("purchases"))
+        assertEquals(t11, syncPoints.get("purchases:u1"))
     }
 
     @Test
@@ -202,7 +211,7 @@ class GotThisSyncPullTest {
         sync.pull("u1")
 
         assertTrue(dao.byTickId("t09").isEmpty())
-        assertEquals(t12, syncPoints.get("purchases"))
+        assertEquals(t12, syncPoints.get("purchases:u1"))
     }
 
     @Test
@@ -218,16 +227,16 @@ class GotThisSyncPullTest {
 
         assertEquals(t11.isoToMillis(), dao.byTickId("t1").single().deletedAt)
         assertEquals(listOf("t2"), ids())
-        assertEquals(t12, syncPoints.get("purchases"))
+        assertEquals(t12, syncPoints.get("purchases:u1"))
     }
 
     @Test
-    fun `large fetches check the outbox in chunks`() = runTest {
-        remote.purchaseRows = (1..1000).map { row("t$it", t10, updatedAt = t11) }
-
+    fun `the outbox is checked in chunks within the SQL variable limit`() = runTest {
+        remote.purchaseRows = (1..33_000).map { row("t$it", t10, updatedAt = t11) }
+        // More ids than SQLite's variable limit (32766 on current builds, 999 on old ones): one IN list would throw.
         sync.pull("u1")
 
-        assertEquals(1000, ids().size)
+        assertEquals(33_000, ids().size)
     }
 
     // ── Sign-in and sign-out ────────────────────────────────────────────────
@@ -262,7 +271,6 @@ class GotThisSyncPullTest {
         dao.insertOutbox(TickOutboxEntity("o1", "u1", "i", "l", 1L, "Milk", null, null, 0))
         seedState()
         prefs.setPendingClear("u1", t10.isoToMillis())
-        syncPoints.set("purchases", t09)
 
         sync.evict()
 
@@ -274,6 +282,5 @@ class GotThisSyncPullTest {
         assertNull(state.impression("i1"))
         assertTrue(state.followUps("u1").isEmpty())
         assertEquals(t10.isoToMillis(), prefs.pendingClear("u1"))
-        assertNull(syncPoints.get("purchases"))
     }
 }

@@ -100,6 +100,8 @@ class SyncEngine(
     // lists moved in, and adds them to the notice the lists screen shows.
     suspend fun claimDeviceLists(userId: String): Result<Int> = safeCall {
         mutex.withLock {
+            // Before the lists change hands, so guest ticks have their times.
+            gotThis.prepareClaim()
             listDao.getOtherAccountListIds(userId).forEach { syncPoints.remove(it) }
             // The first claim after the update also takes the existing shared
             // replicas: they predate owners, and they belong to whoever is signed
@@ -111,8 +113,9 @@ class SyncEngine(
             // discovery keeps the ones the server returns (catchUpAccount).
             if (firstClaim) ownership.setUnverifiedListIds(listDao.getOwnerlessSharedListIds().toSet())
             val claimed = listDao.claimDeviceLists(userId, includeOwnerlessShared = firstClaim)
-            gotThis.claimGuestHistory(userId)
             finishFirstRun()
+            // After the first-run bookkeeping: a failure here must not skip it.
+            gotThis.claimGuestHistory(userId)
             if (claimed > 0) ownership.setAdoptionNotice(ownership.adoptionNotice.value + claimed)
             // Count only. Which lists moved is the user's business.
             crashReporter.breadcrumb("sync: claimed $claimed lists")

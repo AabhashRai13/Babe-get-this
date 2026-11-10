@@ -4,7 +4,6 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.sync.data.mapper.isoToMillis
 import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
-import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.gotthis.data.remote.PurchaseRow
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.FakeGotThisPrefs
@@ -321,7 +320,7 @@ class SyncEngineAccountCatchUpTest {
     )
 
     @Test
-    fun `purchases are fetched after items, and only when the items landed`() = runTest {
+    fun `purchases are fetched only once the items have landed`() = runTest {
         seedAccountList("known")
         gotThisRemote.purchaseRows = listOf(purchaseRow("t1", t11))
         remote.listRows = listOf(listRow("joined"))
@@ -342,11 +341,7 @@ class SyncEngineAccountCatchUpTest {
     @Test
     fun `a failed clear followed by a catch-up does not bring back a cleared purchase`() = runTest {
         seedAccountList("known")
-        dbRule.purchaseDao.upsert(
-            listOf(PurchaseEntity("p-t09", "t09", "user-1", "i", "Milk", "milk", null, 1L, null, false)),
-        )
         gotThisPrefs.setPendingClear("user-1", t12.isoToMillis())
-        dbRule.purchaseDao.deleteAllFor("user-1")
         gotThisRemote.failClear = true
         gotThisRemote.purchaseRows = listOf(purchaseRow("t10", t10), purchaseRow("t11", t11))
 

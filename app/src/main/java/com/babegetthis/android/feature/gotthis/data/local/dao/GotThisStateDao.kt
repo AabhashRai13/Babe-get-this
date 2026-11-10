@@ -68,6 +68,23 @@ interface GotThisStateDao {
         deleteAccountFollowUps()
     }
 
+    // Another account signed in over a lost session; the guest's ("") stays.
+    @Query("DELETE FROM item_mutes WHERE accountId != '' AND accountId != :userId")
+    suspend fun deleteOtherMutes(userId: String)
+
+    @Query("DELETE FROM hint_impressions WHERE accountId != '' AND accountId != :userId")
+    suspend fun deleteOtherImpressions(userId: String)
+
+    @Query("DELETE FROM reminder_followups WHERE accountId != '' AND accountId != :userId")
+    suspend fun deleteOtherFollowUps(userId: String)
+
+    @Transaction
+    suspend fun clearOtherAccountState(userId: String) {
+        deleteOtherMutes(userId)
+        deleteOtherImpressions(userId)
+        deleteOtherFollowUps(userId)
+    }
+
     // Key recompute: the state was learned from keys that no longer mean the same.
     @Query("DELETE FROM item_mutes")
     suspend fun deleteAllMutes()

@@ -56,7 +56,8 @@ object GotThisModule {
         prefs: GotThisPrefs,
         syncPoints: SyncPointStore,
         clock: ReminderClock,
-    ): GotThisSync = GotThisSync(db, remote, prefs, syncPoints, clock)
+        backfill: GotThisBackfill,
+    ): GotThisSync = GotThisSync(db, remote, prefs, syncPoints, clock, backfill)
 
     @Provides
     @Singleton
