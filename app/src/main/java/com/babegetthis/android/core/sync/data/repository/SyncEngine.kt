@@ -10,6 +10,7 @@ import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.telemetry.CrashReporter
+import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import kotlinx.coroutines.sync.Mutex
@@ -30,6 +31,7 @@ class SyncEngine(
     private val remote: SharedListRemote,
     private val syncPoints: SyncPointStore,
     private val ownership: ListOwnershipStore,
+    private val gotThis: GotThisSync,
     private val currentUserId: () -> String?,
     private val crashReporter: CrashReporter,
     private val safeCall: SafeCall,
@@ -59,7 +61,7 @@ class SyncEngine(
         // can't race the INSERT that would have put it on the server. Needs no
         // session: it is outbox housekeeping, and it keeps the sign-out
         // warning honest for a session that has expired.
-        listDao.deleteNeverSentDeletedLists()
+        gotThis.dropNeverSentLists()
         val userId = currentUserId() ?: return
         val lists = listDao.getPendingAccountLists(userId)
         val (existing, brandNew) = lists.partition { it.onServer }
@@ -84,6 +86,7 @@ class SyncEngine(
             remote.upsertItems(items.map { it.toRow() })
             items.forEach { itemDao.markItemSynced(it.id, it.updatedAt) }
         }
+        gotThis.push(userId)
         // Counts only. A crash mid-sync reads very differently depending on
         // whether the queue was empty or draining hundreds of rows, and
         // that is not recoverable from the report afterwards.
@@ -267,7 +270,8 @@ class SyncEngine(
     // released first-run claim, another account's leftovers) aren't counted:
     // a warning about them could never be cleared by going online.
     suspend fun hasUnsyncedChanges(accountId: String): Boolean =
-        listDao.countPendingAccountLists(accountId) + itemDao.countPendingSyncItemsForAccount(accountId) > 0
+        listDao.countPendingAccountLists(accountId) + itemDao.countPendingSyncItemsForAccount(accountId) +
+            gotThis.unsyncedCount(accountId) > 0
 
     private suspend fun apply(userId: String, listRows: List<ListRow>, itemRows: List<ItemRow>) {
         val lockedIds = ownership.lockedListIds()

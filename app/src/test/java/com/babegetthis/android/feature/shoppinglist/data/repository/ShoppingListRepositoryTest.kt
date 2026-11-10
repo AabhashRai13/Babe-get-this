@@ -12,6 +12,7 @@ import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.TestData
 import com.babegetthis.android.testing.authStateFor
+import com.babegetthis.android.testing.gotThisSyncFor
 import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.flow.first
@@ -55,6 +56,7 @@ class ShoppingListRepositoryTest {
             remote,
             FakeSyncPointStore(),
             ownership,
+            gotThisSyncFor(dbRule),
             { auth.liveSessionUserId() },
             mockk(relaxed = true),
             unreportedSafeCall(),

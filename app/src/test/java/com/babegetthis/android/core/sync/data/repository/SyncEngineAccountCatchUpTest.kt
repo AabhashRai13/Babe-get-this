@@ -8,6 +8,7 @@ import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import com.babegetthis.android.testing.gotThisSyncFor
 import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -35,7 +36,7 @@ class SyncEngineAccountCatchUpTest {
     private val ownership = FakeListOwnershipStore()
     private var userId: String? = "user-1"
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, {
+        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, gotThisSyncFor(dbRule), {
             userId
         }, mockk(relaxed = true), unreportedSafeCall())
     }

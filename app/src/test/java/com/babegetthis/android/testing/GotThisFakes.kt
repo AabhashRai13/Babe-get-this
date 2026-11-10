@@ -1,5 +1,8 @@
 package com.babegetthis.android.testing
 
+import com.babegetthis.android.core.reminder.ReminderClock
+import com.babegetthis.android.core.sync.data.repository.SyncPointStore
+import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
 import com.babegetthis.android.feature.gotthis.data.remote.OwnPurchaseRow
@@ -51,6 +54,7 @@ class FakeGotThisRemote : GotThisRemote {
     var resetAt: String? = null
     var reply: (List<TickEventRow>) -> TickReply = { TickReply(it.map(TickEventRow::id), emptyList(), emptyList()) }
     var failClear = false
+    var clearFailure: Throwable? = null
     var failRecord = false
     var failUpload = false
     var failFetch = false
@@ -73,6 +77,7 @@ class FakeGotThisRemote : GotThisRemote {
 
     override suspend fun clearHistory(clearedAtIso: String): String {
         calls += "clearHistory"
+        clearFailure?.let { throw it }
         if (failClear) throw IOException("network down")
         clearedAt += clearedAtIso
         return clearedAtIso
@@ -97,3 +102,11 @@ class FakeGotThisRemote : GotThisRemote {
         return claimResult
     }
 }
+
+fun gotThisSyncFor(
+    dbRule: InMemoryDatabaseRule,
+    remote: GotThisRemote = FakeGotThisRemote(),
+    prefs: GotThisPrefs = FakeGotThisPrefs(),
+    syncPoints: SyncPointStore = FakeSyncPointStore(),
+    clock: ReminderClock = ReminderClock { 0L },
+) = GotThisSync(dbRule.db, remote, prefs, syncPoints, clock)

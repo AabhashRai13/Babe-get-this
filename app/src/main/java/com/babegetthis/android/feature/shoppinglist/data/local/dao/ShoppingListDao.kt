@@ -146,6 +146,9 @@ interface ShoppingListDao {
     @Query("DELETE FROM shopping_lists WHERE onServer = 0 AND deletedAt IS NOT NULL")
     suspend fun deleteNeverSentDeletedLists()
 
+    @Query("SELECT id FROM shopping_lists WHERE onServer = 0 AND deletedAt IS NOT NULL")
+    suspend fun neverSentDeletedListIds(): List<String>
+
     // Sharing a list that already syncs: the server set the code, record it.
     @Query("UPDATE shopping_lists SET shareCode = :code WHERE id = :id")
     suspend fun setShareCode(id: String, code: String)

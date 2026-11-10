@@ -26,6 +26,9 @@ object GotThisRules {
     const val FOLLOW_UP_DAYS = 7
     const val UNKNOWN_WINDOW_DAYS = 7
     const val HOLDOUT_PERCENT = 10
+    const val PUSH_BATCH_SIZE = 500
+    const val FUTURE_REJECT_MILLIS = 30L * 24 * 60 * 60 * 1000
+    const val SQL_IN_CHUNK = 900
 
     // Hint window in days -> default category ids. cat-other and custom
     // categories are in no group and fall to UNKNOWN_WINDOW_DAYS.

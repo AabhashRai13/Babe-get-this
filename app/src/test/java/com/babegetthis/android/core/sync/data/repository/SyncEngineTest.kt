@@ -1,15 +1,19 @@
 package com.babegetthis.android.core.sync.data.repository
 
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.sync.data.mapper.isoToMillis
 import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
+import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
+import com.babegetthis.android.testing.FakeGotThisRemote
 import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import com.babegetthis.android.testing.gotThisSyncFor
 import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
@@ -36,10 +40,18 @@ class SyncEngineTest {
     private val syncPoints = FakeSyncPointStore()
     private val ownership = FakeListOwnershipStore()
     private var userId: String? = "user-1"
+    private val gotThisRemote = FakeGotThisRemote()
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, {
-            userId
-        }, mockk(relaxed = true), unreportedSafeCall())
+        SyncEngine(
+            dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership,
+            gotThisSyncFor(
+                dbRule,
+                gotThisRemote,
+            ),
+            {
+                userId
+            }, mockk(relaxed = true), unreportedSafeCall(),
+        )
     }
 
     private val t10 = "2026-08-01T10:00:00Z"
@@ -572,5 +584,54 @@ class SyncEngineTest {
         dbRule.listDao.insertList(listEntity(id = "theirs", accountId = "user-2", pendingSync = true))
 
         assertFalse(engine.hasUnsyncedChanges("user-1"))
+    }
+
+    private fun tickStore() = TickStore(
+        dbRule.db,
+        dbRule.itemDao,
+        dbRule.listDao,
+        dbRule.purchaseDao,
+        ReminderClock { 1_793_527_200_000L },
+    )
+
+    @Test
+    fun `a tick is pushed after its item row`() = runTest {
+        dbRule.listDao.insertList(listEntity())
+        dbRule.itemDao.insertItem(itemEntity())
+        val order = mutableListOf<String>()
+        remote.onUpsertItems = { order += "items" }
+        gotThisRemote.onRecordTicks = { order += "ticks" }
+        tickStore().tick("item-1")
+
+        assertTrue(engine.push() is Result.Success)
+
+        assertEquals(listOf("items", "ticks"), order)
+        assertEquals(1_793_527_200_000L, remote.upsertedItems.single().pickedUpAt?.isoToMillis())
+        assertEquals(1, gotThisRemote.recordedBatches.single().size)
+    }
+
+    @Test
+    fun `an outbox row alone counts as unsynced`() = runTest {
+        dbRule.listDao.insertList(listEntity())
+        dbRule.itemDao.insertItem(itemEntity())
+        tickStore().tick("item-1")
+        dbRule.itemDao.markItemSynced("item-1", dbRule.itemDao.getItemRaw("item-1")!!.updatedAt)
+
+        assertTrue(engine.hasUnsyncedChanges("user-1"))
+    }
+
+    @Test
+    fun `a list created, ticked and deleted offline uploads the tick as an own purchase`() = runTest {
+        dbRule.listDao.insertList(listEntity(onServer = false, pendingSync = true))
+        dbRule.itemDao.insertItem(itemEntity())
+        val result = tickStore().tick("item-1")
+        dbRule.listDao.insertList(listEntity(onServer = false, pendingSync = true, deletedAt = 9L))
+
+        assertTrue(engine.push() is Result.Success)
+
+        assertEquals(listOf("uploadOwnPurchases"), gotThisRemote.calls)
+        assertEquals(1, gotThisRemote.uploadedBatches.single().size)
+        assertTrue(remote.insertedLists.isEmpty())
+        assertEquals("list-1", result?.listId)
     }
 }

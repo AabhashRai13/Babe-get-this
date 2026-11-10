@@ -4,7 +4,9 @@ import android.content.Context
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.core.reminder.ReminderClock
+import com.babegetthis.android.core.sync.data.repository.SyncPointStore
 import com.babegetthis.android.feature.gotthis.data.GotThisAccess
+import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.SharedPrefsGotThisPrefs
@@ -44,4 +46,14 @@ object GotThisModule {
     @Provides
     @Singleton
     fun provideGotThisRemote(client: SupabaseClient): GotThisRemote = SupabaseGotThisRemote(client)
+
+    @Provides
+    @Singleton
+    fun provideGotThisSync(
+        db: AppDatabase,
+        remote: GotThisRemote,
+        prefs: GotThisPrefs,
+        syncPoints: SyncPointStore,
+        clock: ReminderClock,
+    ): GotThisSync = GotThisSync(db, remote, prefs, syncPoints, clock)
 }
