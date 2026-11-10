@@ -482,6 +482,7 @@ class SettingsViewModelTest {
 
     @Test
     fun `running-low is Blocked when the permission was permanently refused`() = runTest {
+        notificationGate.enabled = false
         val vm = viewModel()
 
         vm.updatePermissionState(PermissionState.PermanentlyRefused)
@@ -490,13 +491,13 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `running-low stays askable when the gate is closed only for want of the grant`() = runTest {
+    fun `running-low is Blocked when Requestable and notifications are off`() = runTest {
         notificationGate.enabled = false
         val vm = viewModel()
 
         vm.updatePermissionState(PermissionState.Requestable)
 
-        assertEquals(ReminderRowState.Off, vm.gotThisRunningLow.value)
+        assertEquals(ReminderRowState.Blocked, vm.gotThisRunningLow.value)
     }
 
     @Test
@@ -553,6 +554,7 @@ class SettingsViewModelTest {
     @Test
     fun `switching running-low on when Requestable records the request and asks`() = runTest {
         gotThisPrefs.runningLowEnabled = false
+        notificationGate.enabled = false
         val vm = viewModel()
         vm.updatePermissionState(PermissionState.Requestable)
 
@@ -571,6 +573,7 @@ class SettingsViewModelTest {
     fun `a granted result for the running-low request leaves shopping reminders alone`() = runTest {
         gotThisPrefs.runningLowEnabled = false
         reminderPrefs.enabled = false
+        notificationGate.enabled = false
         val vm = viewModel()
         vm.updatePermissionState(PermissionState.Requestable)
         vm.events.test {
@@ -578,6 +581,7 @@ class SettingsViewModelTest {
             awaitItem()
         }
 
+        notificationGate.enabled = true
         vm.onNotificationPermissionResult(true)
 
         coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
@@ -589,6 +593,7 @@ class SettingsViewModelTest {
     @Test
     fun `a denied result for the running-low request touches no reminder state`() = runTest {
         gotThisPrefs.runningLowEnabled = false
+        notificationGate.enabled = false
         val vm = viewModel()
         vm.updatePermissionState(PermissionState.Requestable)
         vm.events.test {
@@ -602,11 +607,13 @@ class SettingsViewModelTest {
         verify(exactly = 0) { reminderScheduler.onPermissionDenied() }
         verify(exactly = 0) { reminderScheduler.snoozePrompt() }
         coVerify(exactly = 0) { reminderScheduler.onPermissionGranted(any()) }
-        assertEquals(ReminderRowState.Off, vm.gotThisRunningLow.value)
+        assertTrue(gotThisPrefs.runningLowEnabled)
+        assertEquals(ReminderRowState.Blocked, vm.gotThisRunningLow.value)
     }
 
     @Test
     fun `a later shopping-reminder result still enables reminders after a running-low request`() = runTest {
+        notificationGate.enabled = false
         val vm = viewModel()
         vm.updatePermissionState(PermissionState.Requestable)
         vm.events.test {
@@ -615,6 +622,107 @@ class SettingsViewModelTest {
         }
         vm.onNotificationPermissionResult(false)
 
+        vm.onNotificationPermissionResult(true)
+
+        coVerify { reminderScheduler.setEnabled(true) }
+    }
+
+    @Test
+    fun `switching running-low off from Blocked writes the pref false`() = runTest {
+        notificationGate.enabled = false
+        val vm = viewModel()
+        assertEquals(ReminderRowState.Blocked, vm.gotThisRunningLow.value)
+
+        vm.onGotThisRunningLowSwitch(false)
+
+        assertTrue(!gotThisPrefs.runningLowEnabled)
+        assertEquals(ReminderRowState.Off, vm.gotThisRunningLow.value)
+    }
+
+    @Test
+    fun `tapping the row while Blocked and Requestable asks for permission and keeps the pref`() = runTest {
+        notificationGate.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Requestable)
+
+        vm.events.test {
+            vm.onGotThisRunningLowRowTap()
+
+            assertEquals(SettingsEvent.RequestNotificationPermission, awaitItem())
+        }
+        verify { reminderScheduler.onPermissionRequested() }
+        assertTrue(gotThisPrefs.runningLowEnabled)
+        assertEquals(ReminderRowState.Blocked, vm.gotThisRunningLow.value)
+    }
+
+    @Test
+    fun `tapping the row while Blocked and permanently refused opens system settings`() = runTest {
+        notificationGate.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.PermanentlyRefused)
+
+        vm.events.test {
+            vm.onGotThisRunningLowRowTap()
+
+            assertEquals(SettingsEvent.OpenNotificationSettings, awaitItem())
+        }
+        verify(exactly = 0) { reminderScheduler.onPermissionRequested() }
+        assertTrue(gotThisPrefs.runningLowEnabled)
+    }
+
+    @Test
+    fun `tapping the row toggles the pref when it is not Blocked`() = runTest {
+        val vm = viewModel()
+
+        vm.onGotThisRunningLowRowTap()
+        assertEquals(ReminderRowState.Off, vm.gotThisRunningLow.value)
+        assertTrue(!gotThisPrefs.runningLowEnabled)
+
+        vm.onGotThisRunningLowRowTap()
+        assertEquals(ReminderRowState.On, vm.gotThisRunningLow.value)
+        assertTrue(gotThisPrefs.runningLowEnabled)
+    }
+
+    @Test
+    fun `Blocked becomes On after a grant`() = runTest {
+        notificationGate.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Requestable)
+        vm.events.test {
+            vm.onGotThisRunningLowRowTap()
+            awaitItem()
+        }
+
+        notificationGate.enabled = true
+        vm.onNotificationPermissionResult(true)
+
+        assertEquals(ReminderRowState.On, vm.gotThisRunningLow.value)
+        coVerify(exactly = 0) { reminderScheduler.setEnabled(any()) }
+    }
+
+    @Test
+    fun `Blocked becomes On after returning from system settings`() = runTest {
+        notificationGate.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.PermanentlyRefused)
+        assertEquals(ReminderRowState.Blocked, vm.gotThisRunningLow.value)
+
+        notificationGate.enabled = true
+        vm.onResumed()
+
+        assertEquals(ReminderRowState.On, vm.gotThisRunningLow.value)
+    }
+
+    // The event can be lost (nobody collecting), leaving the flag set with no
+    // dialog ever shown; the next shopping-reminders answer must still count.
+    @Test
+    fun `a stale Got This request does not swallow a later shopping-reminders result`() = runTest {
+        notificationGate.enabled = false
+        val vm = viewModel()
+        vm.updatePermissionState(PermissionState.Requestable)
+        vm.onGotThisRunningLowRowTap()
+
+        vm.onReminderSwitch(true)
         vm.onNotificationPermissionResult(true)
 
         coVerify { reminderScheduler.setEnabled(true) }
@@ -861,7 +969,7 @@ class SettingsScreenTest {
         compose.onNodeWithText("Running-low reminders").performScrollTo().performClick()
 
         verify { viewModel.onGotThisHintsSwitch(false) }
-        verify { viewModel.onGotThisRunningLowSwitch(false) }
+        verify { viewModel.onGotThisRunningLowRowTap() }
     }
 
     @Test
@@ -873,6 +981,16 @@ class SettingsScreenTest {
 
         verify { viewModel.onGotThisHintsSwitch(false) }
         verify { viewModel.onGotThisRunningLowSwitch(true) }
+    }
+
+    @Test
+    fun `the running-low switch is drawn on while Blocked and a row tap goes to the view model`() {
+        render(pinExists = false, runningLow = ReminderRowState.Blocked)
+
+        compose.onAllNodes(isToggleable())[2].performScrollTo().assertIsOn()
+        compose.onNodeWithText("Running-low reminders").performScrollTo().performClick()
+
+        verify { viewModel.onGotThisRunningLowRowTap() }
     }
 
     @Test

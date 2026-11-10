@@ -234,10 +234,10 @@ fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel
                         R.string.settings_got_this_running_low_subtitle
                     },
                 ),
-                onClick = { viewModel.onGotThisRunningLowSwitch(gotThisRunningLow != ReminderRowState.On) },
+                onClick = { viewModel.onGotThisRunningLowRowTap() },
                 trailing = {
                     Switch(
-                        checked = gotThisRunningLow == ReminderRowState.On,
+                        checked = gotThisRunningLow != ReminderRowState.Off,
                         onCheckedChange = { viewModel.onGotThisRunningLowSwitch(it) },
                     )
                 },

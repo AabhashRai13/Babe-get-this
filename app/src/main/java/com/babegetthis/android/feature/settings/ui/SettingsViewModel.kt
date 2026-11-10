@@ -131,21 +131,32 @@ class SettingsViewModel @Inject constructor(
         _gotThisHints.value = on
     }
 
-    // Mirrors onReminderSwitch, but never touches ReminderScheduler beyond
-    // recording that the system dialog was requested: nothing here arms a
-    // shopping reminder or snoozes its prompt.
+    // Turning on writes the pref, then asks for what is missing. Nothing here
+    // arms a shopping reminder or snoozes its prompt; ReminderScheduler is only
+    // told that the system dialog was requested.
     fun onGotThisRunningLowSwitch(on: Boolean) {
         gotThisPrefs.runningLowEnabled = on
         refreshReminderRow()
-        if (!on) return
-        when {
-            _gotThisRunningLow.value == ReminderRowState.Blocked ->
-                emitEvent(SettingsEvent.OpenNotificationSettings)
-            permissionState == PermissionState.Requestable -> {
-                gotThisPermissionPending = true
-                reminderScheduler.onPermissionRequested()
-                emitEvent(SettingsEvent.RequestNotificationPermission)
-            }
+        if (on && _gotThisRunningLow.value == ReminderRowState.Blocked) requestOrOpenSettings()
+    }
+
+    // Tapping the row while Blocked fixes the notifications; it never turns the pref off.
+    fun onGotThisRunningLowRowTap() {
+        refreshReminderRow()
+        if (_gotThisRunningLow.value == ReminderRowState.Blocked) {
+            requestOrOpenSettings()
+        } else {
+            onGotThisRunningLowSwitch(_gotThisRunningLow.value == ReminderRowState.Off)
+        }
+    }
+
+    private fun requestOrOpenSettings() {
+        if (permissionState == PermissionState.Requestable) {
+            gotThisPermissionPending = true
+            reminderScheduler.onPermissionRequested()
+            emitEvent(SettingsEvent.RequestNotificationPermission)
+        } else {
+            emitEvent(SettingsEvent.OpenNotificationSettings)
         }
     }
 
@@ -166,6 +177,8 @@ class SettingsViewModel @Inject constructor(
 
     // Enabling from Settings does not arm a list: setEnabled(true) is the whole effect.
     fun onReminderSwitch(checked: Boolean) {
+        // A Got This request that never reached the system must not swallow this one's result.
+        gotThisPermissionPending = false
         if (!checked) {
             enableReminders(false)
             return
@@ -223,11 +236,8 @@ class SettingsViewModel @Inject constructor(
         }
         _gotThisRunningLow.value = when {
             !gotThisPrefs.runningLowEnabled -> ReminderRowState.Off
-            permissionState == PermissionState.PermanentlyRefused ||
-                (!notificationGate.notificationsEnabled() && permissionHeld) ->
-                ReminderRowState.Blocked
-            permissionHeld -> ReminderRowState.On
-            else -> ReminderRowState.Off
+            notificationGate.notificationsEnabled() -> ReminderRowState.On
+            else -> ReminderRowState.Blocked
         }
     }
 }
