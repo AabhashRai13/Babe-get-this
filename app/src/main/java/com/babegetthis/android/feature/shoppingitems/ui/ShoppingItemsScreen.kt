@@ -137,7 +137,10 @@ fun ShoppingItemsScreen(
     // state is Requestable (API 33+).
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> viewModel.onNotificationPermissionResult(granted) }
+    ) { granted ->
+        viewModel.onNotificationPermissionResult(granted)
+        gotThisViewModel.onResumed()
+    }
 
     val isLocked by viewModel.isLocked.collectAsState()
     val sessionUnlocked by viewModel.sessionUnlocked.collectAsState()
@@ -627,7 +630,7 @@ fun ShoppingItemsScreen(
         ReminderPermissionSheet(
             onAccept = {
                 showHeadsUpPrompt = false
-                viewModel.onReminderPromptAccepted()
+                viewModel.onHeadsUpAccepted()
             },
             onDecline = { showHeadsUpPrompt = false },
             title = stringResource(R.string.got_this_prompt_title),

@@ -1329,6 +1329,49 @@ class ShoppingItemsViewModelTest {
     }
 
     @Test
+    fun `heads-up accepted then denied leaves the shopping reminder alone`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.events.test {
+            viewModel.onHeadsUpAccepted()
+            assertEquals(ShoppingItemsViewModel.UiEvent.RequestNotificationPermission, awaitItem())
+        }
+        verify { reminderScheduler.onPermissionRequested() }
+
+        viewModel.onNotificationPermissionResult(granted = false)
+
+        verify(exactly = 0) { reminderScheduler.onPermissionDenied() }
+        verify(exactly = 0) { reminderScheduler.snoozePrompt() }
+        coVerify(exactly = 0) { reminderScheduler.onPermissionGranted(any()) }
+        coVerify(exactly = 0) { reminderScheduler.arm(any()) }
+    }
+
+    @Test
+    fun `heads-up accepted then granted does not arm a reminder`() = runTest {
+        val viewModel = buildViewModel()
+        viewModel.onHeadsUpAccepted()
+
+        viewModel.onNotificationPermissionResult(granted = true)
+
+        coVerify(exactly = 0) { reminderScheduler.onPermissionGranted(any()) }
+        coVerify(exactly = 0) { reminderScheduler.arm(any()) }
+        verify(exactly = 0) { reminderScheduler.onPermissionDenied() }
+    }
+
+    @Test
+    fun `a heads-up result does not leak into a later reminder result`() = runTest {
+        val viewModel = buildViewModel()
+        viewModel.onHeadsUpAccepted()
+        viewModel.onNotificationPermissionResult(granted = false)
+
+        viewModel.onNotificationPermissionResult(granted = true)
+        viewModel.onNotificationPermissionResult(granted = false)
+
+        coVerify(exactly = 1) { reminderScheduler.onPermissionGranted("L1") }
+        verify(exactly = 1) { reminderScheduler.onPermissionDenied() }
+    }
+
+    @Test
     fun `no prompt before the screen reports a permission state`() = runTest {
         coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         val viewModel = buildViewModel()

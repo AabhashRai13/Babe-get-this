@@ -230,7 +230,21 @@ class ShoppingItemsViewModel @Inject constructor(
         _showReminderPrompt.value = false
     }
 
+    // Got This's "weekly heads-up" shares the system dialog but not the shopping reminder:
+    // its result must neither arm this list nor snooze the reminder prompt.
+    private var headsUpRequestPending = false
+
+    fun onHeadsUpAccepted() {
+        reminderScheduler.onPermissionRequested()
+        headsUpRequestPending = true
+        viewModelScope.launch { _events.emit(UiEvent.RequestNotificationPermission) }
+    }
+
     fun onNotificationPermissionResult(granted: Boolean) {
+        if (headsUpRequestPending) {
+            headsUpRequestPending = false
+            return
+        }
         viewModelScope.launch {
             if (granted) {
                 reminderScheduler.onPermissionGranted(listId)
