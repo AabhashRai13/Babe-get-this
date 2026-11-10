@@ -25,6 +25,8 @@ import java.util.TimeZone
 
 data class BoughtHint(val itemId: String, val daysAgo: Int, val source: HintSource, val canonicalKey: String)
 
+data class GotThisCounts(val regulars: Int, val purchases: Int)
+
 data class UsualItem(val canonicalKey: String, val name: String, val categoryId: String?, val daysOverdue: Int)
 
 // The read side of purchase history: groups what is in Room, asks ItemJudge and
@@ -88,6 +90,19 @@ class GotThisRepository(
         val names = itemDao.uncheckedNames(ownerId).first()
         val mutes = stateDao.mutes(ownerId ?: GUEST_STATE_ID)
         return due(ownerId, rows, names, mutedKeys(mutes, now), now + withinDays * DAY_MILLIS)
+    }
+
+    // How many of the owner's item groups are regulars, and how many live purchases there are.
+    suspend fun summaryCounts(ownerId: String?): GotThisCounts {
+        val now = clock.now()
+        val groups = ItemGroups.build(purchaseDao.keyStats(ownerId).first().map(::toKeyStat))
+        val live = purchaseDao.live(ownerId)
+        val byKey = live.groupBy { it.itemKey }
+        val regulars = groups.count { group ->
+            val purchases = group.keys.flatMap { byKey[it].orEmpty() }
+            ItemJudge.profile(purchases.map { JudgedPurchase(it.boughtAt, it.categoryId) }, now, tz()).isRegular
+        }
+        return GotThisCounts(regulars, live.size)
     }
 
     suspend fun purchaseDays(ownerId: String?): List<Long> = purchaseDao.live(ownerId).map { it.boughtAt }

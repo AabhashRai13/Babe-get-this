@@ -335,6 +335,7 @@ kover {
                     "com.babegetthis.android.core.reminder.AndroidNotificationGate",
                     "com.babegetthis.android.core.reminder.ProcessForegroundState",
                     "com.babegetthis.android.core.reminder.SystemReminderClock",
+                    "com.babegetthis.android.feature.gotthis.reminder.WorkManagerRunningLowEnqueuer",
                 )
             }
         }

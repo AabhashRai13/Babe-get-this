@@ -54,6 +54,10 @@ class MainActivity : ComponentActivity() {
     // consumed, so a rotation does not navigate again.
     private val pendingReminder = MutableStateFlow<ReminderTarget?>(null)
 
+    // Set when the running-low notification had no list to open: the list
+    // catalog shows with the name dialog open. Reset once consumed.
+    private val pendingCreateList = MutableStateFlow(false)
+
     private var startAtWelcome = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,6 +77,8 @@ class MainActivity : ComponentActivity() {
             restored = savedInstanceState != null,
             analytics::track,
         )
+        pendingCreateList.value = !startAtWelcome && savedInstanceState == null &&
+            ReminderIntentParser.wantsCreateList(intent)
 
         setContent {
             BabeGetThisTheme {
@@ -95,12 +101,15 @@ class MainActivity : ComponentActivity() {
                     }
 
                     val reminder by pendingReminder.collectAsStateWithLifecycle()
+                    val createList by pendingCreateList.collectAsStateWithLifecycle()
                     BgtNavGraph(
                         authStateManager = authStateManager,
                         navController = navController,
                         startAtWelcome = startAtWelcome,
                         pendingReminder = reminder,
                         onPendingReminderConsumed = { pendingReminder.value = null },
+                        pendingCreateList = createList,
+                        onPendingCreateListConsumed = { pendingCreateList.value = false },
                     )
 
                     val snackbarHostState = remember { SnackbarHostState() }
@@ -142,6 +151,7 @@ class MainActivity : ComponentActivity() {
         val welcomeNow = welcomeRepository.shouldShowWelcome(authStateManager.authState.value)
         pendingReminder.value =
             ReminderIntentParser.handleReminderIntent(intent, welcomeNow, restored = false, analytics::track)
+        pendingCreateList.value = !welcomeNow && ReminderIntentParser.wantsCreateList(intent)
     }
 
     override fun onResume() {

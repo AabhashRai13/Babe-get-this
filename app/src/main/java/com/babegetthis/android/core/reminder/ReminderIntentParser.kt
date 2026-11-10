@@ -14,6 +14,13 @@ object ReminderIntentParser {
     const val EXTRA_LIST_ID = "reminder_list_id"
     const val EXTRA_LIST_NAME = "reminder_list_name"
 
+    // Set by the Got This running-low notification; absent on a shopping reminder.
+    const val EXTRA_SOURCE = "reminder_source"
+    const val SOURCE_GOT_THIS = "got_this"
+
+    // A Got This notification with no list to open asks for the create-list dialog.
+    const val EXTRA_CREATE_LIST = "reminder_create_list"
+
     /**
      * The list a reminder tap should open, or null when [intent] is not a
      * reminder tap. Welcome wins: a signed-out user who has not chosen yet has
@@ -48,8 +55,25 @@ object ReminderIntentParser {
     ): ReminderTarget? {
         if (restored) return null
         if (intent != null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
-        val target = parse(intent, startAtWelcome) ?: return null
-        track(AnalyticsEvent.ReminderTapped)
-        return target
+        val target = parse(intent, startAtWelcome)
+        return when {
+            isGotThis(intent) -> {
+                if (!startAtWelcome && (target != null || wantsCreateList(intent))) {
+                    track(AnalyticsEvent.GotThisReminderOpened)
+                }
+                target
+            }
+            target != null -> {
+                track(AnalyticsEvent.ReminderTapped)
+                target
+            }
+            else -> null
+        }
     }
+
+    /** True only for a Got This notification tap that asks for the create-list dialog. */
+    fun wantsCreateList(intent: Intent?): Boolean =
+        isGotThis(intent) && intent?.getBooleanExtra(EXTRA_CREATE_LIST, false) == true
+
+    private fun isGotThis(intent: Intent?): Boolean = intent?.getStringExtra(EXTRA_SOURCE) == SOURCE_GOT_THIS
 }

@@ -241,4 +241,10 @@
     <string name="got_this_heads_up">Get a weekly heads-up</string>
     <string name="got_this_prompt_title">Running low?</string>
     <string name="got_this_prompt_body">Get one heads-up a week for things you usually buy.</string>
+    <string name="got_this_channel_name">Running-low reminders</string>
+    <string name="got_this_notification_title">Running low?</string>
+    <string name="got_this_notification_one">%1$s is usually bought around now.</string>
+    <string name="got_this_notification_two">%1$s and %2$s are usually bought around now.</string>
+    <string name="got_this_notification_three">%1$s, %2$s and %3$s are usually bought around now.</string>
+    <string name="got_this_notification_more" tools:ignore="PluralsCandidate">%1$s, %2$s, %3$s and %4$d more are usually bought around now.</string>
 </resources>

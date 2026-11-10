@@ -13,6 +13,7 @@ import com.babegetthis.android.core.sync.SyncTrigger
 import com.babegetthis.android.core.telemetry.TelemetryContext
 import com.babegetthis.android.feature.gotthis.data.GotThisAccess
 import com.babegetthis.android.feature.gotthis.data.GotThisBackfill
+import com.babegetthis.android.feature.gotthis.reminder.RunningLowScheduler
 import dagger.hilt.android.HiltAndroidApp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -50,6 +51,8 @@ class BabeGetThisApp :
     @Inject lateinit var gotThisAccess: GotThisAccess
 
     @Inject lateinit var gotThisBackfill: GotThisBackfill
+
+    @Inject lateinit var runningLowScheduler: RunningLowScheduler
 
     // The one process-wide scope (CoroutinesModule), shared with everything
     // else that outlives a screen — not a second private one that happened to
@@ -96,6 +99,9 @@ class BabeGetThisApp :
         // Got This: turn already-ticked guest items into history, once. Room
         // work, so off the main thread.
         applicationScope.launch(Dispatchers.IO) { gotThisBackfill.runOnce() }
+        // Got This: the daily check behind the weekly running-low notification.
+        // KEEP makes this a no-op once the periodic work exists.
+        applicationScope.launch(Dispatchers.IO) { runningLowScheduler.ensureScheduled() }
         // Token rotation and session loss, mirrored into local auth state and
         // telemetry identity. See SessionObserver for the transitions and for
         // why it runs on the IO dispatcher.

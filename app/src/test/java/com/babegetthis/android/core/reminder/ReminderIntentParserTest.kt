@@ -3,7 +3,9 @@ package com.babegetthis.android.core.reminder
 import android.content.Intent
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -107,5 +109,69 @@ class ReminderIntentParserTest {
 
         assertNull(target)
         assertEquals(emptyList<AnalyticsEvent>(), tracked)
+    }
+
+    private fun gotThisIntent(listId: String? = "list-1", createList: Boolean = false) = Intent().apply {
+        putExtra(ReminderIntentParser.EXTRA_SOURCE, "got_this")
+        if (listId != null) {
+            putExtra(ReminderIntentParser.EXTRA_LIST_ID, listId)
+            putExtra(ReminderIntentParser.EXTRA_LIST_NAME, "Weekly shop")
+        }
+        if (createList) putExtra(ReminderIntentParser.EXTRA_CREATE_LIST, true)
+    }
+
+    @Test
+    fun `the Got This extra keys are stable`() {
+        assertEquals("reminder_source", ReminderIntentParser.EXTRA_SOURCE)
+        assertEquals("reminder_create_list", ReminderIntentParser.EXTRA_CREATE_LIST)
+    }
+
+    @Test
+    fun `a Got This tap with a list tracks GotThisReminderOpened, not ReminderTapped`() {
+        val tracked = mutableListOf<AnalyticsEvent>()
+
+        val target = ReminderIntentParser.handleReminderIntent(gotThisIntent(), false, false, { tracked.add(it) })
+
+        assertEquals(ReminderTarget("list-1", "Weekly shop"), target)
+        assertEquals(listOf<AnalyticsEvent>(AnalyticsEvent.GotThisReminderOpened), tracked)
+    }
+
+    @Test
+    fun `a Got This tap that asks for a new list tracks GotThisReminderOpened once and has no target`() {
+        val tracked = mutableListOf<AnalyticsEvent>()
+        val intent = gotThisIntent(listId = null, createList = true)
+
+        val target = ReminderIntentParser.handleReminderIntent(intent, false, false, { tracked.add(it) })
+
+        assertNull(target)
+        assertEquals(listOf<AnalyticsEvent>(AnalyticsEvent.GotThisReminderOpened), tracked)
+    }
+
+    @Test
+    fun `a Got This tap on a restored activity, from Recents or at Welcome tracks nothing`() {
+        val tracked = mutableListOf<AnalyticsEvent>()
+        val intent = gotThisIntent(listId = null, createList = true)
+
+        ReminderIntentParser.handleReminderIntent(intent, false, true, { tracked.add(it) })
+        ReminderIntentParser.handleReminderIntent(
+            Intent(intent).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY),
+            false,
+            false,
+            { tracked.add(it) },
+        )
+        ReminderIntentParser.handleReminderIntent(intent, true, false, { tracked.add(it) })
+        ReminderIntentParser.handleReminderIntent(Intent(), false, false, { tracked.add(it) })
+
+        assertEquals(emptyList<AnalyticsEvent>(), tracked)
+    }
+
+    @Test
+    fun `wantsCreateList is true only for a Got This intent asking for it`() {
+        assertTrue(ReminderIntentParser.wantsCreateList(gotThisIntent(listId = null, createList = true)))
+        assertFalse(ReminderIntentParser.wantsCreateList(gotThisIntent()))
+        assertFalse(
+            ReminderIntentParser.wantsCreateList(Intent().putExtra(ReminderIntentParser.EXTRA_CREATE_LIST, true)),
+        )
+        assertFalse(ReminderIntentParser.wantsCreateList(null))
     }
 }

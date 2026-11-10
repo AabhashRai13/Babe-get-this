@@ -51,6 +51,8 @@ fun BgtNavGraph(
     startAtWelcome: Boolean = false,
     pendingReminder: ReminderTarget? = null,
     onPendingReminderConsumed: () -> Unit = {},
+    pendingCreateList: Boolean = false,
+    onPendingCreateListConsumed: () -> Unit = {},
 ) {
     // A tapped reminder. The caller nulls it on consumption, so a rotation
     // (which re-runs this composition with the same controller) does not
@@ -60,6 +62,12 @@ fun BgtNavGraph(
             navController.openReminder(pendingReminder)
             onPendingReminderConsumed()
         }
+    }
+
+    // The running-low notification with no list to open: show the catalog, which
+    // opens the name dialog and then reports the request consumed.
+    LaunchedEffect(pendingCreateList) {
+        if (pendingCreateList) navController.showListCatalog()
     }
 
     // Signing out or deleting the account takes the account's lists off the
@@ -92,6 +100,8 @@ fun BgtNavGraph(
         composable(Routes.SHOPPING_LIST) {
             ShoppingListScreen(
                 authStateManager = authStateManager,
+                pendingCreateList = pendingCreateList,
+                onPendingCreateListConsumed = onPendingCreateListConsumed,
                 onNavigateToList = { listId, listName ->
                     navController.navigate(Routes.shoppingItems(listId, listName))
                 },
@@ -214,6 +224,12 @@ internal fun NavHostController.openReminder(target: ReminderTarget) {
     navigate(Routes.shoppingItems(target.listId, Uri.encode(target.listName))) {
         popUpTo(Routes.SHOPPING_LIST)
     }
+}
+
+// Back to the list catalog, which is on the stack beneath every other screen
+// (or is the start destination itself).
+internal fun NavHostController.showListCatalog() {
+    popBackStack(Routes.SHOPPING_LIST, inclusive = false)
 }
 
 // Auth can be opened from the lists (Share, voice, the profile button) or from

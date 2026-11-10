@@ -41,6 +41,20 @@ interface ShoppingListDao {
     )
     fun getListsWithItemCount(accountId: String?): Flow<List<ShoppingListWithItemCount>>
 
+    // The list the person edited last, finished or not; the same owner rule as
+    // the catalog above.
+    @Query(
+        """
+        SELECT * FROM shopping_lists
+        WHERE deletedAt IS NULL
+          AND ((:accountId IS NULL AND accountId IS NULL AND shareCode IS NULL)
+               OR accountId = :accountId)
+        ORDER BY updatedAt DESC, createdAt DESC
+        LIMIT 1
+    """,
+    )
+    suspend fun mostRecentlyEdited(accountId: String?): ShoppingListEntity?
+
     @Query("SELECT * FROM shopping_lists WHERE id = :listId AND deletedAt IS NULL")
     fun getListById(listId: String): Flow<ShoppingListEntity?>
 

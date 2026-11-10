@@ -1,6 +1,8 @@
 package com.babegetthis.android.feature.gotthis.di
 
 import android.content.Context
+import androidx.core.app.NotificationManagerCompat
+import androidx.work.WorkManager
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.core.reminder.ReminderClock
@@ -18,8 +20,14 @@ import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.SharedPrefsGotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
 import com.babegetthis.android.feature.gotthis.data.remote.SupabaseGotThisRemote
+import com.babegetthis.android.feature.gotthis.domain.ZoneProvider
+import com.babegetthis.android.feature.gotthis.reminder.RunningLowEnqueuer
+import com.babegetthis.android.feature.gotthis.reminder.RunningLowNotifier
+import com.babegetthis.android.feature.gotthis.reminder.RunningLowScheduler
+import com.babegetthis.android.feature.gotthis.reminder.WorkManagerRunningLowEnqueuer
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
+import dagger.Lazy
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -77,7 +85,8 @@ object GotThisModule {
         prefs: GotThisPrefs,
         syncKicker: SyncKicker,
         clock: ReminderClock,
-    ): GotThisRepository = GotThisRepository(db, prefs, syncKicker, clock) { TimeZone.getDefault() }
+        zone: ZoneProvider,
+    ): GotThisRepository = GotThisRepository(db, prefs, syncKicker, clock) { zone.current() }
 
     @Provides
     @Singleton
@@ -88,5 +97,30 @@ object GotThisModule {
         prefs: GotThisPrefs,
         clock: ReminderClock,
         crashReporter: CrashReporter,
-    ): GotThisTracker = GotThisTracker(db, analytics, access, prefs, clock, crashReporter) { TimeZone.getDefault() }
+        zone: ZoneProvider,
+    ): GotThisTracker = GotThisTracker(db, analytics, access, prefs, clock, crashReporter) { zone.current() }
+
+    @Provides
+    @Singleton
+    fun provideZoneProvider(): ZoneProvider = ZoneProvider { TimeZone.getDefault() }
+
+    @Provides
+    @Singleton
+    fun provideRunningLowNotifier(@ApplicationContext context: Context): RunningLowNotifier =
+        RunningLowNotifier(context, NotificationManagerCompat.from(context))
+
+    // Lazy so building the enqueuer during Application injection does not
+    // initialise WorkManager; see WorkManagerEnqueuer.
+    @Provides
+    @Singleton
+    fun provideRunningLowEnqueuer(workManager: Lazy<WorkManager>): RunningLowEnqueuer =
+        WorkManagerRunningLowEnqueuer(workManager)
+
+    @Provides
+    @Singleton
+    fun provideRunningLowScheduler(
+        enqueuer: RunningLowEnqueuer,
+        clock: ReminderClock,
+        zone: ZoneProvider,
+    ): RunningLowScheduler = RunningLowScheduler(enqueuer, clock, zone)
 }

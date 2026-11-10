@@ -337,4 +337,17 @@ class GotThisRepositoryTest {
             cancel()
         }
     }
+
+    @Test
+    fun `summaryCounts counts regular groups and live purchases of one owner`() = runTest {
+        buy("eggs", 1, 8, 15, 22)
+        buy("tea", 3)
+        buy("milk", 2, 9, 16, 23, account = "u2")
+
+        val counts = repo.summaryCounts("u1")
+
+        assertEquals(GotThisCounts(regulars = 1, purchases = 5), counts)
+        assertEquals(GotThisCounts(regulars = 1, purchases = 4), repo.summaryCounts("u2"))
+        assertEquals(GotThisCounts(regulars = 0, purchases = 0), repo.summaryCounts(null))
+    }
 }

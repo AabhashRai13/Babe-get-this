@@ -100,6 +100,18 @@ interface ShoppingItemDao {
     )
     fun uncheckedNames(accountId: String?): Flow<List<String>>
 
+    // Names of items added to one owner's live lists since [since], ticked or
+    // deleted afterwards or not (null is the guest's lists).
+    @Query(
+        """
+        SELECT i.name FROM shopping_items i
+        JOIN shopping_lists l ON l.id = i.listId
+        WHERE i.createdAt >= :since AND l.deletedAt IS NULL
+            AND (l.accountId = :accountId OR (:accountId IS NULL AND l.accountId IS NULL))
+    """,
+    )
+    suspend fun namesCreatedSince(accountId: String?, since: Long): List<String>
+
     // ── Sync primitives (shared lists only) — see ShoppingListDao ───────────
 
     @Query(
