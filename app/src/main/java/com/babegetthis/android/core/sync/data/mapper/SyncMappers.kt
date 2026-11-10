@@ -31,6 +31,7 @@ fun ShoppingItemEntity.toRow(): ItemRow = ItemRow(
     shop = shop,
     note = note,
     deletedAt = deletedAt?.millisToIso(),
+    pickedUpAt = pickedUpAt?.millisToIso(),
 )
 
 // Incoming rows land as clean (pendingSync = false) entities whose updatedAt
@@ -77,5 +78,6 @@ fun ItemRow.toEntity(local: ShoppingItemEntity?): ShoppingItemEntity {
         updatedAt = serverMs,
         deletedAt = deletedAt?.isoToMillis(),
         pendingSync = false,
+        pickedUpAt = pickedUpAt?.isoToMillis(),
     )
 }

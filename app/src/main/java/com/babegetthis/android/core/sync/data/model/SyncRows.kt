@@ -37,4 +37,5 @@ data class ItemRow(
     val note: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("deleted_at") val deletedAt: String? = null,
+    @SerialName("picked_up_at") val pickedUpAt: String? = null,
 )

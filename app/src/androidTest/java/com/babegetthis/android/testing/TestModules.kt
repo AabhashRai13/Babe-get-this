@@ -19,6 +19,8 @@ import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.voice.data.repository.VoiceRepository
 import com.babegetthis.android.core.voice.model.ItemDraft
+import com.babegetthis.android.feature.gotthis.data.local.dao.GotThisStateDao
+import com.babegetthis.android.feature.gotthis.data.local.dao.PurchaseDao
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import dagger.Module
@@ -60,6 +62,12 @@ object TestDatabaseModule {
 
     @Provides
     fun provideCategoryDao(db: AppDatabase): CategoryDao = db.categoryDao()
+
+    @Provides
+    fun providePurchaseDao(db: AppDatabase): PurchaseDao = db.purchaseDao()
+
+    @Provides
+    fun provideGotThisStateDao(db: AppDatabase): GotThisStateDao = db.gotThisStateDao()
 }
 
 // --- auth ---

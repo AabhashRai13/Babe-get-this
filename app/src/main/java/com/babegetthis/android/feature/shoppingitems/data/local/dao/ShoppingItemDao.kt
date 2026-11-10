@@ -71,6 +71,34 @@ interface ShoppingItemDao {
     )
     suspend fun updatePickedUpStatus(itemId: String, isPickedUp: Boolean, updatedAt: Long, pendingSync: Boolean)
 
+    // A tick or untick: also records the tick time (kept on untick, so the
+    // caller passes the existing time then).
+    @Query(
+        """
+        UPDATE shopping_items
+        SET isPickedUp = :isPickedUp, pickedUpAt = :pickedUpAt, updatedAt = :updatedAt, pendingSync = :pendingSync
+        WHERE id = :itemId
+    """,
+    )
+    suspend fun setPickedUp(
+        itemId: String,
+        isPickedUp: Boolean,
+        pickedUpAt: Long?,
+        updatedAt: Long,
+        pendingSync: Boolean,
+    )
+
+    // Names of one owner's live, unticked items (null is the guest's lists).
+    @Query(
+        """
+        SELECT i.name FROM shopping_items i
+        JOIN shopping_lists l ON l.id = i.listId
+        WHERE i.isPickedUp = 0 AND i.deletedAt IS NULL AND l.deletedAt IS NULL
+            AND (l.accountId = :accountId OR (:accountId IS NULL AND l.accountId IS NULL))
+    """,
+    )
+    fun uncheckedNames(accountId: String?): Flow<List<String>>
+
     // ── Sync primitives (shared lists only) — see ShoppingListDao ───────────
 
     @Query(

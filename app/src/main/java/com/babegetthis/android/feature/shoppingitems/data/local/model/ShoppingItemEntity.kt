@@ -33,4 +33,7 @@ data class ShoppingItemEntity(
     // Sync columns, added in DB v3 (MIGRATION_2_3) — see ShoppingListEntity.
     val deletedAt: Long? = null,
     val pendingSync: Boolean = false,
+    // The time of the current or most recent tick, added in DB v6
+    // (MIGRATION_5_6). Never cleared by an untick.
+    val pickedUpAt: Long? = null,
 )
