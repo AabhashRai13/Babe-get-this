@@ -2,12 +2,14 @@ package com.babegetthis.android.feature.gotthis.data
 
 import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.sync.data.mapper.millisToIso
+import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.TickOutboxEntity
 import com.babegetthis.android.feature.gotthis.data.remote.TickReply
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.FakeGotThisPrefs
 import com.babegetthis.android.testing.FakeGotThisRemote
+import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
 import com.babegetthis.android.testing.gotThisSyncFor
 import kotlinx.coroutines.test.runTest
@@ -30,7 +32,8 @@ class GotThisSyncPushTest {
     private val now = 1_793_527_200_000L
     private val remote = FakeGotThisRemote()
     private val prefs = FakeGotThisPrefs()
-    private val sync by lazy { gotThisSyncFor(dbRule, remote, prefs, clock = ReminderClock { now }) }
+    private val syncPoints = FakeSyncPointStore()
+    private val sync by lazy { gotThisSyncFor(dbRule, remote, prefs, syncPoints, clock = ReminderClock { now }) }
     private val dao get() = dbRule.purchaseDao
 
     private suspend fun outbox(
@@ -62,6 +65,23 @@ class GotThisSyncPushTest {
                 boughtAt = now,
                 deletedAt = deletedAt,
                 pendingUpload = pendingUpload,
+            ),
+        ),
+    )
+
+    private suspend fun purchaseAt(tickId: String, boughtAt: Long) = dao.upsert(
+        listOf(
+            PurchaseEntity(
+                id = "p-$tickId",
+                tickId = tickId,
+                accountId = "u1",
+                sourceItemId = "item-$tickId",
+                name = "Milk",
+                itemKey = "milk",
+                categoryId = null,
+                boughtAt = boughtAt,
+                deletedAt = null,
+                pendingUpload = false,
             ),
         ),
     )
@@ -126,6 +146,28 @@ class GotThisSyncPushTest {
         remote.onClear = {}
         sync.push("u1")
         assertEquals(listOf((now - day).millisToIso(), now.millisToIso()), remote.clearedAt)
+        assertNull(prefs.pendingClear("u1"))
+    }
+
+    @Test
+    fun `a clear answered with a later reset applies that reset on the phone`() = runTest {
+        val t1 = now - 3 * day
+        val t2 = now - day
+        prefs.setPendingClear("u1", t1)
+        // Another phone cleared at t2 first; the server keeps the later reset.
+        remote.clearReply = { t2.millisToIso() }
+        purchaseAt("between", t1 + day)
+        purchaseAt("after", t2 + 1)
+        dbRule.stateDao.upsertMute(ItemMuteEntity("u1", "milk", 1, null))
+        syncPoints.set("purchases:u1", "2026-10-01T00:00:00Z")
+
+        sync.push("u1")
+
+        assertEquals(listOf("after"), dao.live("u1").map { it.tickId })
+        assertTrue(dao.byTickId("between").isEmpty())
+        assertTrue(dbRule.stateDao.mutes("u1").isEmpty())
+        assertNull(syncPoints.get("purchases:u1"))
+        assertEquals(t2, prefs.lastAppliedReset("u1"))
         assertNull(prefs.pendingClear("u1"))
     }
 

@@ -204,6 +204,21 @@ class GotThisSyncPullTest {
     }
 
     @Test
+    fun `a clear pressed while the fetch is in flight keeps the fetched older rows out`() = runTest {
+        remote.purchaseRows = listOf(row("t09", t09), row("t10", t10), row("t12", t12))
+        remote.onFetch = {
+            // What GotThisRepository.clearHistory does at t11.
+            prefs.setPendingClear("u1", t11.isoToMillis())
+            dao.deleteUpTo("u1", t11.isoToMillis())
+        }
+
+        sync.pull("u1")
+
+        assertTrue(dao.all().none { it.boughtAt <= t11.isoToMillis() })
+        assertEquals(listOf("t12"), ids())
+    }
+
+    @Test
     fun `only discarded rows still move the point`() = runTest {
         prefs.setLastAppliedReset("u1", t11.isoToMillis())
         remote.purchaseRows = listOf(row("t09", t09, updatedAt = t12))

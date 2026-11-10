@@ -65,11 +65,13 @@ class GotThisSync(
     // when the server has not heard of the clear yet.
     suspend fun pull(userId: String) {
         applyServerReset(userId)
-        val watermark = prefs.watermark(userId)
         val fetched = remote.fetchPurchases(syncPoints.get(point(userId)))
         if (fetched.isEmpty()) return
-        val kept = fetched.filter { watermark == null || it.boughtAt.isoToMillis() > watermark }
         db.withTransaction {
+            // Read here, not before the fetch: a Clear pressed while it was in
+            // flight has already deleted its rows and must not get them back.
+            val watermark = prefs.watermark(userId)
+            val kept = fetched.filter { watermark == null || it.boughtAt.isoToMillis() > watermark }
             // A live server row must not undo an undo this phone has yet to send.
             val undoPending = kept.filter { it.deletedAt == null }
                 .map { it.tickId }
@@ -85,6 +87,13 @@ class GotThisSync(
 
     private suspend fun applyServerReset(userId: String) {
         val reset = remote.fetchResetAt()?.isoToMillis() ?: return
+        applyReset(userId, reset)
+    }
+
+    // Brings the phone in line with a reset the server holds, whether pulled or
+    // returned by a clear: a reset later than the one sent (another phone
+    // cleared after this one) must still delete the purchases up to it.
+    private suspend fun applyReset(userId: String, reset: Long) {
         val applied = prefs.lastAppliedReset(userId)
         if (applied != null && reset <= applied) return
         db.withTransaction {
@@ -162,7 +171,7 @@ class GotThisSync(
         val pending = prefs.pendingClear(userId) ?: return
         try {
             val resetAt = remote.clearHistory(pending.millisToIso())
-            prefs.setLastAppliedReset(userId, resetAt.isoToMillis())
+            applyReset(userId, resetAt.isoToMillis())
             // A Clear pressed during the call replaced the pending time; it is not sent yet.
             if (prefs.pendingClear(userId) == pending) prefs.setPendingClear(userId, null)
         } catch (e: CancellationException) {

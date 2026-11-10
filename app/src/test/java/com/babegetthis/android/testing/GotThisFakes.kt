@@ -57,6 +57,10 @@ class FakeGotThisRemote : GotThisRemote {
     var failClear = false
     var clearFailure: Throwable? = null
     var onClear: () -> Unit = {}
+
+    // The reset_at the server answers a clear with; by default the time sent.
+    var clearReply: (String) -> String = { it }
+    var onFetch: suspend () -> Unit = {}
     var failRecord = false
     var failUpload = false
     var failFetch = false
@@ -84,7 +88,7 @@ class FakeGotThisRemote : GotThisRemote {
         clearFailure?.let { throw it }
         if (failClear) throw IOException("network down")
         clearedAt += clearedAtIso
-        return clearedAtIso
+        return clearReply(clearedAtIso)
     }
 
     override suspend fun fetchResetAt(): String? {
@@ -97,6 +101,7 @@ class FakeGotThisRemote : GotThisRemote {
         calls += "fetchPurchases"
         if (failFetch) throw IOException("network down")
         fetchSince += sinceIso
+        onFetch()
         return purchaseRows.filter { sinceIso == null || it.updatedAt >= sinceIso }
     }
 
