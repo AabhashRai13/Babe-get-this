@@ -60,7 +60,8 @@ class GotThisSync(
         try {
             val resetAt = remote.clearHistory(pending.millisToIso())
             prefs.setLastAppliedReset(userId, resetAt.isoToMillis())
-            prefs.setPendingClear(userId, null)
+            // A Clear pressed during the call replaced the pending time; it is not sent yet.
+            if (prefs.pendingClear(userId) == pending) prefs.setPendingClear(userId, null)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -83,8 +84,10 @@ class GotThisSync(
             val farFuture = clock.now() + GotThisRules.FUTURE_REJECT_MILLIS
             for (row in batch) {
                 if (row.tickId !in finished) continue
-                purchaseDao.deleteOutboxIfRevision(row.tickId, row.revision)
-                if (row.tickId in reply.rejected && row.tickedAt > farFuture) purchaseDao.deleteByTickId(row.tickId)
+                val deleted = purchaseDao.deleteOutboxIfRevision(row.tickId, row.revision) > 0
+                if (deleted && row.tickId in reply.rejected && row.tickedAt > farFuture) {
+                    purchaseDao.deleteByTickId(row.tickId)
+                }
             }
         }
     }

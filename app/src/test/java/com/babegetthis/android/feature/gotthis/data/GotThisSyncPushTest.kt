@@ -115,6 +115,21 @@ class GotThisSyncPushTest {
     }
 
     @Test
+    fun `a clear pressed during the clear call stays pending and is sent next`() = runTest {
+        prefs.setPendingClear("u1", now - day)
+        remote.onClear = { prefs.setPendingClear("u1", now) }
+
+        sync.push("u1")
+
+        assertEquals(now, prefs.pendingClear("u1"))
+        assertEquals(now - day, prefs.lastAppliedReset("u1"))
+        remote.onClear = {}
+        sync.push("u1")
+        assertEquals(listOf((now - day).millisToIso(), now.millisToIso()), remote.clearedAt)
+        assertNull(prefs.pendingClear("u1"))
+    }
+
+    @Test
     fun `cancellation during the clear is not swallowed`() = runTest {
         prefs.setPendingClear("u1", now - day)
         remote.clearFailure = kotlinx.coroutines.CancellationException("cancelled")
@@ -197,6 +212,20 @@ class GotThisSyncPushTest {
         assertTrue(dao.byTickId("far").isEmpty())
         assertEquals(1, dao.byTickId("near").size)
         assertEquals(0, dao.countOutbox("u1"))
+    }
+
+    @Test
+    fun `a far-future rejection keeps its purchase when an undo changed the row mid-call`() = runTest {
+        outbox("far", tickedAt = now + 31 * day)
+        purchase("far")
+        remote.onRecordTicks =
+            { dao.insertOutbox(dao.outboxByTickId("far")!!.copy(undoneAt = now + 31 * day, revision = 1)) }
+        remote.reply = { TickReply(emptyList(), emptyList(), it.map { e -> e.id }) }
+
+        sync.push("u1")
+
+        assertEquals(1, dao.byTickId("far").size)
+        assertEquals(1, dao.countOutbox("u1"))
     }
 
     @Test

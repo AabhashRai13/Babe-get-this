@@ -55,6 +55,7 @@ class FakeGotThisRemote : GotThisRemote {
     var reply: (List<TickEventRow>) -> TickReply = { TickReply(it.map(TickEventRow::id), emptyList(), emptyList()) }
     var failClear = false
     var clearFailure: Throwable? = null
+    var onClear: () -> Unit = {}
     var failRecord = false
     var failUpload = false
     var failFetch = false
@@ -77,6 +78,7 @@ class FakeGotThisRemote : GotThisRemote {
 
     override suspend fun clearHistory(clearedAtIso: String): String {
         calls += "clearHistory"
+        onClear()
         clearFailure?.let { throw it }
         if (failClear) throw IOException("network down")
         clearedAt += clearedAtIso
