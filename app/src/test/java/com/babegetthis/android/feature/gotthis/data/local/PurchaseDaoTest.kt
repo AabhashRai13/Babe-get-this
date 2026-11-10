@@ -160,6 +160,19 @@ class PurchaseDaoTest {
     }
 
     @Test
+    fun `an undone purchase is neither listed nor counted as a pending upload`() = runTest {
+        purchases.upsert(
+            listOf(
+                purchase("a", pendingUpload = true, boughtAt = 1),
+                purchase("b", pendingUpload = true, boughtAt = 2, deletedAt = 5),
+            ),
+        )
+
+        assertEquals(listOf("a"), purchases.pendingUploads("u1", limit = 10).map { it.id })
+        assertEquals(1, purchases.countPendingUploads("u1"))
+    }
+
+    @Test
     fun `outbox rows round trip and replace`() = runTest {
         purchases.insertOutbox(outbox("t1"))
         purchases.insertOutbox(outbox("t1", revision = 2))

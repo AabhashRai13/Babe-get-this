@@ -271,6 +271,21 @@ class GotThisSyncPushTest {
     }
 
     @Test
+    fun `outbox rows more than 30 days old are dropped unsent and their purchases stay`() = runTest {
+        outbox("old", tickedAt = now - 30 * day - 1)
+        purchase("old")
+        outbox("edge", tickedAt = now - 30 * day)
+        outbox("other", accountId = "u2", tickedAt = now - 40 * day)
+
+        sync.push("u1")
+
+        assertEquals(listOf("edge"), remote.recordedBatches.flatten().map { it.id })
+        assertNull(dao.outboxByTickId("old"))
+        assertEquals(1, dao.byTickId("old").size)
+        assertNotNull("another account's rows are not this push's", dao.outboxByTickId("other"))
+    }
+
+    @Test
     fun `a failed record call propagates and leaves the rows`() = runTest {
         outbox("t1")
         remote.failRecord = true

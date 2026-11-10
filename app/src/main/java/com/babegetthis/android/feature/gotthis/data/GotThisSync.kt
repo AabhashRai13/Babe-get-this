@@ -182,6 +182,9 @@ class GotThisSync(
     }
 
     private suspend fun pushOutbox(userId: String) {
+        // The server would reject them, and kept they hold the sign-out warning
+        // up for good. Their purchases stay on the phone.
+        purchaseDao.deleteOutboxTickedBefore(userId, clock.now() - GotThisRules.PAST_ACCEPT_MILLIS)
         // Rows sent in this push. Retry rows and rows changed during the call
         // stay in the table, so without this the loop would read them forever.
         val sent = mutableSetOf<String>()

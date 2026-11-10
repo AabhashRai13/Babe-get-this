@@ -29,6 +29,9 @@ object GotThisRules {
     const val HOLDOUT_PERCENT = 10
     const val PUSH_BATCH_SIZE = 500
     const val FUTURE_REJECT_MILLIS = 30L * 24 * 60 * 60 * 1000
+
+    // The server accepts tick events from this far back; older ones are dropped unsent.
+    const val PAST_ACCEPT_MILLIS = 30L * 24 * 60 * 60 * 1000
     const val SQL_IN_CHUNK = 900
 
     // Hint window in days -> default category ids. cat-other and custom

@@ -93,7 +93,7 @@ interface PurchaseDao {
 
     @Query(
         """
-        SELECT * FROM purchases WHERE accountId = :accountId AND pendingUpload = 1
+        SELECT * FROM purchases WHERE accountId = :accountId AND pendingUpload = 1 AND deletedAt IS NULL
         ORDER BY boughtAt, id LIMIT :limit
     """,
     )
@@ -105,7 +105,8 @@ interface PurchaseDao {
     @Query("UPDATE purchases SET pendingUpload = 1 WHERE tickId IN (:tickIds)")
     suspend fun markPendingUploadByTickIds(tickIds: List<String>)
 
-    @Query("SELECT COUNT(*) FROM purchases WHERE accountId = :accountId AND pendingUpload = 1")
+    // Live rows only: an undone purchase must not be uploaded as live.
+    @Query("SELECT COUNT(*) FROM purchases WHERE accountId = :accountId AND pendingUpload = 1 AND deletedAt IS NULL")
     suspend fun countPendingUploads(accountId: String): Int
 
     // ── Tick outbox ─────────────────────────────────────────────────────────
@@ -132,6 +133,9 @@ interface PurchaseDao {
 
     @Query("DELETE FROM tick_outbox WHERE accountId = :accountId")
     suspend fun deleteOutboxFor(accountId: String)
+
+    @Query("DELETE FROM tick_outbox WHERE accountId = :accountId AND tickedAt < :before")
+    suspend fun deleteOutboxTickedBefore(accountId: String, before: Long)
 
     @Query("DELETE FROM tick_outbox WHERE accountId != :userId")
     suspend fun deleteOtherAccountOutbox(userId: String)
