@@ -42,14 +42,16 @@ interface ShoppingListDao {
     fun getListsWithItemCount(accountId: String?): Flow<List<ShoppingListWithItemCount>>
 
     // The list the person edited last, finished or not; the same owner rule as
-    // the catalog above.
+    // the catalog above. Nothing bumps a list's updatedAt for item edits, so the
+    // later of it and the newest item updatedAt (deleted items too) counts.
     @Query(
         """
-        SELECT * FROM shopping_lists
-        WHERE deletedAt IS NULL
-          AND ((:accountId IS NULL AND accountId IS NULL AND shareCode IS NULL)
-               OR accountId = :accountId)
-        ORDER BY updatedAt DESC, createdAt DESC
+        SELECT l.* FROM shopping_lists l
+        WHERE l.deletedAt IS NULL
+          AND ((:accountId IS NULL AND l.accountId IS NULL AND l.shareCode IS NULL)
+               OR l.accountId = :accountId)
+        ORDER BY MAX(l.updatedAt, COALESCE((SELECT MAX(i.updatedAt) FROM shopping_items i WHERE i.listId = l.id), 0)) DESC,
+                 l.createdAt DESC
         LIMIT 1
     """,
     )

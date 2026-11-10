@@ -77,8 +77,8 @@ class MainActivity : ComponentActivity() {
             restored = savedInstanceState != null,
             analytics::track,
         )
-        pendingCreateList.value = !startAtWelcome && savedInstanceState == null &&
-            ReminderIntentParser.wantsCreateList(intent)
+        pendingCreateList.value =
+            ReminderIntentParser.handleCreateListIntent(intent, startAtWelcome, restored = savedInstanceState != null)
 
         setContent {
             BabeGetThisTheme {
@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity() {
         val welcomeNow = welcomeRepository.shouldShowWelcome(authStateManager.authState.value)
         pendingReminder.value =
             ReminderIntentParser.handleReminderIntent(intent, welcomeNow, restored = false, analytics::track)
-        pendingCreateList.value = !welcomeNow && ReminderIntentParser.wantsCreateList(intent)
+        pendingCreateList.value = ReminderIntentParser.handleCreateListIntent(intent, welcomeNow, restored = false)
     }
 
     override fun onResume() {

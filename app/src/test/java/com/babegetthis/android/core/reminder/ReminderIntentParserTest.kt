@@ -174,4 +174,22 @@ class ReminderIntentParserTest {
         )
         assertFalse(ReminderIntentParser.wantsCreateList(null))
     }
+
+    @Test
+    fun `handleCreateListIntent is true only for a fresh Got This create-list tap`() {
+        val fresh = gotThisIntent(listId = null, createList = true)
+        assertTrue(ReminderIntentParser.handleCreateListIntent(fresh, startAtWelcome = false, restored = false))
+
+        assertFalse(ReminderIntentParser.handleCreateListIntent(fresh, startAtWelcome = false, restored = true))
+        assertFalse(ReminderIntentParser.handleCreateListIntent(fresh, startAtWelcome = true, restored = false))
+        assertFalse(
+            ReminderIntentParser.handleCreateListIntent(
+                Intent(fresh).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY),
+                startAtWelcome = false,
+                restored = false,
+            ),
+        )
+        assertFalse(ReminderIntentParser.handleCreateListIntent(reminderIntent(), false, false))
+        assertFalse(ReminderIntentParser.handleCreateListIntent(null, false, false))
+    }
 }

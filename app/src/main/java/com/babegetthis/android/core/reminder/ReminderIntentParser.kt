@@ -53,8 +53,7 @@ object ReminderIntentParser {
         restored: Boolean,
         track: (AnalyticsEvent) -> Unit,
     ): ReminderTarget? {
-        if (restored) return null
-        if (intent != null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
+        if (alreadyHandled(intent, restored)) return null
         val target = parse(intent, startAtWelcome)
         return when {
             isGotThis(intent) -> {
@@ -70,6 +69,19 @@ object ReminderIntentParser {
             else -> null
         }
     }
+
+    /**
+     * Whether the app should open the create-list dialog for [intent]: a Got This
+     * tap that asks for it, under the same restored, Recents and Welcome rules as
+     * [handleReminderIntent] so a re-delivered intent never reopens the dialog.
+     */
+    fun handleCreateListIntent(intent: Intent?, startAtWelcome: Boolean, restored: Boolean): Boolean =
+        !startAtWelcome && !alreadyHandled(intent, restored) && wantsCreateList(intent)
+
+    // A recreated activity or a relaunch from Recents re-delivers an intent
+    // whose tap was already handled.
+    private fun alreadyHandled(intent: Intent?, restored: Boolean): Boolean =
+        restored || (intent != null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0)
 
     /** True only for a Got This notification tap that asks for the create-list dialog. */
     fun wantsCreateList(intent: Intent?): Boolean =
