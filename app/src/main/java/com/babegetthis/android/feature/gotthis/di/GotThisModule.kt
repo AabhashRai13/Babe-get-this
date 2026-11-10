@@ -6,10 +6,12 @@ import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
+import com.babegetthis.android.core.telemetry.AnalyticsRepository
 import com.babegetthis.android.feature.gotthis.data.GotThisAccess
 import com.babegetthis.android.feature.gotthis.data.GotThisBackfill
 import com.babegetthis.android.feature.gotthis.data.GotThisRepository
 import com.babegetthis.android.feature.gotthis.data.GotThisSync
+import com.babegetthis.android.feature.gotthis.data.GotThisTracker
 import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.SharedPrefsGotThisPrefs
@@ -75,4 +77,14 @@ object GotThisModule {
         syncKicker: SyncKicker,
         clock: ReminderClock,
     ): GotThisRepository = GotThisRepository(db, prefs, syncKicker, clock) { TimeZone.getDefault() }
+
+    @Provides
+    @Singleton
+    fun provideGotThisTracker(
+        db: AppDatabase,
+        analytics: AnalyticsRepository,
+        access: GotThisAccess,
+        prefs: GotThisPrefs,
+        clock: ReminderClock,
+    ): GotThisTracker = GotThisTracker(db, analytics, access, prefs, clock) { TimeZone.getDefault() }
 }

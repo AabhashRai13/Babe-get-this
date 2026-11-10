@@ -21,6 +21,7 @@ import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.CategorySource
 import com.babegetthis.android.core.telemetry.model.InputMethod
 import com.babegetthis.android.core.voice.model.ItemDraft
+import com.babegetthis.android.feature.gotthis.data.GotThisTracker
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.CategorySection
 import com.babegetthis.android.feature.shoppingitems.model.ShopSection
@@ -60,6 +61,7 @@ class ShoppingItemsViewModel @Inject constructor(
     private val analytics: AnalyticsRepository,
     private val markers: TelemetryMarkers,
     private val reminderScheduler: ReminderScheduler,
+    private val gotThisTracker: GotThisTracker,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
@@ -448,6 +450,7 @@ class ShoppingItemsViewModel @Inject constructor(
                         if (reminderScheduler.shouldOfferPermission(listId, permissionState)) {
                             _showReminderPrompt.value = true
                         }
+                        gotThisTracker.onItemTicked(itemId, result.data)
                     }
                     onListEdited()
                 }
@@ -464,6 +467,7 @@ class ShoppingItemsViewModel @Inject constructor(
             val itemToDelete = items.value.find { it.id == itemId }
             when (val result = itemRepository.deleteItem(itemId)) {
                 is Result.Success -> {
+                    gotThisTracker.onItemDeleted(itemId)
                     pendingDeleteItem = itemToDelete
                     // Only offer Undo when there is something cached to restore.
                     // Emitting unconditionally gave the user an Undo button that

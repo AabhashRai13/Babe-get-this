@@ -63,7 +63,7 @@ class TickStoreTest {
 
         val result = store.tick("i1")
 
-        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false, recorded = true), result)
         val item = item()
         assertTrue(item.isPickedUp)
         assertEquals(tickedAt, item.pickedUpAt)
@@ -97,7 +97,7 @@ class TickStoreTest {
 
         val result = store.tick("i1")
 
-        assertEquals(TickResult("list-1", false, null, ItemKey.of("Milk"), false), result)
+        assertEquals(TickResult("list-1", false, null, ItemKey.of("Milk"), false, recorded = true), result)
         assertFalse(item().pendingSync)
         val tid = tickId(now)
         val purchase = dbRule.purchaseDao.byTickId(tid).single()
@@ -115,7 +115,7 @@ class TickStoreTest {
 
         val result = store.untick("i1")
 
-        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), true), result)
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), true, recorded = false), result)
         val item = item()
         assertFalse(item.isPickedUp)
         assertEquals(tickedAt, item.pickedUpAt)
@@ -324,7 +324,7 @@ class TickStoreTest {
 
         val result = store.tick("i1")
 
-        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false, recorded = false), result)
         assertEquals(tickedAt, item().pickedUpAt)
         assertEquals(1, dbRule.purchaseDao.all().size)
         assertEquals(1, dbRule.purchaseDao.countOutbox("u1"))
@@ -343,7 +343,7 @@ class TickStoreTest {
 
         val result = store.untick("i1")
 
-        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false, recorded = false), result)
         val tid = tickId(tickedAt)
         assertEquals(undoneAt, dbRule.purchaseDao.byTickId(tid).single().deletedAt)
         val outbox = dbRule.purchaseDao.outboxByTickId(tid)!!
@@ -358,7 +358,7 @@ class TickStoreTest {
 
         val result = store.untick("i1")
 
-        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false, recorded = false), result)
         assertEquals(2L, item().updatedAt)
         assertTrue(dbRule.purchaseDao.all().isEmpty())
         assertEquals(0, dbRule.purchaseDao.countOutbox("u1"))

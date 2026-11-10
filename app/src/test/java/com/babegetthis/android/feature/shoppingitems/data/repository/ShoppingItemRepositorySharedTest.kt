@@ -188,7 +188,7 @@ class ShoppingItemRepositorySharedTest {
 
         val result = (repository.togglePickedUp(id, isPickedUp = true) as Result.Success).data
 
-        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false), result)
+        assertEquals(TickResult("list-1", true, "u1", ItemKey.of("Milk"), false, recorded = true), result)
         assertEquals(1, dbRule.purchaseDao.live("u1").size)
         assertEquals(1, kicks)
     }

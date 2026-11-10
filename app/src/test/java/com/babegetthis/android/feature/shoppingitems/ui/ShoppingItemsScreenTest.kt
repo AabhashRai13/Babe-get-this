@@ -101,6 +101,7 @@ class ShoppingItemsScreenTest {
             analytics = mockk(relaxed = true),
             markers = mockk(relaxed = true),
             reminderScheduler = scheduler,
+            gotThisTracker = mockk(relaxed = true),
             applicationScope = CoroutineScope(UnconfinedTestDispatcher()),
         )
         compose.setContent {

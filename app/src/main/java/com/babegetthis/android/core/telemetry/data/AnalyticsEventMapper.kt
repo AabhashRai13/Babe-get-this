@@ -3,6 +3,8 @@ package com.babegetthis.android.core.telemetry.data
 import com.babegetthis.android.core.data.local.DEFAULT_CATEGORIES
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.bucketCount
+import com.babegetthis.android.core.telemetry.model.bucketDaysAgo
+import com.babegetthis.android.core.telemetry.model.bucketErrorDays
 import com.babegetthis.android.core.telemetry.model.bucketMillis
 import com.babegetthis.android.core.telemetry.model.bucketReminderDelay
 
@@ -165,6 +167,50 @@ object AnalyticsEventMapper {
         )
 
         AnalyticsEvent.ReminderTapped -> ev("reminder_tapped")
+
+        // -- Got This ----------------------------------------------------
+        is AnalyticsEvent.GotThisHintShown -> ev(
+            name = "got_this_hint_shown",
+            text = mapOf(
+                "source" to event.source.name.lowercase(),
+                "days_ago" to bucketDaysAgo(event.daysAgo),
+                "holdout" to event.holdout.toString(),
+            ),
+        )
+
+        is AnalyticsEvent.GotThisHintOutcome -> ev(
+            name = "got_this_hint_outcome",
+            text = mapOf("outcome" to event.outcome.value, "holdout" to event.holdout.toString()),
+        )
+
+        is AnalyticsEvent.GotThisUsualsShown -> ev(
+            name = "got_this_usuals_shown",
+            text = mapOf("count" to bucketCount(event.count), "holdout" to event.holdout.toString()),
+        )
+
+        AnalyticsEvent.GotThisUsualAdded -> ev("got_this_usual_added")
+
+        is AnalyticsEvent.GotThisReminderPosted -> ev(
+            name = "got_this_reminder_posted",
+            text = mapOf("item_count" to bucketCount(event.itemCount), "holdout" to event.holdout.toString()),
+        )
+
+        AnalyticsEvent.GotThisReminderOpened -> ev("got_this_reminder_opened")
+
+        is AnalyticsEvent.GotThisReminderFollowUp -> ev(
+            name = "got_this_reminder_follow_up",
+            text = mapOf("added_any" to event.addedAny.toString(), "holdout" to event.holdout.toString()),
+        )
+
+        is AnalyticsEvent.GotThisPredictionScored -> ev(
+            name = "got_this_prediction_scored",
+            text = mapOf("error_days" to bucketErrorDays(event.errorDays)),
+        )
+
+        is AnalyticsEvent.GotThisWeeklySummary -> ev(
+            name = "got_this_weekly_summary",
+            text = mapOf("regulars" to bucketCount(event.regulars), "purchases" to bucketCount(event.purchases)),
+        )
     }
 
     // Only ids from our own shipped taxonomy pass through as themselves.

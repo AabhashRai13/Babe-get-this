@@ -3,11 +3,13 @@ package com.babegetthis.android.core.telemetry.data
 import com.babegetthis.android.core.data.local.DEFAULT_CATEGORIES
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.CategorySource
+import com.babegetthis.android.core.telemetry.model.HintOutcome
 import com.babegetthis.android.core.telemetry.model.InputMethod
 import com.babegetthis.android.core.telemetry.model.JoinFailureReason
 import com.babegetthis.android.core.telemetry.model.Screen
 import com.babegetthis.android.core.telemetry.model.VoiceFailureReason
 import com.babegetthis.android.core.telemetry.model.WelcomeChoice
+import com.babegetthis.android.feature.gotthis.domain.HintSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -51,6 +53,15 @@ class AnalyticsEventMapperTest {
         AnalyticsEvent.CategoryCorrected("cat-dairy-eggs", "cat-frozen-foods"),
         AnalyticsEvent.ReminderPosted(delayMillis = 3 * 60 * 60 * 1000L + 1),
         AnalyticsEvent.ReminderTapped,
+        AnalyticsEvent.GotThisHintShown(HintSource.Regular, daysAgo = 2, holdout = false),
+        AnalyticsEvent.GotThisHintOutcome(HintOutcome.Removed, holdout = false),
+        AnalyticsEvent.GotThisUsualsShown(count = 3, holdout = true),
+        AnalyticsEvent.GotThisUsualAdded,
+        AnalyticsEvent.GotThisReminderPosted(itemCount = 3, holdout = false),
+        AnalyticsEvent.GotThisReminderOpened,
+        AnalyticsEvent.GotThisReminderFollowUp(addedAny = true, holdout = false),
+        AnalyticsEvent.GotThisPredictionScored(errorDays = 0),
+        AnalyticsEvent.GotThisWeeklySummary(regulars = 4, purchases = 12),
     )
 
     @Test
@@ -266,5 +277,70 @@ class AnalyticsEventMapperTest {
         // cannot fail at runtime — but it is the assertion that would catch
         // someone converting it to a partial map with a null default.
         everyEvent.forEach { assertNotNull(AnalyticsEventMapper.map(it)) }
+    }
+
+    @Test
+    fun `got this hint shown carries source, bucketed age and holdout`() {
+        assertEquals(
+            MappedEvent(
+                name = "got_this_hint_shown",
+                text = mapOf("source" to "category", "days_ago" to "2-3", "holdout" to "true"),
+            ),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisHintShown(HintSource.Category, 3, holdout = true)),
+        )
+        assertEquals(
+            "regular",
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisHintShown(HintSource.Regular, 0, false)).text["source"],
+        )
+    }
+
+    @Test
+    fun `got this hint outcome sends the lowercase outcome`() {
+        assertEquals(
+            listOf("removed", "ticked", "muted"),
+            HintOutcome.entries.map {
+                AnalyticsEventMapper.map(AnalyticsEvent.GotThisHintOutcome(it, holdout = false)).text["outcome"]
+            },
+        )
+        assertEquals(
+            MappedEvent("got_this_hint_outcome", mapOf("outcome" to "ticked", "holdout" to "false")),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisHintOutcome(HintOutcome.Ticked, holdout = false)),
+        )
+    }
+
+    @Test
+    fun `got this usuals and reminder events bucket their counts`() {
+        assertEquals(
+            MappedEvent("got_this_usuals_shown", mapOf("count" to "2-5", "holdout" to "true")),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisUsualsShown(count = 4, holdout = true)),
+        )
+        assertEquals(
+            MappedEvent("got_this_usual_added"),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisUsualAdded),
+        )
+        assertEquals(
+            MappedEvent("got_this_reminder_posted", mapOf("item_count" to "1", "holdout" to "false")),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisReminderPosted(itemCount = 1, holdout = false)),
+        )
+        assertEquals(
+            MappedEvent("got_this_reminder_opened"),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisReminderOpened),
+        )
+        assertEquals(
+            MappedEvent("got_this_reminder_follow_up", mapOf("added_any" to "true", "holdout" to "false")),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisReminderFollowUp(addedAny = true, holdout = false)),
+        )
+    }
+
+    @Test
+    fun `got this prediction and weekly summary are bucketed`() {
+        assertEquals(
+            MappedEvent("got_this_prediction_scored", mapOf("error_days" to "-2..2")),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisPredictionScored(errorDays = 0)),
+        )
+        assertEquals(
+            MappedEvent("got_this_weekly_summary", mapOf("regulars" to "2-5", "purchases" to "11-20")),
+            AnalyticsEventMapper.map(AnalyticsEvent.GotThisWeeklySummary(regulars = 4, purchases = 12)),
+        )
     }
 }

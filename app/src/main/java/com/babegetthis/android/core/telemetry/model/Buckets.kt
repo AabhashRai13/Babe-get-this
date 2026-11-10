@@ -55,3 +55,24 @@ fun bucketMillis(millis: Long): String = when {
     millis < 30_000L -> "10-30s"
     else -> "30s+"
 }
+
+// Got This: how long ago the hinted item was last bought. Edges follow the hint
+// windows (3, 5, 14, 30 days) so the report lines up with the rules.
+fun bucketDaysAgo(days: Int): String = when {
+    days <= 0 -> "0"
+    days == 1 -> "1"
+    days <= 3 -> "2-3"
+    days <= 7 -> "4-7"
+    days <= 14 -> "8-14"
+    days <= 30 -> "15-30"
+    else -> "30+"
+}
+
+// Got This: bought day minus predicted day. "-2..2" is the band we call right.
+fun bucketErrorDays(days: Int): String = when {
+    days < -7 -> "<-7"
+    days < -2 -> "-7..-3"
+    days <= 2 -> "-2..2"
+    days <= 7 -> "3..7"
+    else -> ">7"
+}

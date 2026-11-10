@@ -83,4 +83,37 @@ class BucketsTest {
         // not invent a new label. It lands where a too-early post belongs.
         assertEquals("<3h", bucketReminderDelay(-1L))
     }
+
+    @Test
+    fun `days ago buckets land on the documented edges`() {
+        assertEquals("0", bucketDaysAgo(0))
+        assertEquals("1", bucketDaysAgo(1))
+        assertEquals("2-3", bucketDaysAgo(2))
+        assertEquals("2-3", bucketDaysAgo(3))
+        assertEquals("4-7", bucketDaysAgo(4))
+        assertEquals("4-7", bucketDaysAgo(7))
+        assertEquals("8-14", bucketDaysAgo(8))
+        assertEquals("8-14", bucketDaysAgo(14))
+        assertEquals("15-30", bucketDaysAgo(15))
+        assertEquals("15-30", bucketDaysAgo(30))
+        assertEquals("30+", bucketDaysAgo(31))
+    }
+
+    @Test
+    fun `a negative age falls into the zero bucket`() {
+        assertEquals("0", bucketDaysAgo(-1))
+    }
+
+    @Test
+    fun `error days buckets land on the documented edges`() {
+        assertEquals("<-7", bucketErrorDays(-8))
+        assertEquals("-7..-3", bucketErrorDays(-7))
+        assertEquals("-7..-3", bucketErrorDays(-3))
+        assertEquals("-2..2", bucketErrorDays(-2))
+        assertEquals("-2..2", bucketErrorDays(0))
+        assertEquals("-2..2", bucketErrorDays(2))
+        assertEquals("3..7", bucketErrorDays(3))
+        assertEquals("3..7", bucketErrorDays(7))
+        assertEquals(">7", bucketErrorDays(8))
+    }
 }

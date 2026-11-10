@@ -19,6 +19,8 @@ import com.babegetthis.android.core.telemetry.TelemetryMarkers
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.CategorySource
 import com.babegetthis.android.core.telemetry.model.InputMethod
+import com.babegetthis.android.feature.gotthis.data.GotThisTracker
+import com.babegetthis.android.feature.gotthis.data.TickResult
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
@@ -69,6 +71,7 @@ class ShoppingItemsViewModelTest {
     private lateinit var analytics: AnalyticsRepository
     private lateinit var markers: TelemetryMarkers
     private lateinit var reminderScheduler: ReminderScheduler
+    private lateinit var gotThisTracker: GotThisTracker
     private lateinit var itemsFlow: MutableStateFlow<List<ShoppingItem>>
     private lateinit var shareCodeFlow: MutableStateFlow<String?>
 
@@ -89,6 +92,7 @@ class ShoppingItemsViewModelTest {
         markers = mockk(relaxed = true)
         // relaxed shouldOfferPermission() returns false, i.e. "do not prompt".
         reminderScheduler = mockk(relaxed = true)
+        gotThisTracker = mockk(relaxed = true)
         itemsFlow = MutableStateFlow(emptyList())
         shareCodeFlow = MutableStateFlow(null)
 
@@ -119,6 +123,7 @@ class ShoppingItemsViewModelTest {
         analytics = analytics,
         markers = markers,
         reminderScheduler = reminderScheduler,
+        gotThisTracker = gotThisTracker,
         applicationScope = CoroutineScope(testDispatcher),
     )
 
@@ -561,6 +566,7 @@ class ShoppingItemsViewModelTest {
             analytics = analytics,
             markers = markers,
             reminderScheduler = reminderScheduler,
+            gotThisTracker = gotThisTracker,
             applicationScope = CoroutineScope(testDispatcher),
         )
 
@@ -740,6 +746,42 @@ class ShoppingItemsViewModelTest {
         viewModel.togglePickedUp("a", true)
 
         coVerify { itemRepository.togglePickedUp("a", true) }
+    }
+
+    @Test
+    fun `ticking hands the tick result to the tracker`() = runTest {
+        val tick = TickResult("L1", true, "u1", "milk", undone = false, recorded = true)
+        coEvery { itemRepository.togglePickedUp("a", true) } returns Result.Success(tick)
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("a", true)
+
+        coVerify(exactly = 1) { gotThisTracker.onItemTicked("a", tick) }
+    }
+
+    @Test
+    fun `unticking and a failed tick do not reach the tracker`() = runTest {
+        coEvery { itemRepository.togglePickedUp("a", false) } returns Result.Success(null)
+        coEvery { itemRepository.togglePickedUp("b", true) } returns Result.Error(AppError.DatabaseError("boom"))
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("a", false)
+        viewModel.togglePickedUp("b", true)
+
+        coVerify(exactly = 0) { gotThisTracker.onItemTicked(any(), any()) }
+    }
+
+    @Test
+    fun `deleting an item tells the tracker once, and a failed delete does not`() = runTest {
+        coEvery { itemRepository.deleteItem("1") } returns Result.Success(Unit)
+        coEvery { itemRepository.deleteItem("2") } returns Result.Error(AppError.DatabaseError("boom"))
+        val viewModel = buildViewModel()
+
+        viewModel.deleteItem("1")
+        viewModel.deleteItem("2")
+
+        coVerify(exactly = 1) { gotThisTracker.onItemDeleted("1") }
+        coVerify(exactly = 0) { gotThisTracker.onItemDeleted("2") }
     }
 
     @Test
