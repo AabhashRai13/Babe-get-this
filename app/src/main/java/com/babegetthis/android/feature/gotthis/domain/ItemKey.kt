@@ -81,9 +81,8 @@ object ItemKey {
         else -> word
     }
 
-    // One insert, delete or substitution, or one swap of two letters. The swap
-    // is not limited to neighbours because the spec's example "tomato"/"tomota"
-    // swaps letters two places apart.
+    // Damerau-Levenshtein distance of 1: one insert, delete or substitution,
+    // or one swap of two neighbouring letters.
     private fun withinOneEdit(a: String, b: String): Boolean {
         if (Math.abs(a.length - b.length) > 1) return false
         var i = 0
@@ -97,10 +96,6 @@ object ItemKey {
         }
     }
 
-    private fun swapped(a: String, b: String): Boolean {
-        val differing = a.indices.filter { a[it] != b[it] }
-        return differing.size == 2 &&
-            a[differing[0]] == b[differing[1]] &&
-            a[differing[1]] == b[differing[0]]
-    }
+    private fun swapped(a: String, b: String): Boolean =
+        a.length >= 2 && a[0] == b[1] && a[1] == b[0] && a.substring(2) == b.substring(2)
 }
