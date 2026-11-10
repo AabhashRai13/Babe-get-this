@@ -6,6 +6,7 @@ import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.dao.KeyStatRow
+import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.gotthis.domain.HintSource
 import com.babegetthis.android.feature.gotthis.domain.ItemGroup
@@ -14,11 +15,12 @@ import com.babegetthis.android.feature.gotthis.domain.ItemJudge
 import com.babegetthis.android.feature.gotthis.domain.ItemKey
 import com.babegetthis.android.feature.gotthis.domain.JudgedPurchase
 import com.babegetthis.android.feature.gotthis.domain.KeyStat
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import java.util.TimeZone
 
 data class BoughtHint(val itemId: String, val daysAgo: Int, val source: HintSource, val canonicalKey: String)
@@ -39,10 +41,17 @@ class GotThisRepository(
     private val purchaseDao = db.purchaseDao()
     private val stateDao = db.gotThisStateDao()
 
-    fun hintsFor(listId: String): Flow<Map<String, BoughtHint>> = flow {
-        val owner = ownerOf(listId)
-        emitAll(
-            combine(itemDao.getItemsByListId(listId), purchaseDao.keyStats(owner)) { items, rows ->
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun hintsFor(listId: String): Flow<Map<String, BoughtHint>> = listDao.getListById(listId).flatMapLatest { list ->
+        if (list == null) {
+            flowOf(emptyMap())
+        } else {
+            val owner = list.accountId
+            combine(
+                itemDao.getItemsByListId(listId),
+                purchaseDao.keyStats(owner),
+                stateDao.observeMutes(owner ?: GUEST_STATE_ID),
+            ) { items, rows, mutes ->
                 val now = clock.now()
                 val groups = ItemGroups.build(rows.map(::toKeyStat))
                 val matched = items.filter { !it.isPickedUp && it.deletedAt == null }
@@ -51,7 +60,7 @@ class GotThisRepository(
                 val byKey = keys.chunked(MAX_KEYS_PER_QUERY)
                     .flatMap { purchaseDao.liveForKeys(owner, it) }
                     .groupBy { it.itemKey }
-                val muted = mutedKeys(owner, now)
+                val muted = mutedKeys(mutes, now)
                 val profiles = matched.map { it.second }.distinct().associate {
                     it.canonicalKey to ItemJudge.profile(it.purchasesIn(byKey), now, tz())
                 }
@@ -60,21 +69,25 @@ class GotThisRepository(
                     if (!profile.showsHint || group.keys.any { it in muted }) return@mapNotNull null
                     itemId to BoughtHint(itemId, profile.hintDaysAgo!!, profile.hintSource, group.canonicalKey)
                 }.toMap()
-            },
-        )
+            }
+        }
     }
 
-    fun usualsFor(ownerId: String?): Flow<List<UsualItem>> =
-        combine(purchaseDao.keyStats(ownerId), itemDao.uncheckedNames(ownerId)) { rows, names ->
-            val now = clock.now()
-            due(ownerId, rows, names, now, now)
-        }
+    fun usualsFor(ownerId: String?): Flow<List<UsualItem>> = combine(
+        purchaseDao.keyStats(ownerId),
+        itemDao.uncheckedNames(ownerId),
+        stateDao.observeMutes(ownerId ?: GUEST_STATE_ID),
+    ) { rows, names, mutes ->
+        val now = clock.now()
+        due(ownerId, rows, names, mutedKeys(mutes, now), now)
+    }
 
     suspend fun dueItems(ownerId: String?, withinDays: Int): List<UsualItem> {
         val now = clock.now()
         val rows = purchaseDao.keyStats(ownerId).first()
         val names = itemDao.uncheckedNames(ownerId).first()
-        return due(ownerId, rows, names, now, now + withinDays * DAY_MILLIS)
+        val mutes = stateDao.mutes(ownerId ?: GUEST_STATE_ID)
+        return due(ownerId, rows, names, mutedKeys(mutes, now), now + withinDays * DAY_MILLIS)
     }
 
     suspend fun purchaseDays(ownerId: String?): List<Long> = purchaseDao.live(ownerId).map { it.boughtAt }
@@ -103,12 +116,11 @@ class GotThisRepository(
         ownerId: String?,
         rows: List<KeyStatRow>,
         unticked: List<String>,
-        mutesAt: Long,
+        muted: Set<String>,
         judgedAt: Long,
     ): List<UsualItem> {
         val groups = ItemGroups.build(rows.map(::toKeyStat))
         val onLists = unticked.mapNotNull { ItemGroups.groupFor(ItemKey.of(it), groups)?.canonicalKey }.toSet()
-        val muted = mutedKeys(ownerId, mutesAt)
         val byKey = purchaseDao.live(ownerId).groupBy { it.itemKey }
         return groups.mapNotNull { group ->
             val purchases = group.keys.flatMap { byKey[it].orEmpty() }
@@ -129,8 +141,8 @@ class GotThisRepository(
         }.sortedWith(compareByDescending<UsualItem> { it.daysOverdue }.thenBy { it.name })
     }
 
-    private suspend fun mutedKeys(ownerId: String?, now: Long): Set<String> =
-        stateDao.mutes(ownerId ?: GUEST_STATE_ID).filter { (it.mutedUntil ?: 0L) > now }.map { it.itemKey }.toSet()
+    private fun mutedKeys(mutes: List<ItemMuteEntity>, now: Long): Set<String> =
+        mutes.filter { (it.mutedUntil ?: 0L) > now }.map { it.itemKey }.toSet()
 
     private fun ItemGroup.purchasesIn(byKey: Map<String, List<PurchaseEntity>>): List<JudgedPurchase> =
         keys.flatMap { byKey[it].orEmpty() }.map { JudgedPurchase(it.boughtAt, it.categoryId) }

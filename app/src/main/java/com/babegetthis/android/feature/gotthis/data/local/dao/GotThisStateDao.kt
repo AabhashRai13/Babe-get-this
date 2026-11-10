@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import com.babegetthis.android.feature.gotthis.data.local.model.HintImpressionEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.ReminderFollowUpEntity
+import kotlinx.coroutines.flow.Flow
 
 // Small per-phone state, never synced. Guests use "" as accountId.
 @Dao
@@ -15,6 +16,9 @@ interface GotThisStateDao {
 
     @Query("SELECT * FROM item_mutes WHERE accountId = :accountId")
     suspend fun mutes(accountId: String): List<ItemMuteEntity>
+
+    @Query("SELECT * FROM item_mutes WHERE accountId = :accountId")
+    fun observeMutes(accountId: String): Flow<List<ItemMuteEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertMute(row: ItemMuteEntity)

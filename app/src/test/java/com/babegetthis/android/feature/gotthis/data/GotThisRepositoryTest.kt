@@ -279,4 +279,62 @@ class GotThisRepositoryTest {
         assertNull(prefs.pendingClear(""))
         assertEquals(0, kicks)
     }
+
+    @Test
+    fun `a mute inserted while collecting removes the hint`() = runTest {
+        list()
+        item("milk")
+        buy("milk", 1, category = "cat-dairy-eggs")
+        repo.hintsFor("list-1").test {
+            assertEquals(1, awaitItem().size)
+            dbRule.stateDao.upsertMute(ItemMuteEntity("u1", ItemKey.of("milk"), 2, now + day))
+            assertTrue(awaitItem().isEmpty())
+            cancel()
+        }
+    }
+
+    @Test
+    fun `a mute inserted while collecting removes the usual`() = runTest {
+        buy("Eggs", 21, 14, 7)
+        repo.usualsFor("u1").test {
+            assertEquals(1, awaitItem().size)
+            dbRule.stateDao.upsertMute(ItemMuteEntity("u1", ItemKey.of("Eggs"), 2, now + day))
+            assertTrue(awaitItem().isEmpty())
+            cancel()
+        }
+    }
+
+    @Test
+    fun `a guest mute is read under the empty account id`() = runTest {
+        buy("Eggs", 21, 14, 7, account = null)
+        repo.usualsFor(null).test {
+            assertEquals(1, awaitItem().size)
+            dbRule.stateDao.upsertMute(ItemMuteEntity("", ItemKey.of("Eggs"), 2, now + day))
+            assertTrue(awaitItem().isEmpty())
+            cancel()
+        }
+    }
+
+    @Test
+    fun `an unknown list has no hints even when guest purchases exist`() = runTest {
+        buy("milk", 1, category = "cat-dairy-eggs", account = null)
+        repo.hintsFor("none").test {
+            assertTrue(awaitItem().isEmpty())
+            cancel()
+        }
+    }
+
+    @Test
+    fun `hints follow the list when an account claims it`() = runTest {
+        list(accountId = null)
+        item("milk")
+        buy("milk", 1, category = "cat-dairy-eggs", account = null)
+        repo.hintsFor("list-1").test {
+            assertEquals(1, awaitItem().size)
+            buy("milk", 2, category = "cat-dairy-eggs", account = "u1")
+            dbRule.listDao.claimList("list-1", "u1")
+            assertEquals(2, awaitItem().getValue("i-milk").daysAgo)
+            cancel()
+        }
+    }
 }
