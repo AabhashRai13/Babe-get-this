@@ -24,6 +24,8 @@ class ItemKeyTest {
         "2 kg" to "2 kg",
         "!!!" to "!!!",
         "دودھ" to "دودھ",
+        "दूध" to "दूध",
+        "كِتَاب" to "كِتَاب",
         "Dozen eggs" to "dozen egg",
         "Apple 3 pack" to "apple",
         "Peaches" to "peach",

@@ -17,7 +17,7 @@ object ItemKey {
     )
     private val DROPPED_WORDS = setOf("fresh", "organic", "large", "small", "big", "medium")
     private val ACCENTS = Regex("[\\u0300-\\u036F]")
-    private val NOT_WORD = Regex("[^\\p{L}\\p{N}\\s]")
+    private val NOT_WORD = Regex("[^\\p{L}\\p{N}\\p{M}\\s]")
     private val WHITESPACE = Regex("\\s+")
     private val NUMBER = Regex("\\p{N}+")
     private val NUMBER_WITH_UNIT = Regex("(\\p{N}+)(\\p{L}+)")
