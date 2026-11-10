@@ -567,20 +567,28 @@ two Settings switches.
 
 **Old app versions**
 
-13. **Before insert or update on `items`** (`items_track_picked_up_at`):
-    - When `is_picked_up` turns true (on insert, or from false on update) and
-      the incoming `picked_up_at` is unchanged (equal to the stored value, or
-      null on insert), the push came from an app version that does not know
-      about ticks: such versions never send the column. Set `picked_up_at :=
-      now()` and write a tick through `record_tick_rows` with `source =
-      'legacy'`, the item's current name and category, and `ticked_at` equal
-      to that value.
-    - In every other case, `new.picked_up_at := greatest(new.picked_up_at,
-      old.picked_up_at)`. `greatest` ignores nulls, so a null or older value
-      from any client leaves the newer one in place. Current app versions
-      always send a new `picked_up_at` with a tick, even one that is older
-      than the stored value because of clock skew, so the legacy path never
-      fires for them and never duplicates their event.
+13. **Before insert or update on `items`** (`items_track_picked_up_at`).
+    Clients push items with upsert (`INSERT … ON CONFLICT DO UPDATE`), and
+    Postgres fires the before-insert trigger for every proposed row before
+    it detects the conflict, so the two paths are kept apart:
+    - **Insert:** if a row with that id already exists, do nothing here; the
+      update path decides. Otherwise, a ticked item that arrives with no
+      `picked_up_at` came from an app version that does not know about
+      ticks: set `picked_up_at := now()` and write a tick through
+      `record_tick_rows` with `source = 'legacy'`, the item's current name
+      and category, and `ticked_at` equal to that value.
+    - **Update:** when `is_picked_up` turns from false to true and the
+      incoming `picked_up_at` is unchanged, the writer did not send a tick
+      time (such versions never send the column): set it and write a legacy
+      tick the same way. In every other case, `new.picked_up_at :=
+      greatest(new.picked_up_at, old.picked_up_at)`. `greatest` ignores
+      nulls, so a null or older value from any client leaves the newer one
+      in place.
+
+    Current app versions always send a new `picked_up_at` with a tick, even
+    one that is older than the stored value because of clock skew, so the
+    legacy path never fires for them and never duplicates their event.
+    Pushing an already-ticked item again (a rename, say) writes no tick.
 
 **Backfill, once, inside the migration**
 
