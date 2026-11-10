@@ -117,6 +117,9 @@ due:
   while every item on it is ticked (`isCompleted` is derived). Adding a chip
   to a finished list makes it unfinished, so it moves back to the active
   lists and its progress card resets, exactly as adding any item does today.
+- A regular whose most recent purchase came from an item on a PIN-locked
+  list is not suggested, here or in the weekly notification, while that list
+  stays locked: a locked list's contents are not named elsewhere.
 - An item already unticked on any of the person's lists is never suggested.
   "Already on a list" uses the same matching as hints, so an unticked
   "bannana" counts for bananas.
@@ -148,6 +151,10 @@ person's usual shopping day:
 - With no clear usual shopping day (see Running low), it goes out at about
   18:00 on the first day something becomes due, still at most once a week.
 - A week is an ISO week (Monday to Sunday) in the phone's time zone.
+- The check runs in the background, usually with the app closed. It takes
+  the signed-in person from the stored identity, and claims the week only
+  with a session the server client has actually loaded; if it cannot
+  confirm one, it stays silent.
 - Its own notification channel, "Running-low reminders", separate from
   shopping reminders, so either can be muted in system settings.
 
@@ -619,9 +626,11 @@ dropped are deleted, and their live local purchases are marked
 Then, after the existing item push, in this order:
 
 1. A pending clear goes to `clear_purchase_history` with its stored time. It
-   stays pending until the server answers. On success the phone stores the
-   returned reset time as the last applied one (never lowering it) and drops
-   the pending clear. On failure the push carries on with the next steps and
+   stays pending until the server answers. On success the phone drops the
+   pending clear, unless Clear was pressed again meanwhile. If the server
+   answers with a later reset than the phone had applied (another phone
+   cleared since), the phone applies it at once, exactly as a pulled reset
+   is applied, before storing it. On failure the push carries on with the next steps and
    the clear is sent again next time.
 2. `tick_outbox` rows go to `record_ticks` in batches of 500. Accepted and
    rejected rows are deleted only if their `revision` is unchanged since they
@@ -643,7 +652,8 @@ Item rows carry `picked_up_at` as before. An untick sends the same
 The phone's **watermark** for an account is the later of the reset time it
 last applied from the server and its own pending clear, if it has one. No
 purchase with `boughtAt` at or before the watermark is ever written to Room
-(I6). This is what keeps cleared history from coming back when the clear
+(I6). The watermark is read in the same transaction that writes the pulled
+rows, so a Clear pressed while a pull is in flight still wins. This is what keeps cleared history from coming back when the clear
 call fails but the pull succeeds: the server has not heard of the clear yet
 and still returns the old purchases.
 
@@ -747,6 +757,11 @@ bias is under one part in 40 million. A guest uses the phone's drawn number
 guest who signs in takes the account's number, so they may change group once;
 every event carries `holdout`, so the analysis follows them. The flag is
 switched off 8 weeks after release, which ends the holdout for everyone.
+
+The holdout is measured under the same conditions as everyone else, so the
+two groups differ only in what is shown: the "kept twice" mute applies to it
+too, a "would have posted" is logged only when notifications are allowed,
+and a "would have shown" only when the matching Settings switch is on.
 
 ### Targets, to review 4 weeks after release
 
@@ -1050,8 +1065,10 @@ shows the first in the field; the second is a submission checklist item.
   keeps, not how fast it is used up, and are tuned from telemetry.
 - A partner on an old app version cannot undo an accidental tick.
 - A stale push can record a tick nobody made: if one phone unticks an item
-  more than 2 hours after another phone ticked it, and that other phone, not
-  yet having pulled the untick, pushes an edit of the item, the server sees
+  another phone ticked (after 2 hours, leaving two purchases for one tick;
+  within 2 hours, bringing an undone purchase back), and that other phone,
+  not yet having pulled the untick, pushes an edit of the item, the server
+  sees
   the item ticked again with an unchanged tick time, which is exactly what an
   old app's tick looks like, and records a second purchase. Telling the two
   apart needs a marker from the client; not built.
