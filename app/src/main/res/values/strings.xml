@@ -167,6 +167,16 @@
     <string name="settings_reminders_subtitle">A nudge when you leave items unticked after a shop</string>
     <string name="settings_reminders_blocked_subtitle">Allow notifications in system settings to turn this on</string>
 
+    <string name="settings_got_this_section">Got This</string>
+    <string name="settings_got_this_hints_title">Bought-recently hints</string>
+    <string name="settings_got_this_hints_subtitle">Show when an item on your list was bought recently</string>
+    <string name="settings_got_this_running_low_title">Running-low reminders</string>
+    <string name="settings_got_this_running_low_subtitle">Suggest things you usually buy, with one heads-up a week</string>
+    <string name="settings_got_this_running_low_blocked">Notifications are off for this app</string>
+    <string name="settings_got_this_clear_title">Clear purchase history</string>
+    <string name="settings_got_this_clear_message">This deletes your purchase history on all your devices. Your lists stay as they are, and people you share lists with keep their own history.</string>
+    <string name="settings_got_this_clear_confirm">Clear</string>
+
     <!-- PIN entry -->
     <string name="pin_label">PIN</string>
     <string name="pin_unlock_title">Unlock list</string>

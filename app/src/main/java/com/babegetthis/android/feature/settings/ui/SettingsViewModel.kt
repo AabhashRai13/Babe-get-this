@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.settings.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.data.di.ApplicationScope
 import com.babegetthis.android.core.pin.data.PinRepository
 import com.babegetthis.android.core.reminder.NotificationGate
@@ -9,6 +10,8 @@ import com.babegetthis.android.core.reminder.PermissionState
 import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.reminder.data.local.ReminderPrefs
 import com.babegetthis.android.core.telemetry.TelemetryConsent
+import com.babegetthis.android.feature.gotthis.data.GotThisRepository
+import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -31,8 +34,9 @@ sealed interface SettingsEvent {
 }
 
 // Settings depends on PinRepository (PIN state) and ShoppingListRepository
-// (unlock-all on removal, and the locked-count warning). Deliberately NOT on
-// AuthStateManager — Settings must work signed out.
+// (unlock-all on removal, and the locked-count warning). AuthStateManager is
+// only asked who owns the data (null when signed out), so Settings still works
+// signed out.
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     pinRepository: PinRepository,
@@ -42,6 +46,9 @@ class SettingsViewModel @Inject constructor(
     private val reminderScheduler: ReminderScheduler,
     private val reminderPrefs: ReminderPrefs,
     private val notificationGate: NotificationGate,
+    private val gotThisPrefs: GotThisPrefs,
+    private val gotThisRepository: GotThisRepository,
+    private val authStateManager: AuthStateManager,
 ) : ViewModel() {
 
     val pinExists: StateFlow<Boolean> = pinRepository.pinExists
@@ -105,8 +112,46 @@ class SettingsViewModel @Inject constructor(
     private val _events = MutableSharedFlow<SettingsEvent>()
     val events: SharedFlow<SettingsEvent> = _events.asSharedFlow()
 
+    private val _gotThisHints = MutableStateFlow(gotThisPrefs.hintsEnabled)
+    val gotThisHints: StateFlow<Boolean> = _gotThisHints.asStateFlow()
+
+    private val _gotThisRunningLow = MutableStateFlow(ReminderRowState.Off)
+    val gotThisRunningLow: StateFlow<ReminderRowState> = _gotThisRunningLow.asStateFlow()
+
+    // Set while the system permission dialog was asked for by the running-low
+    // switch, so its result is not mistaken for a shopping-reminders answer.
+    private var gotThisPermissionPending = false
+
     init {
         refreshReminderRow()
+    }
+
+    fun onGotThisHintsSwitch(on: Boolean) {
+        gotThisPrefs.hintsEnabled = on
+        _gotThisHints.value = on
+    }
+
+    // Mirrors onReminderSwitch, but never touches ReminderScheduler beyond
+    // recording that the system dialog was requested: nothing here arms a
+    // shopping reminder or snoozes its prompt.
+    fun onGotThisRunningLowSwitch(on: Boolean) {
+        gotThisPrefs.runningLowEnabled = on
+        refreshReminderRow()
+        if (!on) return
+        when {
+            _gotThisRunningLow.value == ReminderRowState.Blocked ->
+                emitEvent(SettingsEvent.OpenNotificationSettings)
+            permissionState == PermissionState.Requestable -> {
+                gotThisPermissionPending = true
+                reminderScheduler.onPermissionRequested()
+                emitEvent(SettingsEvent.RequestNotificationPermission)
+            }
+        }
+    }
+
+    // applicationScope, like onPinRemoved: the user confirms and may leave at once.
+    fun onClearPurchaseHistory() {
+        applicationScope.launch { gotThisRepository.clearHistory(authStateManager.dataOwnerId()) }
     }
 
     fun permissionRequested(): Boolean = reminderScheduler.permissionRequested()
@@ -141,6 +186,13 @@ class SettingsViewModel @Inject constructor(
 
     // A denial is the items-screen flow's concern to snooze; Settings only re-reads.
     fun onNotificationPermissionResult(granted: Boolean) {
+        if (gotThisPermissionPending) {
+            // Asked for by the running-low switch: no shopping-reminder side effects.
+            gotThisPermissionPending = false
+            if (granted) permissionState = PermissionState.Granted
+            refreshReminderRow()
+            return
+        }
         if (granted) enableReminders(true) else refreshReminderRow()
     }
 
@@ -167,6 +219,14 @@ class SettingsViewModel @Inject constructor(
                 (!notificationGate.notificationsEnabled() && permissionHeld) ->
                 ReminderRowState.Blocked
             reminderPrefs.enabled && permissionHeld -> ReminderRowState.On
+            else -> ReminderRowState.Off
+        }
+        _gotThisRunningLow.value = when {
+            !gotThisPrefs.runningLowEnabled -> ReminderRowState.Off
+            permissionState == PermissionState.PermanentlyRefused ||
+                (!notificationGate.notificationsEnabled() && permissionHeld) ->
+                ReminderRowState.Blocked
+            permissionHeld -> ReminderRowState.On
             else -> ReminderRowState.Off
         }
     }
