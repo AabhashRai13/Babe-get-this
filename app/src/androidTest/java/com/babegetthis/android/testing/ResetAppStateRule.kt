@@ -69,13 +69,16 @@ class ResetAppStateRule(
     //     flag (only the first test in the process would take the first-claim
     //     path) and the unverified claims.
     //   sync_points — high-water marks, so every test catches up from scratch.
+    //   got_this — holdout draw, kill switch copy, hint and suggestion switches
+    //     and the "Not now" timer; journeys that need the feature visible set
+    //     them again after this rule runs.
     //
     // Cleared through the files rather than clear() methods on the stores: the
     // app has no production reason to wipe them, and adding API purely for
     // tests is how production classes grow test-shaped holes.
     private fun clearPrefs() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        listOf("telemetry_markers", "telemetry_consent", "list_ownership", "sync_points").forEach { name ->
+        listOf("telemetry_markers", "telemetry_consent", "list_ownership", "sync_points", "got_this").forEach { name ->
             context.getSharedPreferences(name, Context.MODE_PRIVATE)
                 .edit().clear().commit()
         }

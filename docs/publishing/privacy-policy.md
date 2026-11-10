@@ -5,7 +5,9 @@
      effective date below to that release date.
      DO NOT publish before delete_user purges lists nobody else joined
      (plan Task 14) — section 6 promises it.
-     Revised 2026-11-05 for shopping reminders (on-device notifications; nothing collected). -->
+     Revised 2026-11-05 for shopping reminders (on-device notifications; nothing collected).
+     Revised 2026-11-10 for Got This (purchase history). Publish with the app release
+     that ships it; the Play Data safety form changes at the same time (008 D4). -->
 
 Effective date: August 18, 2026
 
@@ -32,8 +34,17 @@ The short version: lists you make as a guest, without signing in, stay on your d
 
 **Your lists (when signed in)**
 
-* When you're signed in, we store each of your lists on our server: the list name, and each item's name, quantity, category, shop, note, and checked/unchecked state, plus which account created it. When you share a list, we also store who has joined it (linked to accounts). We do not record who added, edited, or checked off each item — there is no per-edit history.
+* When you're signed in, we store each of your lists on our server: the list name, and each item's name, quantity, category, shop, note, and checked/unchecked state, plus which account created it. When you share a list, we also store who has joined it (linked to accounts). We do not record who added or edited each item. Who checked an item off is not shown on the list; what is kept when you check one off is described under "Your purchase history" below.
 * Lists you make as a guest, without signing in, are never uploaded. If you later sign in on that phone, they move into your account and are stored as above — the app tells you when that happens.
+
+**Your purchase history**
+
+* What is kept — when you check off an item, we keep its name, its category, and the time you checked it off, as a record of what you have bought. The app uses this record to show "Bought 3 days ago" on an item you add again, to suggest things you usually buy, and to send at most one "Running low?" notification a week, which you can turn off in Settings.
+* After a list is deleted — your purchase history stays, even when the list or the item it came from is deleted.
+* Shared lists — when you check off an item on a shared list, each person on that list at that moment gets their own copy of that purchase in their own history. People who join later do not get it.
+* Deleting it — "Clear purchase history" in Settings deletes your purchase history on all your devices. Deleting your account deletes it too.
+* Never sold, and never used for advertising.
+* Lists you make as a guest — your purchase history stays on your phone, and moves into your account with your lists if you sign in.
 
 **Voice recordings**
 
@@ -60,7 +71,7 @@ The short version: lists you make as a guest, without signing in, stay on your d
 * Lists you make as a guest — these stay entirely on your device.
 * No advertising identifiers, and no ads of any kind.
 * No advertising or tracking SDKs, and no cross-app or cross-site tracking.
-* No analytics on what is in your lists — see "Usage analytics and crash reports" above for exactly what is collected.
+* No analytics on what is in your lists or your purchase history — see "Usage analytics and crash reports" above for exactly what is collected.
 * No location data.
 * No contacts, photos, files, or other device content.
 * We never sell or rent your personal information to anyone.
@@ -69,6 +80,7 @@ The short version: lists you make as a guest, without signing in, stay on your d
 ## 3. How We Use Your Information
 
 * To create and secure your account and keep you signed in.
+* To show you what you bought recently and what you usually buy, using your purchase history.
 * To convert your voice recordings into shopping list items when you use voice capture.
 * To read and act on feedback you send us.
 * To send you a single launch notification if you joined the website waitlist.
@@ -104,8 +116,9 @@ Anyone who has a list's share code can view and edit that list. Treat the code l
 * Waitlist emails are deleted within 30 days of the launch email being sent, or sooner if you ask us to remove you.
 * Voice recordings are processed transiently for transcription and are not retained as a voice archive.
 * Usage analytics are retained by Google Analytics for 14 months and then deleted automatically. Crash reports are retained for approximately 90 days.
+* Your purchase history is kept while your account exists, or until you clear it in Settings. When you check off an item on a shared list, the record of that tick that delivers the purchase to the people on the list is deleted once it is 60 days old; your purchase history itself is not affected.
 * Your lists are kept on our server while your account exists — and a shared list, while at least one member still has it. Deleted items and lists are marked deleted but their rows are retained — this is how the deletion reaches your other devices and other members.
-* When you delete your account, your account record and the lists no one else has joined are permanently deleted from our systems within 30 days, except where a longer retention period is required by law. A list you shared stays available to the other members who joined it, but is no longer linked to you. Your lists are also removed from your phone when you delete your account. Guest lists are removed when you uninstall the app or clear its data.
+* When you delete your account, your account record and your purchase history and the lists no one else has joined are permanently deleted from our systems within 30 days, except where a longer retention period is required by law. A list you shared stays available to the other members who joined it, but is no longer linked to you. Your lists are also removed from your phone when you delete your account. Guest lists are removed when you uninstall the app or clear its data.
 * Because analytics and crash records are tied to a random identifier rather than to your name or email, deleting your account does not retroactively erase past records — but from that point the identifier no longer corresponds to any account. If you want those past records deleted as well, email us and we will do it.
 
 ## 7. Your Rights and Choices
@@ -113,6 +126,7 @@ Anyone who has a list's share code can view and edit that list. Treat the code l
 Depending on where you live, you may have rights to access, correct, export, or delete your personal data, and to object to or restrict certain processing. You can exercise these rights at any time:
 
 * Access or correction — your lists (guest, account and shared) are directly visible and editable in the app. For account data, email us.
+* Purchase history — delete it at any time with "Clear purchase history" in Settings, without deleting your account.
 * Deletion — see our account deletion page at https://babegetthis.com/delete-account.html for step-by-step instructions.
 * Analytics and crash reporting — turn either off at any time in the app under Settings > Privacy. No account needed, and it takes effect immediately.
 * Anything else — email us at contactus@babegetthis.com and we will respond within 30 days.
