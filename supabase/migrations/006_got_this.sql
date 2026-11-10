@@ -467,3 +467,105 @@ create extension if not exists pg_cron with schema pg_catalog;
 -- Idempotent: drop a job of the same name before scheduling it.
 select cron.unschedule(j.jobid) from cron.job j where j.jobname = 'got_this_purge_ticks';
 select cron.schedule('got_this_purge_ticks', '0 3 * * *', 'select got_this_private.purge()');
+
+-- ─── 12. Old app versions: record their ticks from the items they push ──────
+-- Versions without Got This never send picked_up_at. When such a push ticks an
+-- item (is_picked_up turns true and picked_up_at arrives unchanged), stamp the
+-- item with the server time and write a 'legacy' tick. Current versions always
+-- send a new picked_up_at with a tick, so this never duplicates their event.
+-- Otherwise picked_up_at only moves forward: greatest() ignores nulls, so a
+-- null or older value from any client keeps the stored one.
+--
+-- Clients push with upsert (INSERT ... ON CONFLICT (id) DO UPDATE). Postgres
+-- fires BEFORE INSERT for the proposed row before it finds the conflict, then
+-- BEFORE UPDATE for the existing row. So the INSERT branch must do nothing when
+-- the row already exists, and let the UPDATE branch decide.
+--
+-- Times are truncated to milliseconds, so the stored time and the tick id
+-- agree with what a phone computes from the same value.
+
+create function got_this_private.items_track_picked_up_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if exists (select 1 from public.items i where i.id = new.id) then
+      return new;   -- an upsert of an existing row: BEFORE UPDATE decides
+    end if;
+    if new.is_picked_up and new.picked_up_at is null then
+      new.picked_up_at := date_trunc('milliseconds', now());
+      perform got_this_private.record_tick_rows(
+        got_this_private.tick_id(new.id, new.picked_up_at),
+        new.id, new.list_id, new.picked_up_at, left(new.name, 500), new.category_id, null, 'legacy'
+      );
+    end if;
+    return new;
+  end if;
+
+  if not old.is_picked_up
+     and new.is_picked_up
+     and new.picked_up_at is not distinct from old.picked_up_at then
+    new.picked_up_at := date_trunc('milliseconds', now());
+    perform got_this_private.record_tick_rows(
+      got_this_private.tick_id(new.id, new.picked_up_at),
+      new.id, new.list_id, new.picked_up_at, left(new.name, 500), new.category_id, null, 'legacy'
+    );
+  else
+    new.picked_up_at := greatest(new.picked_up_at, old.picked_up_at);
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function got_this_private.items_track_picked_up_at() from public, anon, authenticated;
+
+create trigger items_track_picked_up_at
+  before insert or update on public.items
+  for each row execute function got_this_private.items_track_picked_up_at();
+
+-- ─── 13. Backfill, once: items ticked before this migration ─────────────────
+-- Each gets a 'backfill' tick at its last edit time, which the ticks trigger
+-- turns into purchases for the people on the list then. picked_up_at is then
+-- set with both items triggers off, so updated_at does not move (phones do not
+-- re-download every ticked item) and no legacy tick is written. The ALTERs are
+-- part of this transaction: other sessions never see the triggers disabled.
+
+create function got_this_private.backfill_ticked_items()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_count integer;
+begin
+  -- Lock items first, so no write lands between the ticks and the update.
+  alter table public.items disable trigger items_set_updated_at;
+  alter table public.items disable trigger items_track_picked_up_at;
+
+  perform got_this_private.record_tick_rows(
+    got_this_private.tick_id(i.id, date_trunc('milliseconds', i.updated_at)),
+    i.id, i.list_id, date_trunc('milliseconds', i.updated_at),
+    left(i.name, 500), i.category_id, null, 'backfill'
+  )
+  from public.items i
+  where i.is_picked_up and i.deleted_at is null and i.picked_up_at is null;
+
+  update public.items
+  set picked_up_at = date_trunc('milliseconds', updated_at)
+  where is_picked_up and deleted_at is null and picked_up_at is null;
+  get diagnostics v_count = row_count;
+
+  alter table public.items enable trigger items_set_updated_at;
+  alter table public.items enable trigger items_track_picked_up_at;
+
+  return v_count;
+end;
+$$;
+
+revoke all on function got_this_private.backfill_ticked_items() from public, anon, authenticated;
+
+select got_this_private.backfill_ticked_items();
