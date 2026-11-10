@@ -1,0 +1,43 @@
+# pgTAP tests for the Supabase schema (supabase/tests/database).
+#
+# Pull requests that touch supabase/ only. The local stack is a set of Docker
+# containers, so this needs a Linux runner; the Android workflows never wait
+# for it.
+
+name: Database tests
+
+on:
+  pull_request:
+    branches: [ main, development ]
+    paths:
+      - 'supabase/**'
+  workflow_dispatch:
+
+# A newer push to the same PR makes the in-flight run pointless.
+concurrency:
+  group: db-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pgtap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the CLI the config.toml was generated with.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+
+      # Only the database, auth and the API are needed: auth owns auth.users,
+      # which the tests insert into. Everything else is excluded to keep the
+      # start fast. (The mail container is called mailpit in this CLI version;
+      # older ones called it inbucket.)
+      - name: Start the local stack
+        run: supabase start -x studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor,storage-api,postgres-meta
+
+      # --local is explicit so the command can never reach a linked project.
+      - name: Run pgTAP tests
+        run: supabase test db --local

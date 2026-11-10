@@ -1,11 +1,12 @@
 # Running the tests
 
-Two suites. Most of the time you only need the first.
+Three suites. Most of the time you only need the first.
 
 | Suite | Where | Needs an emulator? | Speed |
 |---|---|---|---|
 | Unit + Compose | `app/src/test/` | No | seconds |
 | End-to-end | `app/src/androidTest/` | Yes | ~1 min |
+| Database (pgTAP) | `supabase/tests/database/` | No, but needs Docker | ~1 min after the first start |
 
 ## Terminal
 
@@ -78,6 +79,28 @@ emulator's Android version. Bump `espressoCore` in `gradle/libs.versions.toml`.
 test in `androidTest/` used a backticked name with spaces. Instrumented tests are
 dexed and this app is minSdk 24, so those must be camelCase. Backticked names are
 fine in `src/test/`.
+
+## Database tests
+
+The SQL in `supabase/migrations/` is tested with pgTAP against a local Supabase
+stack. **This needs Docker** (Docker Desktop or OrbStack) and the Supabase CLI;
+without Docker none of these commands can run.
+
+```bash
+supabase start            # first time pulls the images; applies migrations + seed.sql
+supabase db reset --local # re-apply every migration and seed.sql to a clean database
+supabase test db --local  # run every file in supabase/tests/database
+```
+
+`supabase/seed.sql` defines the helpers the tests use (`tests.make_user`,
+`tests.act_as`, `tests.act_as_anon`). Each test file runs in one transaction
+and rolls back, so files never depend on each other.
+
+Always pass `--local`. The CLI can also target a linked hosted project, and the
+production project must never be reset or tested from here.
+
+CI runs the same suite in `.github/workflows/db-tests.yml` on pull requests that
+touch `supabase/`.
 
 ## Coverage
 

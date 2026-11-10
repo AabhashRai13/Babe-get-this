@@ -23,3 +23,7 @@ openspec/
 
 # Android Studio / IntelliJ project files
 .idea/
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/
