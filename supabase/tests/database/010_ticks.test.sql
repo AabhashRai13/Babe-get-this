@@ -3,7 +3,7 @@
 -- no list until case 10; D is on L5. Most ticks are one day old (T).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(28);
 
 -- An event as the phone sends it, with the id computed the way GotThisIds does.
 create function tests.ev(
@@ -63,7 +63,8 @@ insert into public.items (id, list_id, name) values
   ('0000000e-0000-0000-0000-000000000010', '0000000a-0000-0000-0000-000000000002', 'Milk'),
   ('0000000e-0000-0000-0000-000000000011', '0000000a-0000-0000-0000-000000000003', 'Milk'),
   ('0000000e-0000-0000-0000-000000000012', '0000000a-0000-0000-0000-000000000004', 'Milk'),
-  ('0000000e-0000-0000-0000-000000000013', '0000000a-0000-0000-0000-000000000005', 'Milk');
+  ('0000000e-0000-0000-0000-000000000013', '0000000a-0000-0000-0000-000000000005', 'Milk'),
+  ('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', 'Milk');
 
 -- 1. Pinned id vectors (shared with GotThisIdsTest on the phone).
 select is(
@@ -357,6 +358,52 @@ select results_eq(
       where source_item_id = '0000000e-0000-0000-0000-000000000013' $q$,
   $q$ values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid) $q$,
   '18. D, whose reset_at is after the tick, gets no purchase; A does'
+);
+
+-- 22. Malformed events are rejected one by one; the rest of the call goes on.
+--     A non-uuid id is echoed back as sent. A non-object element (42) has no
+--     id to name, so the code classes it rejected but leaves it out of the
+--     reply.
+select tests.act_as('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select is(
+  public.record_ticks(jsonb_build_array(
+    tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '2 days')
+      || '{"id": "not-a-uuid"}'::jsonb,
+    tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '3 days')
+      || '{"item_id": "not-a-uuid"}'::jsonb,
+    tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '1 day'),
+    tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '4 days')
+      || '{"ticked_at": "not a time"}'::jsonb,
+    tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '5 days')
+      - 'undone_at',
+    '42'::jsonb
+  )),
+  jsonb_build_object(
+    'accepted', jsonb_build_array(
+      tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '1 day') ->> 'id'
+    ),
+    'retry', '[]'::jsonb,
+    'rejected', jsonb_build_array(
+      'not-a-uuid',
+      tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '3 days') ->> 'id',
+      tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '4 days') ->> 'id',
+      tests.ev('0000000e-0000-0000-0000-000000000014', '0000000a-0000-0000-0000-000000000001', now() - interval '5 days') ->> 'id'
+    )
+  ),
+  '22. bad id, bad item_id, bad ticked_at and a missing key are rejected; the good event is accepted'
+);
+select throws_ok(
+  $q$ select public.record_ticks('{"id": "x"}') $q$,
+  'P0001',
+  'bad_events',
+  '22. p_events that is not an array is refused as a whole'
+);
+reset role;
+select is(
+  (select count(*)::int from public.purchases
+   where source_item_id = '0000000e-0000-0000-0000-000000000014'),
+  2,
+  '22. only the good event in that call made purchases, one each for A and B'
 );
 
 -- 19. RLS.

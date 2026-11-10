@@ -1,7 +1,11 @@
 -- Got This: every ticked shopping item becomes a purchase for each person on
 -- the list, so the app can learn what a household buys again
 -- (spec docs/superpowers/specs/2026-11-09-got-this-design.md, "Server").
--- Run AFTER 005, staging first.
+-- Run AFTER 005, staging first. Projects: the one NAMED "babegetthis-staging"
+-- (fpzjyusgqdzqituokrwq) is PRODUCTION; real staging is
+-- "babe-get-this-real-staging" (vdiheceziirgvbudxdxg, paused, resume it first).
+-- Apply by hand in the SQL editor, as 001-005 were. Never `supabase db push`:
+-- it would try to re-apply 001-005, which are not recorded as applied there.
 -- Compatible with old app versions: they keep working unchanged. They never
 -- send items.picked_up_at, and a tick they make is recorded by the items
 -- trigger at the end of this file as a 'legacy' tick.
@@ -169,6 +173,8 @@ begin
       from public.list_members m
       where m.list_id = new.list_id and m.joined_at <= new.ticked_at
     ) credited
+    -- A clear racing this tick under READ COMMITTED can let in a purchase at or
+    -- before the new reset; the phone's watermark still hides it.
     where not exists (
       select 1 from public.purchase_history_resets r
       where r.user_id = credited.user_id and r.reset_at >= new.ticked_at
@@ -327,8 +333,8 @@ grant  execute on function public.record_ticks(jsonb) to authenticated;
 -- ─── 8. upload_own_purchases: history that cannot go through ticks ───────────
 -- Guest-era purchases, and ticks on lists that never reached the server. They
 -- credit only the caller. The id is recomputed here, so a caller cannot write
--- under another user's id. Rows at or before the caller's reset, or outside
--- the name and category limits, are skipped.
+-- under another user's id. Rows at or before the caller's reset, outside the
+-- name and category limits, missing a value or not parsing, are skipped.
 
 create function public.upload_own_purchases(p_rows jsonb)
 returns void
@@ -337,8 +343,14 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_uid   uuid := auth.uid();
-  v_reset timestamptz;
+  v_uid      uuid := auth.uid();
+  v_reset    timestamptz;
+  v_row      jsonb;
+  v_tick     uuid;
+  v_item     uuid;
+  v_name     text;
+  v_category text;
+  v_at       timestamptz;
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
@@ -356,19 +368,34 @@ begin
   from public.purchase_history_resets r
   where r.user_id = v_uid;
 
-  insert into public.purchases
-    (id, user_id, tick_id, source_item_id, name, category_id, bought_at)
-  select got_this_private.purchase_id(v_uid, x.tick_id),
-         v_uid, x.tick_id, x.source_item_id, x.name, x.category_id, x.bought_at
-  from jsonb_to_recordset(p_rows)
-         as x(tick_id uuid, source_item_id uuid, name text, category_id text, bought_at timestamptz)
-  where x.tick_id is not null
-    and x.source_item_id is not null
-    and x.bought_at is not null
-    and char_length(x.name) between 1 and 500
-    and (x.category_id is null or char_length(x.category_id) <= 100)
-    and (v_reset is null or x.bought_at > v_reset)
-  on conflict (id) do nothing;
+  -- One row at a time, so a row that does not parse is skipped like any other
+  -- invalid row instead of failing the batch (the phone would resend it forever).
+  for v_row in select e.value from jsonb_array_elements(p_rows) as e(value) loop
+    continue when jsonb_typeof(v_row) <> 'object';
+    begin
+      v_tick     := (v_row ->> 'tick_id')::uuid;
+      v_item     := (v_row ->> 'source_item_id')::uuid;
+      v_name     := v_row ->> 'name';
+      v_category := v_row ->> 'category_id';
+      v_at       := (v_row ->> 'bought_at')::timestamptz;
+    exception when data_exception then
+      continue;
+    end;
+
+    continue when v_tick is null
+               or v_item is null
+               or v_at is null
+               or v_name is null
+               or char_length(v_name) not between 1 and 500
+               or (v_category is not null and char_length(v_category) > 100)
+               or (v_reset is not null and v_at <= v_reset);
+
+    insert into public.purchases
+      (id, user_id, tick_id, source_item_id, name, category_id, bought_at)
+    values
+      (got_this_private.purchase_id(v_uid, v_tick), v_uid, v_tick, v_item, v_name, v_category, v_at)
+    on conflict (id) do nothing;
+  end loop;
 end;
 $$;
 
@@ -471,8 +498,11 @@ select cron.schedule('got_this_purge_ticks', '0 3 * * *', 'select got_this_priva
 -- ─── 12. Old app versions: record their ticks from the items they push ──────
 -- Versions without Got This never send picked_up_at. When such a push ticks an
 -- item (is_picked_up turns true and picked_up_at arrives unchanged), stamp the
--- item with the server time and write a 'legacy' tick. Current versions always
--- send a new picked_up_at with a tick, so this never duplicates their event.
+-- item with the server time and write a 'legacy' tick. A current app's own
+-- tick never takes this path: it always sends a new picked_up_at with it.
+-- Accepted limitation: a stale whole-row push that re-ticks an item another
+-- phone unticked (true, P after the server's false, P) cannot be told apart
+-- from an old-app tick, and is recorded as one, crediting a second purchase.
 -- Otherwise picked_up_at only moves forward: greatest() ignores nulls, so a
 -- null or older value from any client keeps the stored one.
 --
@@ -492,6 +522,8 @@ set search_path = ''
 as $$
 begin
   if tg_op = 'INSERT' then
+    -- Two concurrent first pushes of the same new ticked item can both pass
+    -- this check and both write a legacy tick (different now(), different ids).
     if exists (select 1 from public.items i where i.id = new.id) then
       return new;   -- an upsert of an existing row: BEFORE UPDATE decides
     end if;

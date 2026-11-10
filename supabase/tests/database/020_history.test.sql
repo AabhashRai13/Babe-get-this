@@ -4,7 +4,7 @@
 -- joined ten days ago.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(19);
 
 -- An event as the phone sends it, with the id computed the way GotThisIds does.
 create function tests.ev(
@@ -217,6 +217,33 @@ select throws_ok(
   '10. anon cannot call claim_running_low_week'
 );
 reset role;
+
+-- 11. A row that does not parse is skipped; the rest of the batch is stored.
+select tests.act_as('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+select lives_ok(
+  $q$ select public.upload_own_purchases(jsonb_build_array(
+        jsonb_build_object(
+          'tick_id', 'f0000000-0000-0000-0000-000000000004',
+          'source_item_id', 'f1000000-0000-0000-0000-000000000004',
+          'name', 'Eggs', 'category_id', null, 'bought_at', tests.yesterday_at('12 hours')),
+        jsonb_build_object(
+          'tick_id', 'f0000000-0000-0000-0000-000000000005',
+          'source_item_id', 'f1000000-0000-0000-0000-000000000005',
+          'name', 'Eggs', 'category_id', null, 'bought_at', 'garbage'),
+        jsonb_build_object(
+          'tick_id', 'not-a-uuid',
+          'source_item_id', 'f1000000-0000-0000-0000-000000000006',
+          'name', 'Eggs', 'category_id', null, 'bought_at', tests.yesterday_at('12 hours')))) $q$,
+  '11. a batch with malformed rows does not fail'
+);
+reset role;
+select results_eq(
+  $q$ select tick_id from public.purchases
+      where source_item_id in ('f1000000-0000-0000-0000-000000000004', 'f1000000-0000-0000-0000-000000000005',
+                               'f1000000-0000-0000-0000-000000000006') $q$,
+  $q$ values ('f0000000-0000-0000-0000-000000000004'::uuid) $q$,
+  '11. only the well-formed row is stored'
+);
 
 select * from finish();
 rollback;

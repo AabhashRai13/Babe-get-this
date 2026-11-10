@@ -7,7 +7,7 @@
 -- get one (I2, R) are therefore seeded with older tick times.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(30);
 
 -- An event as the phone sends it, with the id computed the way GotThisIds does.
 create function tests.ev(
@@ -53,7 +53,8 @@ values ('0000000a-0000-0000-0000-000000000021', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbb
 -- I1: not ticked. I2 and R: ticked by a current app 2 and 3 hours ago (an
 -- insert that carries picked_up_at writes no tick), with their app ticks.
 insert into public.items (id, list_id, name) values
-  ('0000000e-0000-0000-0000-000000000101', '0000000a-0000-0000-0000-000000000021', 'Milk');
+  ('0000000e-0000-0000-0000-000000000101', '0000000a-0000-0000-0000-000000000021', 'Milk'),
+  ('0000000e-0000-0000-0000-000000000106', '0000000a-0000-0000-0000-000000000021', 'Tea');
 insert into public.items (id, list_id, name, category_id, is_picked_up, picked_up_at) values
   ('0000000e-0000-0000-0000-000000000102', '0000000a-0000-0000-0000-000000000021', 'Bread', 'bakery', true, tests.ms_ago('2 hours')),
   ('0000000e-0000-0000-0000-000000000104', '0000000a-0000-0000-0000-000000000021', 'Eggs', 'dairy', true, tests.ms_ago('3 hours'));
@@ -258,6 +259,32 @@ select is(
   (select picked_up_at from public.items where id = '0000000e-0000-0000-0000-000000000105'),
   date_trunc('milliseconds', now()),
   'R3. ... and stamps picked_up_at with its time'
+);
+
+-- R4. The main old-app path: an upsert (no picked_up_at in the payload) that
+--     ticks an existing unticked item.
+select tests.act_as('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.items (id, list_id, name, is_picked_up)
+values ('0000000e-0000-0000-0000-000000000106', '0000000a-0000-0000-0000-000000000021', 'Tea', true)
+on conflict (id) do update set name = excluded.name, is_picked_up = excluded.is_picked_up;
+reset role;
+select results_eq(
+  $q$ select id, source, ticked_at from public.ticks
+      where item_id = '0000000e-0000-0000-0000-000000000106' $q$,
+  $q$ select got_this_private.tick_id('0000000e-0000-0000-0000-000000000106', date_trunc('milliseconds', now())),
+             'legacy'::text, date_trunc('milliseconds', now()) $q$,
+  'R4. an old-app upsert that ticks an unticked item writes exactly one legacy tick'
+);
+select is(
+  (select picked_up_at from public.items where id = '0000000e-0000-0000-0000-000000000106'),
+  date_trunc('milliseconds', now()),
+  'R4. ... and sets picked_up_at to its time'
+);
+select results_eq(
+  $q$ select user_id from public.purchases
+      where source_item_id = '0000000e-0000-0000-0000-000000000106' order by user_id $q$,
+  $q$ values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid), ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid) $q$,
+  'R4. ... and gives A and B one purchase each'
 );
 
 -- 8. Backfill. Items ticked before 006 have no picked_up_at; seed them with
