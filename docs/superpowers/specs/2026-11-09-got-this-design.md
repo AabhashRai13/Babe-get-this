@@ -1049,6 +1049,12 @@ shows the first in the field; the second is a submission checklist item.
 - The category windows are judgment, not data. They tell us how long food
   keeps, not how fast it is used up, and are tuned from telemetry.
 - A partner on an old app version cannot undo an accidental tick.
+- A stale push can record a tick nobody made: if one phone unticks an item
+  more than 2 hours after another phone ticked it, and that other phone, not
+  yet having pulled the untick, pushes an edit of the item, the server sees
+  the item ticked again with an unchanged tick time, which is exactly what an
+  old app's tick looks like, and records a second purchase. Telling the two
+  apart needs a marker from the client; not built.
 - A list member who fabricates event times can undo another member's tick
   from the last 30 days (D18).
 - A phone offline for more than 30 days keeps those ticks to itself.
