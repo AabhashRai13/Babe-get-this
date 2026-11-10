@@ -1,6 +1,6 @@
 # Got This — design
 
-**Date:** 2026-11-09 · **Status:** draft, fourth revision after review, awaiting approval · **Branch:** `feat/got-this`
+**Date:** 2026-11-09 · **Status:** approved 2026-11-10; aligned with the implementation plan · **Branch:** `feat/got-this`
 
 ## Summary
 
@@ -184,6 +184,9 @@ data on the JVM. The numbers are starting values, set in one file
    (berries), "-oes" → "-o" (tomatoes), "-ses/-xes/-ches/-shes" lose "-es",
    a final "s" goes unless the word ends in "ss", "us" or "is".
 
+A name that normalises to nothing ("2 kg", "!!!") keeps its trimmed,
+lowercased form as its key, so it still matches itself.
+
 Two keys match when they are equal, or when both are at least 5 characters,
 have the same number of words, and differ by one edit (Damerau–Levenshtein
 distance 1: "bannana" and "banana"). "Milk" and "coconut milk" never match.
@@ -300,7 +303,8 @@ When the next shop of the item begins, that forecast is scored, **whether or
 not the item lapsed in between**, so very late purchases count against
 accuracy instead of dropping out. The error is the new shop's day minus the
 predicted day: positive means bought later than predicted. Nothing is stored
-for this; the earlier purchases are already in Room.
+for this; the earlier purchases are already in Room. A shop is scored once,
+on the phone that made the tick.
 
 ## Components
 
@@ -397,7 +401,6 @@ New table `purchases`:
 | `tickId` | TEXT | indexed |
 | `accountId` | TEXT, null | owner; null means a guest purchase on this phone |
 | `sourceItemId` | TEXT | the ticked item; no foreign key, history outlives items |
-| `listId` | TEXT | the list it was ticked on, for building undo events |
 | `name` | TEXT | as ticked, for display and for chips |
 | `itemKey` | TEXT | computed locally; index (`accountId`, `itemKey`) |
 | `categoryId` | TEXT, null | the item's category at tick time |
@@ -410,9 +413,10 @@ New table `tick_outbox`, the events not yet accepted by the server:
 | Column | Type | Notes |
 |---|---|---|
 | `tickId` | TEXT PK | |
+| `accountId` | TEXT | the account whose push sends it |
 | `itemId`, `listId` | TEXT | |
 | `tickedAt` | INTEGER | epoch millis |
-| `name`, `categoryId` | TEXT | snapshot at tick time |
+| `name`, `categoryId` | TEXT | snapshot at tick time; the name is cut to 500 characters, the server's limit |
 | `undoneAt` | INTEGER, null | set by an undo |
 | `revision` | INTEGER | bumped on every change, for compare-and-delete after a push |
 
@@ -421,8 +425,8 @@ New tables on this phone only, never synced; guests use the empty string as
 
 - `item_mutes`: (`accountId`, `itemKey`) primary key, `keptInARow`,
   `mutedUntil`.
-- `hint_impressions`: `itemId` primary key, `accountId`, `shownAt`,
-  `holdout`. Written when a hint first applies to an item; read and deleted
+- `hint_impressions`: `itemId` primary key, `accountId`, `canonicalKey`,
+  `shownAt`, `holdout`. Written when a hint first applies to an item; read and deleted
   when that item is removed, ticked or muted, to send the outcome event.
   Rows older than 30 days are pruned at start-up.
 - `reminder_followups`: (`accountId`, `isoWeek`) primary key, `postedAt`,
@@ -551,17 +555,19 @@ two Settings switches.
 **Old app versions**
 
 13. **Before insert or update on `items`** (`items_track_picked_up_at`):
-    - On update, `new.picked_up_at := greatest(new.picked_up_at,
-      old.picked_up_at)`. `greatest` ignores nulls, so a null or older value
-      from any client leaves the newer one in place.
     - When `is_picked_up` turns true (on insert, or from false on update) and
-      `picked_up_at` is not newer than before, the push came from an app
-      version that does not know about ticks. Set `picked_up_at := now()`
-      and write a tick through `record_tick_rows` with `source = 'legacy'`,
-      the item's current name and category, and `ticked_at` equal to that
-      value. Current app versions always send a newer `picked_up_at` with a
-      tick, so this path never fires for them and never duplicates their
-      event.
+      the incoming `picked_up_at` is unchanged (equal to the stored value, or
+      null on insert), the push came from an app version that does not know
+      about ticks: such versions never send the column. Set `picked_up_at :=
+      now()` and write a tick through `record_tick_rows` with `source =
+      'legacy'`, the item's current name and category, and `ticked_at` equal
+      to that value.
+    - In every other case, `new.picked_up_at := greatest(new.picked_up_at,
+      old.picked_up_at)`. `greatest` ignores nulls, so a null or older value
+      from any client leaves the newer one in place. Current app versions
+      always send a new `picked_up_at` with a tick, even one that is older
+      than the stored value because of clock skew, so the legacy path never
+      fires for them and never duplicates their event.
 
 **Backfill, once, inside the migration**
 
@@ -732,9 +738,15 @@ the thresholds. Without a usable dataset, the release relies on
 
 ## Feature flags
 
-- `got_this` (kill switch, read like the reminders flag at UI time): off hides
-  hints, suggestions and notifications. Recording continues.
+- `got_this` (kill switch): off hides hints, suggestions and notifications.
+  Recording continues. A missing row reads as off, so the row is inserted
+  as `true` at release.
 - `got_this_holdout`: on at release, off after 8 weeks (D14).
+
+Both are copied to `GotThisPrefs` when the flags load in the UI process, and
+every reader, including the background worker, uses that copy: the flag
+cache is empty on a background cold start (reminders spec, D8). Before any
+load, the feature is on and the holdout applies.
 
 Plus adds its own flag and gate in `GotThisAccess` in its own spec. Hints and
 history will never be gated.
@@ -761,12 +773,15 @@ history will never be gated.
   | Role | Project name | Ref |
   |---|---|---|
   | Production | `babegetthis-staging` | `fpzjyusgqdzqituokrwq` |
-  | Staging | `babe-get-this-real-staging` | `vdiheceziirgvbudxdxg` (paused on 2026-10-31; resume first) |
+  | Staging | `babe-get-this-real-staging` | `vdiheceziirgvbudxdxg` (paused since 2026-10-31) |
 
-- **Release order:** the database tests pass in CI; `006_got_this.sql` runs on
-  staging (`vdiheceziirgvbudxdxg`), the e2e tests pass against it, then it
-  runs on production (`fpzjyusgqdzqituokrwq`) with explicit confirmation;
-  then the app is released. Old app versions keep working: they never send
+- **Release order:** the database tests pass in CI against a local Supabase
+  stack, which is the automated gate. Production's schema is compared with
+  migrations 001–005 (read-only), since those were applied by hand. Then
+  `006_got_this.sql` runs on production (`fpzjyusgqdzqituokrwq`) with
+  explicit confirmation, on staging first if it has been resumed. The
+  two-phone checks below run against that backend, and then the app is
+  released. Old app versions keep working: they never send
   `picked_up_at`, and step 13 records their ticks.
 - **Notification channel:** created on first use, "Running-low reminders".
 
@@ -785,9 +800,10 @@ history will never be gated.
 - **Undo before the tick reaches the server** (the partner unticks on their
   phone first, or the outbox merges both): the undone event is stored and the
   tick, when it arrives, cannot revive it (step 8).
-- **Undo on another phone:** the second phone has the pulled purchase, with
-  the same tick id, the list id and the snapshot, and applies the same 2-hour
-  rule against `pickedUpAt`.
+- **Undo on another phone:** the second phone has the item with its
+  `pickedUpAt`, so it applies the same 2-hour rule and builds the same tick
+  id. The snapshot comes from the pulled purchase, or from the item's current
+  name and category if the purchase has not arrived yet.
 - **Clock skew:** tick times use the phone's clock. A phone that is days off
   records the wrong day and may credit or skip a member who joined near that
   time.
@@ -938,22 +954,32 @@ exercised, not bypassed.
   names up to 3 items.
 - Migration 5 → 6 in `MigrationTest`, as for 4 → 5.
 
-### End-to-end (`app/src/androidTest`, against staging)
+### Journeys (`app/src/androidTest`)
+
+The instrumented suite replaces auth and Supabase with local fakes and never
+reaches a network, so journeys cover one phone:
 
 1. Guest: tick "Milk" on one list, add "milk" to another, see "Bought today",
    remove it from the hint menu.
-2. Two signed-in members on a shared list (phone and emulator, see the e2e
-   setup): A ticks "Eggs", B adds "eggs" to B's own list and sees the hint
-   after sync.
-3. Two phones on one account with a due regular: only one gets the weekly
-   notification.
-4. Seeded history with a weekly regular: the suggestions row shows it, a chip
+2. Seeded history with a weekly regular: the suggestions row shows it, a chip
    adds it, and the row no longer offers it.
-5. A finished list: adding a chip moves it back to the active lists and
+3. A finished list: adding a chip moves it back to the active lists and
    resets its progress card.
-6. A shared list already on the server: A goes offline, ticks "Butter",
-   deletes the list, and reconnects. B adds "butter" to B's own list and
-   sees the hint after sync.
+
+### Two-phone checks (manual, real backend)
+
+The cross-member paths are covered automatically by the database tests plus
+the sync tests. These confirm them end to end on a phone and an emulator
+with throwaway accounts, after the migration is applied:
+
+1. A ticks "Eggs" on a shared list; B adds "eggs" to B's own list and sees
+   the hint after sync.
+2. A goes offline, ticks "Butter" on a shared list already on the server,
+   deletes the list, and reconnects; B sees the hint for "butter".
+3. A ticks and unticks within a minute; B's hint goes after sync.
+4. A clears history; A's hints go on both of A's devices; B's stay.
+5. Two phones on one account with a due regular: only one gets the weekly
+   notification.
 
 ### Deliberately not tested
 
