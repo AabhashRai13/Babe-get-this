@@ -79,9 +79,10 @@ class GotThisRepository(
         purchaseDao.keyStats(ownerId),
         itemDao.uncheckedNames(ownerId),
         stateDao.observeMutes(ownerId ?: GUEST_STATE_ID),
-    ) { rows, names, mutes ->
+        itemDao.lockedItemIds(),
+    ) { rows, names, mutes, locked ->
         val now = clock.now()
-        due(ownerId, rows, names, mutedKeys(mutes, now), now)
+        due(ownerId, rows, names, mutedKeys(mutes, now), locked.toSet(), now)
     }
 
     suspend fun dueItems(ownerId: String?, withinDays: Int): List<UsualItem> {
@@ -89,7 +90,8 @@ class GotThisRepository(
         val rows = purchaseDao.keyStats(ownerId).first()
         val names = itemDao.uncheckedNames(ownerId).first()
         val mutes = stateDao.mutes(ownerId ?: GUEST_STATE_ID)
-        return due(ownerId, rows, names, mutedKeys(mutes, now), now + withinDays * DAY_MILLIS)
+        val locked = itemDao.lockedItemIds().first().toSet()
+        return due(ownerId, rows, names, mutedKeys(mutes, now), locked, now + withinDays * DAY_MILLIS)
     }
 
     // How many of the owner's item groups are regulars, and how many live purchases there are.
@@ -132,6 +134,7 @@ class GotThisRepository(
         rows: List<KeyStatRow>,
         unticked: List<String>,
         muted: Set<String>,
+        lockedItems: Set<String>,
         judgedAt: Long,
     ): List<UsualItem> {
         val groups = ItemGroups.build(rows.map(::toKeyStat))
@@ -144,14 +147,18 @@ class GotThisRepository(
                 judgedAt,
                 tz(),
             )
+            // A regular last bought on a PIN-locked list is not named anywhere (R24).
             if (!profile.isDue ||
                 group.canonicalKey in onLists ||
-                group.keys.any { it in muted }
+                group.keys.any { it in muted } ||
+                purchases.maxBy { it.boughtAt }.sourceItemId in lockedItems
             ) {
                 return@mapNotNull null
             }
-            // Name and category come from the latest purchase of the group.
-            val latest = purchases.maxBy { it.boughtAt }
+            // Name and category come from the latest purchase under the canonical
+            // key, so a recent typo does not rename the group.
+            val named = purchases.filter { it.itemKey == group.canonicalKey }.ifEmpty { purchases }
+            val latest = named.maxBy { it.boughtAt }
             UsualItem(group.canonicalKey, latest.name, latest.categoryId, profile.daysOverdue)
         }.sortedWith(compareByDescending<UsualItem> { it.daysOverdue }.thenBy { it.name })
     }

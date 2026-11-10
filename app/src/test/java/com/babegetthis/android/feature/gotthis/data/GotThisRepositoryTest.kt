@@ -1,5 +1,6 @@
 package com.babegetthis.android.feature.gotthis.data
 
+import androidx.room.withTransaction
 import app.cash.turbine.test
 import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.sync.SyncKicker
@@ -46,9 +47,17 @@ class GotThisRepositoryTest {
     }
     private var seq = 0
 
-    private suspend fun list(id: String = "list-1", accountId: String? = "u1") = dbRule.listDao.insertList(
-        ShoppingListEntity(id = id, name = id, createdAt = 1L, updatedAt = 2L, accountId = accountId),
-    )
+    private suspend fun list(id: String = "list-1", accountId: String? = "u1", locked: Boolean = false) =
+        dbRule.listDao.insertList(
+            ShoppingListEntity(
+                id = id,
+                name = id,
+                createdAt = 1L,
+                updatedAt = 2L,
+                accountId = accountId,
+                isLocked = locked,
+            ),
+        )
 
     private suspend fun item(name: String, id: String = "i-$name", listId: String = "list-1", ticked: Boolean = false) =
         dbRule.itemDao.insertItem(
@@ -69,6 +78,7 @@ class GotThisRepositoryTest {
         category: String? = null,
         account: String? = "u1",
         key: String = ItemKey.of(name),
+        source: String = "i",
     ) {
         dbRule.purchaseDao.upsert(
             daysAgo.map {
@@ -77,7 +87,7 @@ class GotThisRepositoryTest {
                     id = "p$seq",
                     tickId = "t$seq",
                     accountId = account,
-                    sourceItemId = "i",
+                    sourceItemId = source,
                     name = name,
                     itemKey = key,
                     categoryId = category,
@@ -233,6 +243,75 @@ class GotThisRepositoryTest {
     }
 
     @Test
+    fun `the name comes from the latest purchase under the canonical key, not a later typo`() = runTest {
+        buy("Banana", 28, 21, 14, category = "cat-fruit")
+        buy("bannana", 7, category = "cat-other")
+
+        repo.usualsFor("u1").test {
+            val usual = awaitItem().single()
+            assertEquals("Banana", usual.name)
+            assertEquals("cat-fruit", usual.categoryId)
+            cancel()
+        }
+        assertEquals(listOf("Banana"), repo.dueItems("u1", 0).map { it.name })
+    }
+
+    // ---- Locked lists (R24) ----
+
+    @Test
+    fun `a regular last bought on a locked list is not named until the list is unlocked`() = runTest {
+        list("secret", locked = true)
+        item("Eggs", id = "i-secret", listId = "secret", ticked = true)
+        buy("Eggs", 21, 14, 7, source = "i-secret")
+        buy("Rice", 21, 14, 7)
+
+        assertEquals(listOf("Rice"), repo.dueItems("u1", 0).map { it.name })
+        repo.usualsFor("u1").test {
+            assertEquals(listOf("Rice"), awaitItem().map { it.name })
+            dbRule.listDao.setLocked("secret", false)
+            // The other sources also watch shopping_lists and may re-emit the old answer first.
+            var names = awaitItem().map { it.name }
+            while (names == listOf("Rice")) names = awaitItem().map { it.name }
+            assertEquals(listOf("Eggs", "Rice"), names)
+            cancel()
+        }
+        assertEquals(listOf("Eggs", "Rice"), repo.dueItems("u1", 0).map { it.name })
+    }
+
+    @Test
+    fun `an older purchase from a locked list does not hide a regular last bought elsewhere`() = runTest {
+        list("secret", locked = true)
+        list("open")
+        item("Eggs", id = "i-secret", listId = "secret", ticked = true)
+        item("Eggs", id = "i-open", listId = "open", ticked = true)
+        buy("Eggs", 21, 14, source = "i-secret")
+        buy("Eggs", 7, source = "i-open")
+
+        assertEquals(listOf("Eggs"), repo.dueItems("u1", 0).map { it.name })
+        repo.usualsFor("u1").test {
+            assertEquals(listOf("Eggs"), awaitItem().map { it.name })
+            cancel()
+        }
+    }
+
+    @Test
+    fun `a latest purchase whose item was deleted counts as not locked`() = runTest {
+        list("secret", locked = true)
+        item("Eggs", id = "i-gone", listId = "secret", ticked = true)
+        item("Rice", id = "i-tomb", listId = "secret", ticked = true)
+        buy("Eggs", 21, 14, 7, source = "i-gone")
+        buy("Rice", 21, 14, 7, source = "i-tomb")
+        dbRule.itemDao.deleteItem("i-gone")
+        dbRule.itemDao.softDeleteItem("i-tomb", now = now)
+
+        assertEquals(listOf("Eggs", "Rice"), repo.dueItems("u1", 0).map { it.name })
+        repo.usualsFor("u1").test {
+            assertEquals(listOf("Eggs", "Rice"), awaitItem().map { it.name })
+            cancel()
+        }
+    }
+
+    @Test
     fun `dueItems looks ahead by the given days`() = runTest {
         buy("Tea", 20, 13, 6)
         buy("Eggs", 21, 14, 7)
@@ -331,8 +410,11 @@ class GotThisRepositoryTest {
         buy("milk", 1, category = "cat-dairy-eggs", account = null)
         repo.hintsFor("list-1").test {
             assertEquals(1, awaitItem().size)
-            buy("milk", 2, category = "cat-dairy-eggs", account = "u1")
-            dbRule.listDao.claimList("list-1", "u1")
+            // One transaction, so the flow sees one change rather than racing two.
+            dbRule.db.withTransaction {
+                buy("milk", 2, category = "cat-dairy-eggs", account = "u1")
+                dbRule.listDao.claimList("list-1", "u1")
+            }
             assertEquals(2, awaitItem().getValue("i-milk").daysAgo)
             cancel()
         }

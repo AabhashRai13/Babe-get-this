@@ -100,6 +100,16 @@ interface ShoppingItemDao {
     )
     fun uncheckedNames(accountId: String?): Flow<List<String>>
 
+    // Live items on PIN-locked lists: Got This must not name what was bought there.
+    @Query(
+        """
+        SELECT i.id FROM shopping_items i
+        JOIN shopping_lists l ON l.id = i.listId
+        WHERE l.isLocked = 1 AND i.deletedAt IS NULL
+    """,
+    )
+    fun lockedItemIds(): Flow<List<String>>
+
     // Names of items added to one owner's live lists since [since], ticked or
     // deleted afterwards or not (null is the guest's lists).
     @Query(
