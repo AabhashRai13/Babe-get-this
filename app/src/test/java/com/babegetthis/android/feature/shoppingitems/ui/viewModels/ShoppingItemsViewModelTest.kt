@@ -785,6 +785,47 @@ class ShoppingItemsViewModelTest {
     }
 
     @Test
+    fun `delete bookkeeping is finished before the tracker runs`() = runTest {
+        itemsFlow.value = listOf(item("1", name = "Milk"))
+        coEvery { itemRepository.deleteItem("1") } returns Result.Success(Unit)
+        coEvery { itemRepository.restoreItem(any()) } returns Result.Success(Unit)
+        val viewModel = collecting(buildViewModel())
+        val undoEvents = mutableListOf<String>()
+        val undoneWhenTrackerRan = mutableListOf<Int>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.undoDeleteEvent.collect {
+                undoEvents +=
+                    it
+            }
+        }
+        coEvery { gotThisTracker.onItemDeleted("1") } coAnswers {
+            undoneWhenTrackerRan += undoEvents.size
+            // Models a tracker bug: everything above has already been done.
+        }
+
+        viewModel.deleteItem("1")
+        viewModel.undoDeleteItem()
+
+        assertEquals(listOf(1), undoneWhenTrackerRan)
+        coVerify { itemRepository.restoreItem(match { it.id == "1" }) }
+    }
+
+    @Test
+    fun `tick bookkeeping is finished before the tracker runs`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), true) } returns Result.Success(null)
+        every { markers.has(Marker.JoinedList, "L1") } returns true
+        every { markers.firstTime(Marker.SharedListFirstEdit, "L1") } returns true
+        val order = mutableListOf<String>()
+        every { analytics.track(AnalyticsEvent.SharedListFirstEditByJoiner) } answers { order += "list-edited" }
+        coEvery { gotThisTracker.onItemTicked(any(), any()) } coAnswers { order += "tracker" }
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("a", true)
+
+        assertEquals(listOf("list-edited", "tracker"), order)
+    }
+
+    @Test
     fun `togglePickedUp failure surfaces the error`() = runTest {
         coEvery { itemRepository.togglePickedUp(any(), any()) } returns
             Result.Error(AppError.DatabaseError())

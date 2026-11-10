@@ -7,6 +7,7 @@ import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.sync.SyncKicker
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
 import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.feature.gotthis.data.GotThisAccess
 import com.babegetthis.android.feature.gotthis.data.GotThisBackfill
 import com.babegetthis.android.feature.gotthis.data.GotThisRepository
@@ -86,5 +87,6 @@ object GotThisModule {
         access: GotThisAccess,
         prefs: GotThisPrefs,
         clock: ReminderClock,
-    ): GotThisTracker = GotThisTracker(db, analytics, access, prefs, clock) { TimeZone.getDefault() }
+        crashReporter: CrashReporter,
+    ): GotThisTracker = GotThisTracker(db, analytics, access, prefs, clock, crashReporter) { TimeZone.getDefault() }
 }

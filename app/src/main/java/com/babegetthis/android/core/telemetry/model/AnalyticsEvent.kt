@@ -152,7 +152,8 @@ sealed interface AnalyticsEvent {
 
     // What the person then did with that item. Question: does the hint change
     // behaviour: removed it (saved a purchase), ticked it anyway (hint wrong or
-    // ignored), or muted it (hint unwanted)?
+    // ignored), or muted it (hint unwanted)? A delete followed by Undo still
+    // counts as Removed, because the impression is consumed by the delete.
     data class GotThisHintOutcome(val outcome: HintOutcome, val holdout: Boolean) : AnalyticsEvent
 
     // The "your usuals" chips were on screen, at most once a day. Question: how

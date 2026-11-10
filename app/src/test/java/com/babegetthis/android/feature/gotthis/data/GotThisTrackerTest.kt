@@ -1,21 +1,31 @@
 package com.babegetthis.android.feature.gotthis.data
 
+import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.core.telemetry.AnalyticsRepository
+import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.HintOutcome
+import com.babegetthis.android.feature.gotthis.data.local.dao.GotThisStateDao
 import com.babegetthis.android.feature.gotthis.data.local.model.HintImpressionEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.gotthis.domain.HintSource
 import com.babegetthis.android.testing.FakeGotThisPrefs
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.spyk
+import io.mockk.verify
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,8 +53,11 @@ class GotThisTrackerTest {
 
         override fun setCollectionEnabled(enabled: Boolean) = Unit
     }
+    private val crashReporter = mockk<CrashReporter>(relaxed = true)
     private val tracker by lazy {
-        GotThisTracker(dbRule.db, analytics, access, prefs, ReminderClock { now }) { TimeZone.getTimeZone("UTC") }
+        GotThisTracker(dbRule.db, analytics, access, prefs, ReminderClock { now }, crashReporter) {
+            TimeZone.getTimeZone("UTC")
+        }
     }
 
     // holdout number 12 / 2
@@ -370,5 +383,77 @@ class GotThisTrackerTest {
 
         assertNotNull(events.firstOrNull())
         events.forEach { assertTrue(!it.toString().contains("secretkey")) }
+    }
+
+    @Test
+    fun `a failing database never escapes any method and each failure is reported once`() = runTest {
+        val stateDao = mockk<GotThisStateDao>()
+        coEvery { stateDao.insertImpressionIfAbsent(any()) } throws IllegalStateException("boom")
+        coEvery { stateDao.impression(any()) } throws IllegalStateException("boom")
+        val db = mockk<AppDatabase> {
+            every { gotThisStateDao() } returns stateDao
+            every { purchaseDao() } returns dbRule.purchaseDao
+        }
+        val t = GotThisTracker(db, analytics, access, prefs, ReminderClock { now }, crashReporter) {
+            TimeZone.getTimeZone("UTC")
+        }
+
+        t.onHintsPresent(regular, listOf(hint("i1")))
+        t.onItemTicked("i1", tick(regular))
+        t.onItemDeleted("i1")
+        t.onHintMuted("i1")
+
+        verify(exactly = 4) { crashReporter.recordNonFatal(any<IllegalStateException>(), any()) }
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun `a failing usuals write is reported and swallowed`() = runTest {
+        val failing = spyk(FakeGotThisPrefs())
+        every { failing.lastUsualsShownDay = any() } throws IllegalStateException("boom")
+        val t =
+            GotThisTracker(
+                dbRule.db,
+                analytics,
+                GotThisAccess(FeatureFlagCache(), failing),
+                failing,
+                ReminderClock {
+                    now
+                },
+                crashReporter,
+            ) {
+                TimeZone.getTimeZone("UTC")
+            }
+
+        t.onUsualsPresent(regular, 3)
+
+        verify(exactly = 1) { crashReporter.recordNonFatal(any(), any()) }
+    }
+
+    @Test
+    fun `cancellation is rethrown and not reported`() = runTest {
+        val failing = spyk(FakeGotThisPrefs())
+        every { failing.lastUsualsShownDay = any() } throws CancellationException("cancelled")
+        val t =
+            GotThisTracker(
+                dbRule.db,
+                analytics,
+                GotThisAccess(FeatureFlagCache(), failing),
+                failing,
+                ReminderClock {
+                    now
+                },
+                crashReporter,
+            ) {
+                TimeZone.getTimeZone("UTC")
+            }
+
+        try {
+            t.onUsualsPresent(regular, 3)
+            fail("expected cancellation")
+        } catch (_: CancellationException) {
+        }
+
+        verify(exactly = 0) { crashReporter.recordNonFatal(any(), any()) }
     }
 }

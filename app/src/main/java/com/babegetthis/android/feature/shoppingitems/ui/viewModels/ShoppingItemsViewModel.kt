@@ -450,9 +450,9 @@ class ShoppingItemsViewModel @Inject constructor(
                         if (reminderScheduler.shouldOfferPermission(listId, permissionState)) {
                             _showReminderPrompt.value = true
                         }
-                        gotThisTracker.onItemTicked(itemId, result.data)
                     }
                     onListEdited()
+                    if (isPickedUp) gotThisTracker.onItemTicked(itemId, result.data)
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
@@ -467,7 +467,6 @@ class ShoppingItemsViewModel @Inject constructor(
             val itemToDelete = items.value.find { it.id == itemId }
             when (val result = itemRepository.deleteItem(itemId)) {
                 is Result.Success -> {
-                    gotThisTracker.onItemDeleted(itemId)
                     pendingDeleteItem = itemToDelete
                     // Only offer Undo when there is something cached to restore.
                     // Emitting unconditionally gave the user an Undo button that
@@ -476,6 +475,7 @@ class ShoppingItemsViewModel @Inject constructor(
                     if (itemToDelete != null) {
                         _undoDeleteEvent.emit(itemToDelete.name)
                     }
+                    gotThisTracker.onItemDeleted(itemId)
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
