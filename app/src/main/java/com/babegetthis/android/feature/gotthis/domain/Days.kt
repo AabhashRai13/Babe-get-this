@@ -20,7 +20,7 @@ object Days {
         val thursday = day + (4 - weekday(day))
         val year = yearOf(thursday)
         val week = ((thursday - startOfYear(year)) / 7 + 1).toInt()
-        return "%d-W%02d".format(year, week)
+        return "$year-W${week.toString().padStart(2, '0')}"
     }
 
     // The offset is looked up twice so a day with a clock change still lands on

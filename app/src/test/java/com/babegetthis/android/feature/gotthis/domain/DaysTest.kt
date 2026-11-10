@@ -3,6 +3,7 @@ package com.babegetthis.android.feature.gotthis.domain
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.util.Calendar
+import java.util.Locale
 import java.util.TimeZone
 
 class DaysTest {
@@ -82,5 +83,18 @@ class DaysTest {
     @Test
     fun `weekday of negative epoch days wraps`() {
         assertEquals(7, Days.weekday(-4))
+    }
+
+    @Test
+    fun `iso week stays ascii under a locale with other digits`() {
+        val previous = Locale.getDefault()
+        try {
+            listOf(Locale("ne"), Locale("ar"), Locale("fa")).forEach {
+                Locale.setDefault(it)
+                assertEquals("2026-W46", Days.isoWeek(utcMillis(2026, 11, 9, 12), utc))
+            }
+        } finally {
+            Locale.setDefault(previous)
+        }
     }
 }
