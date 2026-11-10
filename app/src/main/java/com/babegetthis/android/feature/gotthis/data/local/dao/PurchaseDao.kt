@@ -71,6 +71,18 @@ interface PurchaseDao {
     @Query("DELETE FROM purchases WHERE accountId IS NULL")
     suspend fun deleteGuestPurchases()
 
+    // Every other account with anything on the phone, for its sync point.
+    @Query(
+        """
+        SELECT accountId FROM purchases WHERE accountId IS NOT NULL AND accountId != :userId
+        UNION SELECT accountId FROM tick_outbox WHERE accountId != :userId
+        UNION SELECT accountId FROM item_mutes WHERE accountId != '' AND accountId != :userId
+        UNION SELECT accountId FROM hint_impressions WHERE accountId != '' AND accountId != :userId
+        UNION SELECT accountId FROM reminder_followups WHERE accountId != '' AND accountId != :userId
+    """,
+    )
+    suspend fun otherAccountIds(userId: String): List<String>
+
     // Another account signed in over a lost session: its rows can never be sent.
     @Query("DELETE FROM purchases WHERE accountId IS NOT NULL AND accountId != :userId")
     suspend fun deleteOtherAccountPurchases(userId: String)

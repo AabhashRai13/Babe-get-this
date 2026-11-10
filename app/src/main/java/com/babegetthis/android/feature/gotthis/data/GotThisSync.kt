@@ -106,7 +106,8 @@ class GotThisSync(
     // Sign-in from guest: the guest's history becomes the account's. Live rows
     // are sent up; the server has none of it.
     suspend fun claimGuestHistory(userId: String) {
-        db.withTransaction {
+        val others = db.withTransaction {
+            val others = purchaseDao.otherAccountIds(userId)
             // Another account that lost its session leaves its history behind;
             // it is neither this person's nor sendable by them.
             purchaseDao.deleteOtherAccountPurchases(userId)
@@ -125,7 +126,10 @@ class GotThisSync(
                 },
             )
             stateDao.moveGuestState(userId)
+            others
         }
+        // Their rows are gone, so a later pull for them must start from the beginning.
+        others.forEach { syncPoints.remove(point(it)) }
     }
 
     // Sign-out: the account's history leaves the phone with its lists. A pending

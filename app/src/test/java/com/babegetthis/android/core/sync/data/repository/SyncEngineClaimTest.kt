@@ -145,6 +145,11 @@ class SyncEngineClaimTest {
         assertTrue(dbRule.stateDao.followUps("user-2").isEmpty())
         assertEquals("user-1", dbRule.purchaseDao.byTickId("t-guest").single().accountId)
         assertEquals(listOf<String?>(null), gotThisRemote.fetchSince)
+        assertNull(syncPoints.get("purchases:user-2"))
+
+        // user-2 signs back in: their deleted history is pulled again in full.
+        gotThisSyncFor(dbRule, gotThisRemote, gotThisPrefs, syncPoints).pull("user-2")
+        assertEquals(listOf<String?>(null, null), gotThisRemote.fetchSince)
     }
 
     @Test
