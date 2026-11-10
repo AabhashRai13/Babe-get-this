@@ -79,6 +79,7 @@ import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
+import com.babegetthis.android.feature.gotthis.ui.viewModels.GotThisViewModel
 import com.babegetthis.android.feature.shoppingitems.ui.components.CategorySubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.FirstItemPrompt
 import com.babegetthis.android.feature.shoppingitems.ui.components.ProgressCard
@@ -95,8 +96,10 @@ fun ShoppingItemsScreen(
     onNavigateToLogin: () -> Unit = {},
     onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingItemsViewModel = hiltViewModel(),
+    gotThisViewModel: GotThisViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val hints by gotThisViewModel.hints.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val showDialog by viewModel.showAddItemDialog.collectAsState()
     val editingItem by viewModel.editingItem.collectAsState()
@@ -415,6 +418,9 @@ fun ShoppingItemsScreen(
                                         ShoppingItemCard(
                                             item = shoppingItem,
                                             onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                            hint = hints[shoppingItem.id],
+                                            onHintRemove = { viewModel.deleteItem(shoppingItem.id) },
+                                            onHintMute = { gotThisViewModel.onHintMute(shoppingItem.id) },
                                             onTogglePickedUp = {
                                                 // The satisfying "check it off" moment — buzz to match
                                                 // the un-check path on completed items.
@@ -457,6 +463,9 @@ fun ShoppingItemsScreen(
                                 ShoppingItemCard(
                                     item = shoppingItem,
                                     onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                    hint = hints[shoppingItem.id],
+                                    onHintRemove = { viewModel.deleteItem(shoppingItem.id) },
+                                    onHintMute = { gotThisViewModel.onHintMute(shoppingItem.id) },
                                     onTogglePickedUp = {
                                         haptic(Haptic.Light)
                                         viewModel.togglePickedUp(

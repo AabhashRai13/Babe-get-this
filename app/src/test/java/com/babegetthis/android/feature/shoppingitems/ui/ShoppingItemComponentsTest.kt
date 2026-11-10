@@ -15,6 +15,8 @@ import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import com.babegetthis.android.core.ui.TestTags
 import com.babegetthis.android.core.ui.components.SwipeableCard
+import com.babegetthis.android.feature.gotthis.data.BoughtHint
+import com.babegetthis.android.feature.gotthis.domain.HintSource
 import com.babegetthis.android.feature.shoppingitems.ui.components.FirstItemPrompt
 import com.babegetthis.android.feature.shoppingitems.ui.components.ProgressCard
 import com.babegetthis.android.feature.shoppingitems.ui.components.SectionHeader
@@ -105,6 +107,84 @@ class ShoppingItemComponentsTest {
         itemCard(isPickedUp = true)
 
         compose.onNodeWithText("Milk").assertIsDisplayed()
+    }
+
+    // --- Got This hint line ---
+
+    private fun hintedCard(
+        daysAgo: Int = 3,
+        isPickedUp: Boolean = false,
+        hint: Boolean = true,
+        onClick: () -> Unit = {},
+        onToggle: () -> Unit = {},
+        onRemove: () -> Unit = {},
+        onMute: () -> Unit = {},
+    ) = compose.setContent {
+        ShoppingItemCard(
+            item = TestData.item(id = "i1", name = "Milk", isPickedUp = isPickedUp),
+            onClick = onClick,
+            onTogglePickedUp = onToggle,
+            hint = if (hint) BoughtHint("i1", daysAgo, HintSource.Regular, "milk") else null,
+            onHintRemove = onRemove,
+            onHintMute = onMute,
+        )
+    }
+
+    @Test
+    fun `hint line says how many days ago`() {
+        hintedCard(daysAgo = 3)
+
+        compose.onNodeWithText("Bought 3 days ago").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hint line has fixed wording for today and yesterday`() {
+        hintedCard(daysAgo = 0)
+        compose.onNodeWithText("Bought today").assertIsDisplayed()
+    }
+
+    @Test
+    fun `hint line says yesterday for one day`() {
+        hintedCard(daysAgo = 1)
+        compose.onNodeWithText("Bought yesterday").assertIsDisplayed()
+    }
+
+    @Test
+    fun `tapping the hint line shows both actions and each fires`() {
+        var removed = false
+        var muted = false
+        var clicked = false
+        var toggled = false
+        hintedCard(onRemove = { removed = true }, onMute = { muted = true }, onClick = { clicked = true }, onToggle = {
+            toggled =
+                true
+        })
+
+        compose.onNodeWithTag("bought_hint").performClick()
+        compose.onNodeWithText("Remove from list").assertIsDisplayed()
+        compose.onNodeWithText("Don't remind me about this").assertIsDisplayed()
+        compose.onNodeWithText("Remove from list").performClick()
+        assertTrue(removed)
+
+        compose.onNodeWithTag("bought_hint").performClick()
+        compose.onNodeWithText("Don't remind me about this").performClick()
+        assertTrue(muted)
+        assertTrue("the hint tap must not open the item", !clicked)
+        assertTrue("the hint tap must not tick the item", !toggled)
+    }
+
+    @Test
+    fun `a card without a hint shows no line`() {
+        hintedCard(hint = false)
+
+        compose.onNodeWithTag("bought_hint").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a ticked card never shows the line`() {
+        hintedCard(isPickedUp = true)
+
+        compose.onNodeWithTag("bought_hint").assertDoesNotExist()
     }
 
     // --- ProgressCard ---

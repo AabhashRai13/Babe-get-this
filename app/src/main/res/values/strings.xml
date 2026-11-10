@@ -226,4 +226,13 @@
     <string name="join_list_hint">6-character code</string>
     <string name="join_list_button">Join</string>
     <string name="join_list_action">Join a shared list</string>
+
+    <string name="got_this_bought_today">Bought today</string>
+    <string name="got_this_bought_yesterday">Bought yesterday</string>
+    <plurals name="got_this_bought_days_ago">
+        <item quantity="one">Bought %d day ago</item>
+        <item quantity="other">Bought %d days ago</item>
+    </plurals>
+    <string name="got_this_hint_remove">Remove from list</string>
+    <string name="got_this_hint_mute">Don\'t remind me about this</string>
 </resources>

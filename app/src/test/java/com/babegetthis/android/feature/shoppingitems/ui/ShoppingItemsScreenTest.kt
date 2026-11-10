@@ -21,10 +21,13 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.pin.data.PinRepository
 import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.ui.TestTags
+import com.babegetthis.android.feature.gotthis.data.GotThisRepository
+import com.babegetthis.android.feature.gotthis.ui.viewModels.GotThisViewModel
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppingitems.ui.viewModels.ShoppingItemsViewModel
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
+import com.babegetthis.android.testing.FakeGotThisPrefs
 import com.babegetthis.android.testing.TestData
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -72,6 +75,7 @@ class ShoppingItemsScreenTest {
     private var navigatedBack = false
 
     private lateinit var viewModel: ShoppingItemsViewModel
+    private lateinit var gotThisViewModel: GotThisViewModel
 
     private fun item(id: String, name: String, isPickedUp: Boolean = false, shop: String? = null) =
         TestData.item(id = id, listId = "L1", name = name, isPickedUp = isPickedUp, shop = shop)
@@ -104,10 +108,26 @@ class ShoppingItemsScreenTest {
             gotThisTracker = mockk(relaxed = true),
             applicationScope = CoroutineScope(UnconfinedTestDispatcher()),
         )
+        val gotThisRepository = mockk<GotThisRepository>()
+        coEvery { gotThisRepository.ownerOf(any()) } returns null
+        every { gotThisRepository.hintsFor(any()) } returns MutableStateFlow(emptyMap())
+        every { gotThisRepository.usualsFor(any()) } returns MutableStateFlow(emptyList())
+        gotThisViewModel = GotThisViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("listId" to "L1")),
+            repository = gotThisRepository,
+            access = mockk(relaxed = true),
+            tracker = mockk(relaxed = true),
+            itemRepository = itemRepository,
+            prefs = FakeGotThisPrefs(),
+            notificationGate = { true },
+            analytics = mockk(relaxed = true),
+            clock = { 0L },
+        )
         compose.setContent {
             ShoppingItemsScreen(
                 onNavigateBack = { navigatedBack = true },
                 viewModel = viewModel,
+                gotThisViewModel = gotThisViewModel,
             )
         }
     }

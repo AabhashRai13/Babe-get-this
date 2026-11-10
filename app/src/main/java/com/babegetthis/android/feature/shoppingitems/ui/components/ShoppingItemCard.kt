@@ -47,11 +47,20 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.babegetthis.android.core.ui.TestTags
+import com.babegetthis.android.feature.gotthis.data.BoughtHint
+import com.babegetthis.android.feature.gotthis.ui.BoughtHintLine
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import kotlinx.coroutines.delay
 
 @Composable
-fun ShoppingItemCard(item: ShoppingItem, onClick: () -> Unit, onTogglePickedUp: () -> Unit) {
+fun ShoppingItemCard(
+    item: ShoppingItem,
+    onClick: () -> Unit,
+    onTogglePickedUp: () -> Unit,
+    hint: BoughtHint? = null,
+    onHintRemove: () -> Unit = {},
+    onHintMute: () -> Unit = {},
+) {
     // --- Sub-animations for the pick-up moment ---
     // Following the checklist's "break it into sub-animations" pattern:
     //   1) card container colour eases instead of snapping
@@ -184,6 +193,10 @@ fun ShoppingItemCard(item: ShoppingItem, onClick: () -> Unit, onTogglePickedUp: 
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+
+                if (hint != null && !item.isPickedUp) {
+                    BoughtHintLine(daysAgo = hint.daysAgo, onRemove = onHintRemove, onMute = onHintMute)
+                }
 
                 if (!item.note.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
