@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.gotthis.data.remote
 
 import com.babegetthis.android.core.sync.data.remote.fetchAllPaged
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.SerialName
@@ -47,6 +48,13 @@ class SupabaseGotThisRemote(private val client: SupabaseClient) : GotThisRemote 
         function = "claim_running_low_week",
         parameters = buildJsonObject { put("p_week", isoWeek) },
     ).decodeAs<Boolean>()
+
+    // In a process started without an activity the stored session may not be
+    // loaded yet; waiting for it avoids reading a signed-in person as none.
+    override suspend fun sessionUserId(): String? {
+        client.auth.awaitInitialization()
+        return client.auth.currentUserOrNull()?.id
+    }
 
     @Serializable
     private data class TickReplyDto(

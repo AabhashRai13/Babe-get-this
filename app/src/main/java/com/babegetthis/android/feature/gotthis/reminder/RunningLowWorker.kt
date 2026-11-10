@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.babegetthis.android.core.auth.data.AuthStateManager
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.reminder.NotificationGate
@@ -15,6 +14,7 @@ import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.feature.gotthis.data.GotThisAccess
 import com.babegetthis.android.feature.gotthis.data.GotThisRepository
+import com.babegetthis.android.feature.gotthis.data.StoredOwner
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.model.ReminderFollowUpEntity
 import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
@@ -42,7 +42,7 @@ class RunningLowWorker @AssistedInject constructor(
     private val prefs: GotThisPrefs,
     private val access: GotThisAccess,
     private val remote: GotThisRemote,
-    private val authStateManager: AuthStateManager,
+    private val storedOwner: StoredOwner,
     private val notifier: RunningLowNotifier,
     private val notificationGate: NotificationGate,
     private val analytics: AnalyticsRepository,
@@ -63,7 +63,9 @@ class RunningLowWorker @AssistedInject constructor(
     }
 
     private suspend fun runChecks() {
-        val owner = authStateManager.dataOwnerId()
+        // Stored, not AuthStateManager's: a process WorkManager starts has no
+        // activity to initialise it. A failed read throws, so nothing runs.
+        val owner = storedOwner.ownerId()
         val now = clock.now()
         val tz = zone.current()
         val week = Days.isoWeek(now, tz)
@@ -123,16 +125,16 @@ class RunningLowWorker @AssistedInject constructor(
 
     // At most one notification a week per person. A guest's claim lives on the
     // phone; an account's is made on the server so two phones do not both
-    // notify. Any doubt (no live session, offline, already claimed) is silence.
+    // notify. Any doubt (no loaded session, another user's session, offline,
+    // already claimed) is silence.
     private suspend fun claimWeek(owner: String?, week: String): Boolean {
         if (owner == null) {
             if (prefs.guestNotifiedWeek == week) return false
             prefs.guestNotifiedWeek = week
             return true
         }
-        if (authStateManager.liveSessionUserId() != owner) return false
         return try {
-            remote.claimRunningLowWeek(week)
+            remote.sessionUserId() == owner && remote.claimRunningLowWeek(week)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

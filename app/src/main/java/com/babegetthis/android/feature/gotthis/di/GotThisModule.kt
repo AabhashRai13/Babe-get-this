@@ -3,6 +3,7 @@ package com.babegetthis.android.feature.gotthis.di
 import android.content.Context
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.WorkManager
+import com.babegetthis.android.core.auth.data.TokenManager
 import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.featureflags.FeatureFlagCache
 import com.babegetthis.android.core.reminder.ReminderClock
@@ -15,6 +16,7 @@ import com.babegetthis.android.feature.gotthis.data.GotThisBackfill
 import com.babegetthis.android.feature.gotthis.data.GotThisRepository
 import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.gotthis.data.GotThisTracker
+import com.babegetthis.android.feature.gotthis.data.StoredOwner
 import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.SharedPrefsGotThisPrefs
@@ -99,6 +101,11 @@ object GotThisModule {
         crashReporter: CrashReporter,
         zone: ZoneProvider,
     ): GotThisTracker = GotThisTracker(db, analytics, access, prefs, clock, crashReporter) { zone.current() }
+
+    // The same stored id AuthStateManager.initialize() reads; null is a guest.
+    @Provides
+    @Singleton
+    fun provideStoredOwner(tokenManager: TokenManager): StoredOwner = StoredOwner { tokenManager.getUserId() }
 
     @Provides
     @Singleton

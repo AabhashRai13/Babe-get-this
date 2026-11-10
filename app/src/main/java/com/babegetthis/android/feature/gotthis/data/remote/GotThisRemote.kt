@@ -14,4 +14,7 @@ interface GotThisRemote {
     suspend fun fetchPurchases(sinceIso: String?): List<PurchaseRow>
 
     suspend fun claimRunningLowWeek(isoWeek: String): Boolean
+
+    /** The user of the session the client has loaded from storage; null without one. */
+    suspend fun sessionUserId(): String?
 }

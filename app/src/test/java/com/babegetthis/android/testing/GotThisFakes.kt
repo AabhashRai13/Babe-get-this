@@ -61,6 +61,7 @@ class FakeGotThisRemote : GotThisRemote {
     var failUpload = false
     var failFetch = false
     var claimResult = true
+    var sessionUser: String? = null
     var onRecordTicks: suspend () -> Unit = {}
 
     override suspend fun recordTicks(events: List<TickEventRow>): TickReply {
@@ -103,6 +104,11 @@ class FakeGotThisRemote : GotThisRemote {
         calls += "claimRunningLowWeek"
         claimedWeeks += isoWeek
         return claimResult
+    }
+
+    override suspend fun sessionUserId(): String? {
+        calls += "sessionUserId"
+        return sessionUser
     }
 }
 

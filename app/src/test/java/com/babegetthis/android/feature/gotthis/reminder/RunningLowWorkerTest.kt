@@ -19,6 +19,7 @@ import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.feature.gotthis.data.GotThisAccess
 import com.babegetthis.android.feature.gotthis.data.GotThisRepository
+import com.babegetthis.android.feature.gotthis.data.StoredOwner
 import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.ReminderFollowUpEntity
 import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
@@ -31,7 +32,7 @@ import com.babegetthis.android.testing.FakeGotThisPrefs
 import com.babegetthis.android.testing.FakeGotThisRemote
 import com.babegetthis.android.testing.FakeNotificationGate
 import com.babegetthis.android.testing.InMemoryDatabaseRule
-import com.babegetthis.android.testing.authStateFor
+import com.babegetthis.android.testing.inMemoryTokenManager
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CancellationException
@@ -72,14 +73,14 @@ class RunningLowWorkerTest {
     private val manager = context.getSystemService(NotificationManager::class.java)
     private val clock = FakeClock(fridayEvening)
     private val prefs = FakeGotThisPrefs()
-    private val remote = FakeGotThisRemote()
+    private val remote = FakeGotThisRemote().apply { sessionUser = user }
     private val gate = FakeNotificationGate()
     private val analytics = mockk<AnalyticsRepository>(relaxed = true)
     private val crashReporter = mockk<CrashReporter>(relaxed = true)
     private val utc = TimeZone.getTimeZone("UTC")
     private val zone = ZoneProvider { utc }
 
-    private var auth: AuthStateManager = authStateFor(user)
+    private var storedOwner = StoredOwner { user }
     private var notificationGate: NotificationGate = gate
     private var remoteInUse: GotThisRemote = remote
     private var seq = 0
@@ -101,7 +102,7 @@ class RunningLowWorkerTest {
             prefs = prefs,
             access = GotThisAccess(FeatureFlagCache(), prefs),
             remote = remoteInUse,
-            authStateManager = auth,
+            storedOwner = storedOwner,
             notifier = RunningLowNotifier(context, NotificationManagerCompat.from(context)),
             notificationGate = notificationGate,
             analytics = analytics,
@@ -115,7 +116,7 @@ class RunningLowWorkerTest {
         TestListenableWorkerBuilder<RunningLowWorker>(context).setWorkerFactory(factory).build().doWork()
     }
 
-    private fun owner() = auth.dataOwnerId()
+    private fun owner() = storedOwner.ownerId()
 
     // A purchase on each of the given days (offsets from 2026-11-01 00:00 UTC), at 10:00.
     private suspend fun buy(name: String, vararg dayOffsets: Int, account: String? = owner()) {
@@ -262,6 +263,26 @@ class RunningLowWorkerTest {
         assertEquals("Eggs is usually bought around now.", body())
     }
 
+    // ---- A cold process ----
+
+    @Test
+    fun `a signed-in person is notified from a process with no activity`() = runTest {
+        val tokens = inMemoryTokenManager().apply {
+            saveToken("token")
+            saveUserId(user)
+        }
+        val auth = AuthStateManager(tokens)
+        assertNull("never initialised, as in a process WorkManager started", auth.dataOwnerId())
+        storedOwner = StoredOwner { tokens.getUserId() }
+        weekly()
+
+        run()
+
+        assertEquals("Eggs is usually bought around now.", body())
+        assertEquals(listOf(week), remote.claimedWeeks)
+        verify { analytics.track(AnalyticsEvent.GotThisWeeklySummary(1, 4)) }
+    }
+
     // ---- Claiming the week ----
 
     @Test
@@ -279,7 +300,7 @@ class RunningLowWorkerTest {
 
     @Test
     fun `a guest claims the week on the phone and never calls the server`() = runTest {
-        auth = authStateFor(null)
+        storedOwner = StoredOwner { null }
         weekly()
 
         run()
@@ -327,14 +348,41 @@ class RunningLowWorkerTest {
     }
 
     @Test
-    fun `an expired session stays silent`() = runTest {
-        auth = authStateFor(user, expired = true)
+    fun `a stored owner without a loaded session stays silent`() = runTest {
+        remote.sessionUser = null
         weekly()
 
         run()
 
         assertSilent()
+        assertEquals(emptyList<String>(), remote.claimedWeeks)
+        assertEquals(emptyList<ReminderFollowUpEntity>(), dbRule.stateDao.followUps(user))
+    }
+
+    @Test
+    fun `a session of another user stays silent`() = runTest {
+        remote.sessionUser = holdoutUser
+        weekly()
+
+        run()
+
+        assertSilent()
+        assertEquals(emptyList<String>(), remote.claimedWeeks)
+    }
+
+    @Test
+    fun `an owner that cannot be read does nothing at all`() = runTest {
+        weekly()
+        val failure = IllegalStateException("keystore unavailable")
+        storedOwner = StoredOwner { throw failure }
+
+        assertEquals(ListenableWorker.Result.success(), run())
+
+        assertSilent()
+        verify(exactly = 0) { analytics.track(ofType<AnalyticsEvent.GotThisWeeklySummary>()) }
+        assertNull(prefs.lastSummaryWeek)
         assertEquals(emptyList<String>(), remote.calls)
+        verify { crashReporter.recordNonFatal(failure, any()) }
     }
 
     @Test
@@ -350,7 +398,8 @@ class RunningLowWorkerTest {
 
     @Test
     fun `a holdout person gets no notification but the week is claimed and logged`() = runTest {
-        auth = authStateFor(holdoutUser)
+        storedOwner = StoredOwner { holdoutUser }
+        remote.sessionUser = holdoutUser
         gate.enabled = false
         weekly()
 
