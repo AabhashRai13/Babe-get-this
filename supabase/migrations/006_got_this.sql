@@ -323,3 +323,147 @@ $$;
 
 revoke execute on function public.record_ticks(jsonb) from public, anon;
 grant  execute on function public.record_ticks(jsonb) to authenticated;
+
+-- ─── 8. upload_own_purchases: history that cannot go through ticks ───────────
+-- Guest-era purchases, and ticks on lists that never reached the server. They
+-- credit only the caller. The id is recomputed here, so a caller cannot write
+-- under another user's id. Rows at or before the caller's reset, or outside
+-- the name and category limits, are skipped.
+
+create function public.upload_own_purchases(p_rows jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_reset timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  if p_rows is null or jsonb_typeof(p_rows) <> 'array' then
+    raise exception 'bad_rows';
+  end if;
+
+  if jsonb_array_length(p_rows) > 500 then
+    raise exception 'too_many_rows';
+  end if;
+
+  select r.reset_at into v_reset
+  from public.purchase_history_resets r
+  where r.user_id = v_uid;
+
+  insert into public.purchases
+    (id, user_id, tick_id, source_item_id, name, category_id, bought_at)
+  select got_this_private.purchase_id(v_uid, x.tick_id),
+         v_uid, x.tick_id, x.source_item_id, x.name, x.category_id, x.bought_at
+  from jsonb_to_recordset(p_rows)
+         as x(tick_id uuid, source_item_id uuid, name text, category_id text, bought_at timestamptz)
+  where x.tick_id is not null
+    and x.source_item_id is not null
+    and x.bought_at is not null
+    and char_length(x.name) between 1 and 500
+    and (x.category_id is null or char_length(x.category_id) <= 100)
+    and (v_reset is null or x.bought_at > v_reset)
+  on conflict (id) do nothing;
+end;
+$$;
+
+revoke execute on function public.upload_own_purchases(jsonb) from public, anon;
+grant  execute on function public.upload_own_purchases(jsonb) to authenticated;
+
+-- ─── 9. clear_purchase_history ───────────────────────────────────────────────
+-- p_cleared_at is when the person pressed Clear, possibly while offline. It
+-- never counts from the future, and the reset never moves back (I7), so two
+-- clears arriving in reverse order keep the later one. Returns the reset now
+-- in force.
+
+create function public.clear_purchase_history(p_cleared_at timestamptz)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_t     timestamptz;
+  v_reset timestamptz;
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  v_t := least(p_cleared_at, now());
+
+  delete from public.purchases
+  where user_id = v_uid and bought_at <= v_t;
+
+  insert into public.purchase_history_resets as r (user_id, reset_at)
+  values (v_uid, v_t)
+  on conflict (user_id) do update
+    set reset_at = greatest(r.reset_at, excluded.reset_at)
+  returning r.reset_at into v_reset;
+
+  return v_reset;
+end;
+$$;
+
+revoke execute on function public.clear_purchase_history(timestamptz) from public, anon;
+grant  execute on function public.clear_purchase_history(timestamptz) to authenticated;
+
+-- ─── 10. claim_running_low_week ──────────────────────────────────────────────
+-- At most one "running low" notification per person per ISO week, across all
+-- their phones: true only for the call that claims the week.
+
+create function public.claim_running_low_week(p_week text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'not_authenticated';
+  end if;
+
+  if p_week is null or p_week !~ '^\d{4}-W\d{2}$' then
+    raise exception 'bad_week';
+  end if;
+
+  insert into public.running_low_notices (user_id, iso_week)
+  values (v_uid, p_week)
+  on conflict do nothing;
+
+  return found;
+end;
+$$;
+
+revoke execute on function public.claim_running_low_week(text) from public, anon;
+grant  execute on function public.claim_running_low_week(text) to authenticated;
+
+-- ─── 11. Purge, daily at 03:00 UTC ───────────────────────────────────────────
+-- No event older than 30 days is accepted, so a tick row is never needed after
+-- that; the privacy policy promises 60 days. Purchases are not touched.
+
+create function got_this_private.purge()
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  delete from public.ticks where created_at < now() - interval '60 days';
+  delete from public.running_low_notices where posted_at < now() - interval '8 weeks';
+$$;
+
+revoke all on function got_this_private.purge() from public, anon, authenticated;
+
+create extension if not exists pg_cron with schema pg_catalog;
+
+-- Idempotent: drop a job of the same name before scheduling it.
+select cron.unschedule(j.jobid) from cron.job j where j.jobname = 'got_this_purge_ticks';
+select cron.schedule('got_this_purge_ticks', '0 3 * * *', 'select got_this_private.purge()');
