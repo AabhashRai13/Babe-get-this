@@ -8,6 +8,8 @@ import com.babegetthis.android.feature.gotthis.data.GotThisAccess
 import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.SharedPrefsGotThisPrefs
+import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
+import com.babegetthis.android.feature.gotthis.data.remote.SupabaseGotThisRemote
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import dagger.Module
@@ -15,6 +17,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import io.github.jan.supabase.SupabaseClient
 import javax.inject.Singleton
 
 @Module
@@ -37,4 +40,8 @@ object GotThisModule {
         listDao: ShoppingListDao,
         clock: ReminderClock,
     ): TickStore = TickStore(db, itemDao, listDao, db.purchaseDao(), clock)
+
+    @Provides
+    @Singleton
+    fun provideGotThisRemote(client: SupabaseClient): GotThisRemote = SupabaseGotThisRemote(client)
 }

@@ -1,6 +1,12 @@
 package com.babegetthis.android.testing
 
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
+import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
+import com.babegetthis.android.feature.gotthis.data.remote.OwnPurchaseRow
+import com.babegetthis.android.feature.gotthis.data.remote.PurchaseRow
+import com.babegetthis.android.feature.gotthis.data.remote.TickEventRow
+import com.babegetthis.android.feature.gotthis.data.remote.TickReply
+import java.io.IOException
 
 // In-memory GotThisPrefs with the same defaults and never-lower reset rule as
 // the SharedPreferences implementation.
@@ -30,5 +36,64 @@ class FakeGotThisPrefs : GotThisPrefs {
 
     override fun setPendingClear(accountId: String, millis: Long?) {
         if (millis == null) clears.remove(accountId) else clears[accountId] = millis
+    }
+}
+
+// Records every call in order; each fail flag makes its method throw.
+class FakeGotThisRemote : GotThisRemote {
+    val calls = mutableListOf<String>()
+    val recordedBatches = mutableListOf<List<TickEventRow>>()
+    val uploadedBatches = mutableListOf<List<OwnPurchaseRow>>()
+    val clearedAt = mutableListOf<String>()
+    val fetchSince = mutableListOf<String?>()
+    val claimedWeeks = mutableListOf<String>()
+    var purchaseRows: List<PurchaseRow> = emptyList()
+    var resetAt: String? = null
+    var reply: (List<TickEventRow>) -> TickReply = { TickReply(it.map(TickEventRow::id), emptyList(), emptyList()) }
+    var failClear = false
+    var failRecord = false
+    var failUpload = false
+    var failFetch = false
+    var claimResult = true
+    var onRecordTicks: suspend () -> Unit = {}
+
+    override suspend fun recordTicks(events: List<TickEventRow>): TickReply {
+        calls += "recordTicks"
+        if (failRecord) throw IOException("network down")
+        onRecordTicks()
+        recordedBatches += events
+        return reply(events)
+    }
+
+    override suspend fun uploadOwnPurchases(rows: List<OwnPurchaseRow>) {
+        calls += "uploadOwnPurchases"
+        if (failUpload) throw IOException("network down")
+        uploadedBatches += rows
+    }
+
+    override suspend fun clearHistory(clearedAtIso: String): String {
+        calls += "clearHistory"
+        if (failClear) throw IOException("network down")
+        clearedAt += clearedAtIso
+        return clearedAtIso
+    }
+
+    override suspend fun fetchResetAt(): String? {
+        calls += "fetchResetAt"
+        if (failFetch) throw IOException("network down")
+        return resetAt
+    }
+
+    override suspend fun fetchPurchases(sinceIso: String?): List<PurchaseRow> {
+        calls += "fetchPurchases"
+        if (failFetch) throw IOException("network down")
+        fetchSince += sinceIso
+        return purchaseRows.filter { sinceIso == null || it.updatedAt >= sinceIso }
+    }
+
+    override suspend fun claimRunningLowWeek(isoWeek: String): Boolean {
+        calls += "claimRunningLowWeek"
+        claimedWeeks += isoWeek
+        return claimResult
     }
 }
