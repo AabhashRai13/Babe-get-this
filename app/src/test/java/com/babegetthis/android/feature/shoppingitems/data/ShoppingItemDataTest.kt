@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.shoppingitems.data
 
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toDomain
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toEntity
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
@@ -29,10 +30,13 @@ class ShoppingItemDataTest {
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
     private var kicks = 0
+    private val tickStore by lazy {
+        TickStore(dbRule.db, dbRule.itemDao, dbRule.listDao, dbRule.purchaseDao) { System.currentTimeMillis() }
+    }
     private val repository by lazy {
         ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {
             kicks++
-        }, FakeReminderKicker(), unreportedSafeCall())
+        }, FakeReminderKicker(), unreportedSafeCall(), tickStore)
     }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data

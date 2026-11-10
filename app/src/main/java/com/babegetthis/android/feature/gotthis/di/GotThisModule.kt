@@ -1,10 +1,15 @@
 package com.babegetthis.android.feature.gotthis.di
 
 import android.content.Context
+import com.babegetthis.android.core.data.local.AppDatabase
 import com.babegetthis.android.core.featureflags.FeatureFlagCache
+import com.babegetthis.android.core.reminder.ReminderClock
 import com.babegetthis.android.feature.gotthis.data.GotThisAccess
+import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.SharedPrefsGotThisPrefs
+import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
+import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,4 +28,13 @@ object GotThisModule {
     @Provides
     @Singleton
     fun provideGotThisAccess(flags: FeatureFlagCache, prefs: GotThisPrefs): GotThisAccess = GotThisAccess(flags, prefs)
+
+    @Provides
+    @Singleton
+    fun provideTickStore(
+        db: AppDatabase,
+        itemDao: ShoppingItemDao,
+        listDao: ShoppingListDao,
+        clock: ReminderClock,
+    ): TickStore = TickStore(db, itemDao, listDao, db.purchaseDao(), clock)
 }

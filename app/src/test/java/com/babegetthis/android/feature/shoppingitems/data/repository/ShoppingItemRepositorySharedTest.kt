@@ -1,5 +1,6 @@
 package com.babegetthis.android.feature.shoppingitems.data.repository
 
+import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
@@ -24,10 +25,13 @@ class ShoppingItemRepositorySharedTest {
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
     private var kicks = 0
+    private val tickStore by lazy {
+        TickStore(dbRule.db, dbRule.itemDao, dbRule.listDao, dbRule.purchaseDao) { System.currentTimeMillis() }
+    }
     private val repository by lazy {
         ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {
             kicks++
-        }, FakeReminderKicker(), unreportedSafeCall())
+        }, FakeReminderKicker(), unreportedSafeCall(), tickStore)
     }
 
     // Defaults to a shared list of account u1. Sync is decided by the owner

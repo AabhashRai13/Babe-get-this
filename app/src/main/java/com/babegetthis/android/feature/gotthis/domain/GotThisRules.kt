@@ -4,6 +4,7 @@ package com.babegetthis.android.feature.gotthis.domain
 object GotThisRules {
 
     const val UNDO_WINDOW_MILLIS = 2L * 60 * 60 * 1000
+    const val MAX_NAME_CHARS = 500
     const val SHOP_JOIN_DAYS = 2
     const val WINDOW_SHOPS = 7
     const val MIN_SHOPS = 3

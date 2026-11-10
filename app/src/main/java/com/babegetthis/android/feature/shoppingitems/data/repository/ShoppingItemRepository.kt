@@ -7,6 +7,8 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.error.SafeCall
 import com.babegetthis.android.core.reminder.ReminderKicker
 import com.babegetthis.android.core.sync.SyncKicker
+import com.babegetthis.android.feature.gotthis.data.TickResult
+import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toDomain
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toEntity
@@ -26,6 +28,7 @@ class ShoppingItemRepository @Inject constructor(
     private val syncKicker: SyncKicker,
     private val reminderKicker: ReminderKicker,
     private val safeCall: SafeCall,
+    private val tickStore: TickStore,
 ) {
 
     // One raw lookup decides every write's sync behavior: items of account
@@ -83,19 +86,14 @@ class ShoppingItemRepository @Inject constructor(
         reminderKicker.onLocalEdit(item.listId)
     }
 
-    suspend fun togglePickedUp(itemId: String, isPickedUp: Boolean): Result<Unit> = safeCall {
-        val listId = shoppingItemDao.getItemRaw(itemId)?.listId
-        val synced = listId != null && isSynced(listId)
-        shoppingItemDao.updatePickedUpStatus(
-            itemId = itemId,
-            isPickedUp = isPickedUp,
-            updatedAt = System.currentTimeMillis(),
-            pendingSync = synced,
-        )
-        if (synced) syncKicker.pushSoon()
-        if (listId != null) {
-            if (isPickedUp) reminderKicker.onLocalPickUp(listId) else reminderKicker.onLocalEdit(listId)
+    // Null when the item no longer exists; the toggle is then a no-op.
+    suspend fun togglePickedUp(itemId: String, isPickedUp: Boolean): Result<TickResult?> = safeCall {
+        val result = if (isPickedUp) tickStore.tick(itemId) else tickStore.untick(itemId)
+        if (result != null) {
+            if (result.synced) syncKicker.pushSoon()
+            if (isPickedUp) reminderKicker.onLocalPickUp(result.listId) else reminderKicker.onLocalEdit(result.listId)
         }
+        result
     }
 
     suspend fun deleteItem(itemId: String): Result<Unit> = safeCall {

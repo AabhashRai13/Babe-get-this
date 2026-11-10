@@ -203,7 +203,7 @@ class ShoppingItemsScreenTest {
 
     @Test
     fun `ticking the checkbox toggles that item`() {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         render(items = listOf(item("i1", "Milk")))
 
         compose.onNodeWithTag(TestTags.itemCheckbox("i1"))
@@ -214,7 +214,7 @@ class ShoppingItemsScreenTest {
 
     @Test
     fun `the reminder sheet shows its copy and routes both buttons`() {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         coEvery { scheduler.shouldOfferPermission(any(), any()) } returns true
         render(items = listOf(item("i1", "Milk"), item("i2", "Eggs")))
 
@@ -231,7 +231,7 @@ class ShoppingItemsScreenTest {
 
     @Test
     fun `un-ticking a picked-up item toggles it back`() {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         render(items = listOf(item("i1", "Milk", isPickedUp = true)))
 
         compose.onNodeWithTag(TestTags.itemCheckbox("i1"))
