@@ -1,8 +1,5 @@
 package com.babegetthis.android.feature.settings.ui
 
-import android.content.Intent
-import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -45,7 +42,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -57,6 +53,7 @@ import com.babegetthis.android.core.pin.ui.RecoveryResetDialog
 import com.babegetthis.android.core.pin.ui.RegenerateRecoveryDialog
 import com.babegetthis.android.core.pin.ui.RemovePinDialog
 import com.babegetthis.android.core.reminder.ui.NOTIFICATION_PERMISSION
+import com.babegetthis.android.core.reminder.ui.notificationSettingsIntent
 import com.babegetthis.android.core.reminder.ui.rememberPermissionState
 import com.babegetthis.android.core.review.openPlayListing
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
@@ -65,14 +62,6 @@ import com.babegetthis.android.core.ui.openPrivacyPolicy
 import kotlinx.coroutines.launch
 
 // The same page the Play listing links to.
-
-// The per-app notification page exists from API 26; below that the app details page is the closest.
-private fun notificationSettingsIntent(packageName: String): Intent =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-    } else {
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri())
-    }
 
 private enum class SettingsDialog { None, SetUp, Change, Remove, Regenerate, Forgot }
 

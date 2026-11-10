@@ -235,4 +235,10 @@
     </plurals>
     <string name="got_this_hint_remove">Remove from list</string>
     <string name="got_this_hint_mute">Don\'t remind me about this</string>
+    <string name="got_this_usuals_title">Usually bought around now</string>
+    <string name="got_this_usuals_more">+%d</string>
+    <string name="got_this_usuals_not_now">Not now</string>
+    <string name="got_this_heads_up">Get a weekly heads-up</string>
+    <string name="got_this_prompt_title">Running low?</string>
+    <string name="got_this_prompt_body">Get one heads-up a week for things you usually buy.</string>
 </resources>

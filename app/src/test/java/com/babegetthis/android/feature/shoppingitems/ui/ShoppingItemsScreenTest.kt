@@ -21,7 +21,9 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.pin.data.PinRepository
 import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.ui.TestTags
+import com.babegetthis.android.feature.gotthis.data.GotThisAccess
 import com.babegetthis.android.feature.gotthis.data.GotThisRepository
+import com.babegetthis.android.feature.gotthis.data.UsualItem
 import com.babegetthis.android.feature.gotthis.ui.viewModels.GotThisViewModel
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
@@ -73,6 +75,8 @@ class ShoppingItemsScreenTest {
 
     private val itemsFlow = MutableStateFlow<List<ShoppingItem>>(emptyList())
     private var navigatedBack = false
+    private val usualsFlow = MutableStateFlow<List<UsualItem>>(emptyList())
+    private val gotThisAccess = mockk<GotThisAccess>(relaxed = true)
 
     private lateinit var viewModel: ShoppingItemsViewModel
     private lateinit var gotThisViewModel: GotThisViewModel
@@ -111,11 +115,11 @@ class ShoppingItemsScreenTest {
         val gotThisRepository = mockk<GotThisRepository>()
         coEvery { gotThisRepository.ownerOf(any()) } returns null
         every { gotThisRepository.hintsFor(any()) } returns MutableStateFlow(emptyMap())
-        every { gotThisRepository.usualsFor(any()) } returns MutableStateFlow(emptyList())
+        every { gotThisRepository.usualsFor(any()) } returns usualsFlow
         gotThisViewModel = GotThisViewModel(
             savedStateHandle = SavedStateHandle(mapOf("listId" to "L1")),
             repository = gotThisRepository,
-            access = mockk(relaxed = true),
+            access = gotThisAccess,
             tracker = mockk(relaxed = true),
             itemRepository = itemRepository,
             prefs = FakeGotThisPrefs(),
@@ -130,6 +134,31 @@ class ShoppingItemsScreenTest {
                 gotThisViewModel = gotThisViewModel,
             )
         }
+    }
+
+    // --- Got This usuals row ---
+
+    @Test
+    fun `due regulars show above the items and a chip adds one`() {
+        every { gotThisAccess.showsRunningLow(any()) } returns true
+        usualsFlow.value = listOf(UsualItem("eggs", "Eggs", "dairy", 1))
+        coEvery { itemRepository.addItem(any(), any(), any(), any()) } returns Result.Success("new")
+        render(items = listOf(item("i1", "Milk")))
+
+        compose.onNodeWithText("Usually bought around now").assertIsDisplayed()
+        compose.onNodeWithText("+ Eggs").performClick()
+
+        coVerify { itemRepository.addItem("L1", "Eggs", "1", "dairy") }
+    }
+
+    @Test
+    fun `due regulars also show on an empty list`() {
+        every { gotThisAccess.showsRunningLow(any()) } returns true
+        usualsFlow.value = listOf(UsualItem("eggs", "Eggs", null, 1))
+        render(items = emptyList())
+
+        compose.onNodeWithText("Usually bought around now").assertIsDisplayed()
+        compose.onNodeWithText("Add your first item to get started").assertIsDisplayed()
     }
 
     // --- 5.2 states ---
