@@ -133,6 +133,16 @@ class GotThisTrackerTest {
     }
 
     @Test
+    fun `with hints switched off a holdout person logs no hint shown`() = runTest {
+        prefs.hintsEnabled = false
+
+        tracker.onHintsPresent(heldOut, listOf(hint("i1")))
+
+        assertTrue(events.isEmpty())
+        assertNull(dbRule.stateDao.impression("i1"))
+    }
+
+    @Test
     fun `a tick with an impression reports ticked and removes the row`() = runTest {
         impression("i1")
 
@@ -166,11 +176,10 @@ class GotThisTrackerTest {
     }
 
     @Test
-    fun `a tick in the holdout writes no mute`() = runTest {
+    fun `a holdout person gets the mute after two kept, as outside the holdout`() = runTest {
         impression("i1", account = heldOut, holdout = true)
-        impression("i2", account = heldOut, holdout = true)
-
         tracker.onItemTicked("i1", null)
+        impression("i2", account = heldOut, holdout = true)
         tracker.onItemTicked("i2", null)
 
         assertEquals(
@@ -180,7 +189,10 @@ class GotThisTrackerTest {
             ),
             events,
         )
-        assertTrue(dbRule.stateDao.mutes(heldOut).isEmpty())
+        assertEquals(
+            ItemMuteEntity(heldOut, "milk", keptInARow = 0, mutedUntil = now + 60 * day),
+            dbRule.stateDao.mutes(heldOut).single(),
+        )
     }
 
     @Test
@@ -205,14 +217,14 @@ class GotThisTrackerTest {
     }
 
     @Test
-    fun `a delete in the holdout leaves mutes alone`() = runTest {
+    fun `a delete in the holdout resets the counter too`() = runTest {
         dbRule.stateDao.upsertMute(ItemMuteEntity(heldOut, "milk", keptInARow = 1, mutedUntil = null))
         impression("i1", account = heldOut, holdout = true)
 
         tracker.onItemDeleted("i1")
 
         assertEquals(listOf(AnalyticsEvent.GotThisHintOutcome(HintOutcome.Removed, holdout = true)), events)
-        assertEquals(1, dbRule.stateDao.mutes(heldOut).single().keptInARow)
+        assertEquals(0, dbRule.stateDao.mutes(heldOut).single().keptInARow)
     }
 
     @Test
@@ -362,6 +374,15 @@ class GotThisTrackerTest {
         tracker.onUsualsPresent(heldOut, 2)
 
         assertEquals(listOf(AnalyticsEvent.GotThisUsualsShown(2, holdout = true)), events)
+    }
+
+    @Test
+    fun `with running low switched off a holdout person logs no usuals shown`() = runTest {
+        prefs.runningLowEnabled = false
+
+        tracker.onUsualsPresent(heldOut, 2)
+
+        assertTrue(events.isEmpty())
     }
 
     @Test

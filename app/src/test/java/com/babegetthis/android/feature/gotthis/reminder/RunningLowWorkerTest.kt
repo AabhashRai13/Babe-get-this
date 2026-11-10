@@ -400,7 +400,6 @@ class RunningLowWorkerTest {
     fun `a holdout person gets no notification but the week is claimed and logged`() = runTest {
         storedOwner = StoredOwner { holdoutUser }
         remote.sessionUser = holdoutUser
-        gate.enabled = false
         weekly()
 
         run()
@@ -411,6 +410,20 @@ class RunningLowWorkerTest {
         val row = dbRule.stateDao.followUps(holdoutUser).single()
         assertEquals(true, row.holdout)
         assertEquals("egg", row.itemKeys)
+    }
+
+    @Test
+    fun `a holdout person without notification permission logs nothing and claims nothing`() = runTest {
+        storedOwner = StoredOwner { holdoutUser }
+        remote.sessionUser = holdoutUser
+        gate.enabled = false
+        weekly()
+
+        run()
+
+        assertSilent()
+        assertEquals(emptyList<String>(), remote.claimedWeeks)
+        assertEquals(emptyList<ReminderFollowUpEntity>(), dbRule.stateDao.followUps(holdoutUser))
     }
 
     // ---- Switched off ----

@@ -41,7 +41,7 @@ class GotThisTracker(
 
     // One impression and one Shown event per item, however often the list redraws.
     suspend fun onHintsPresent(ownerId: String?, hints: Collection<BoughtHint>) = safely {
-        if (!access.showsHints(ownerId) && !access.shadows(ownerId)) return@safely
+        if (!access.showsHints(ownerId) && !access.shadowsHints(ownerId)) return@safely
         val holdout = access.isHoldout(ownerId)
         val now = clock.now()
         hints.forEach { hint ->
@@ -56,7 +56,8 @@ class GotThisTracker(
         stateDao.impression(itemId)?.let { impression ->
             analytics.track(AnalyticsEvent.GotThisHintOutcome(HintOutcome.Ticked, impression.holdout))
             stateDao.deleteImpression(itemId)
-            if (!impression.holdout) countKept(impression)
+            // In the holdout too, so both groups stop logging an item at the same point.
+            countKept(impression)
         }
         if (tick != null && tick.recorded) scorePrediction(tick)
     }
@@ -65,7 +66,6 @@ class GotThisTracker(
         val impression = stateDao.impression(itemId) ?: return@safely
         analytics.track(AnalyticsEvent.GotThisHintOutcome(HintOutcome.Removed, impression.holdout))
         stateDao.deleteImpression(itemId)
-        if (impression.holdout) return@safely
         stateDao.mutes(impression.accountId).firstOrNull { it.itemKey == impression.canonicalKey }?.let {
             stateDao.upsertMute(it.copy(keptInARow = 0))
         }
@@ -82,7 +82,7 @@ class GotThisTracker(
 
     // At most once per local day, however often the chips redraw.
     suspend fun onUsualsPresent(ownerId: String?, count: Int) = safely {
-        if (!access.showsRunningLow(ownerId) && !access.shadows(ownerId)) return@safely
+        if (!access.showsRunningLow(ownerId) && !access.shadowsRunningLow(ownerId)) return@safely
         val today = Days.epochDay(clock.now(), tz())
         if (prefs.lastUsualsShownDay == today) return@safely
         prefs.lastUsualsShownDay = today

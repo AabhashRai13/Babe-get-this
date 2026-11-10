@@ -56,7 +56,7 @@ class GotThisViewModel @Inject constructor(
         val ownerId = owner.await()
         repository.hintsFor(listId).collect { found ->
             val shows = access.showsHints(ownerId)
-            if (found.isNotEmpty() && (shows || access.shadows(ownerId))) {
+            if (found.isNotEmpty() && (shows || access.shadowsHints(ownerId))) {
                 tracker.onHintsPresent(ownerId, found.values)
             }
             emit(if (shows) found else emptyMap())
@@ -86,7 +86,7 @@ class GotThisViewModel @Inject constructor(
                     offer,
                 ->
                 val wouldShow = due.isNotEmpty() && time >= hidden
-                if (wouldShow && (access.showsRunningLow(ownerId) || access.shadows(ownerId))) {
+                if (wouldShow && (access.showsRunningLow(ownerId) || access.shadowsRunningLow(ownerId))) {
                     tracker.onUsualsPresent(ownerId, due.size)
                 }
                 if (!wouldShow || !access.showsRunningLow(ownerId)) {

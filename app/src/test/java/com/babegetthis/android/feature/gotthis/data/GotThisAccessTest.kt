@@ -25,7 +25,8 @@ class GotThisAccessTest {
         assertFalse(access.isHoldout(regular))
         assertTrue(access.showsHints(regular))
         assertTrue(access.showsRunningLow(regular))
-        assertFalse(access.shadows(regular))
+        assertFalse(access.shadowsHints(regular))
+        assertFalse(access.shadowsRunningLow(regular))
     }
 
     @Test
@@ -33,7 +34,20 @@ class GotThisAccessTest {
         assertTrue(access.isHoldout(heldOut))
         assertFalse(access.showsHints(heldOut))
         assertFalse(access.showsRunningLow(heldOut))
-        assertTrue(access.shadows(heldOut))
+        assertTrue(access.shadowsHints(heldOut))
+        assertTrue(access.shadowsRunningLow(heldOut))
+    }
+
+    @Test
+    fun `each switch stops its own shadowing in the holdout`() {
+        prefs.hintsEnabled = false
+        assertFalse(access.shadowsHints(heldOut))
+        assertTrue(access.shadowsRunningLow(heldOut))
+
+        prefs.hintsEnabled = true
+        prefs.runningLowEnabled = false
+        assertTrue(access.shadowsHints(heldOut))
+        assertFalse(access.shadowsRunningLow(heldOut))
     }
 
     @Test
@@ -51,7 +65,8 @@ class GotThisAccessTest {
 
         assertFalse(access.isHoldout(heldOut))
         assertTrue(access.showsHints(heldOut))
-        assertFalse(access.shadows(heldOut))
+        assertFalse(access.shadowsHints(heldOut))
+        assertFalse(access.shadowsRunningLow(heldOut))
     }
 
     @Test
@@ -60,7 +75,8 @@ class GotThisAccessTest {
 
         assertFalse(access.showsHints(regular))
         assertFalse(access.showsRunningLow(regular))
-        assertFalse(access.shadows(heldOut))
+        assertFalse(access.shadowsHints(heldOut))
+        assertFalse(access.shadowsRunningLow(heldOut))
     }
 
     @Test

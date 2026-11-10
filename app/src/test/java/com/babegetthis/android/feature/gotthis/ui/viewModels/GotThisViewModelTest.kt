@@ -61,15 +61,17 @@ class GotThisViewModelTest {
 
     private fun viewModel(
         showsHints: Boolean = true,
-        shadows: Boolean = false,
+        shadowsHints: Boolean = false,
         showsRunningLow: Boolean = true,
+        shadowsRunningLow: Boolean = false,
     ): GotThisViewModel {
         every { repository.usualsFor(owner) } returns usualsFlow
         every { access.showsRunningLow(owner) } returns showsRunningLow
         coEvery { repository.ownerOf("L1") } returns owner
         every { repository.hintsFor("L1") } returns hintsFlow
         every { access.showsHints(owner) } returns showsHints
-        every { access.shadows(owner) } returns shadows
+        every { access.shadowsHints(owner) } returns shadowsHints
+        every { access.shadowsRunningLow(owner) } returns shadowsRunningLow
         every { gate.notificationsEnabled() } returns true
         return GotThisViewModel(
             savedStateHandle = SavedStateHandle(mapOf("listId" to "L1")),
@@ -97,7 +99,7 @@ class GotThisViewModelTest {
 
     @Test
     fun `hints are empty in the holdout while the tracker still hears about them`() = runTest {
-        val vm = viewModel(showsHints = false, shadows = true)
+        val vm = viewModel(showsHints = false, shadowsHints = true)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.hints.collect {} }
 
         hintsFlow.value = mapOf("i1" to milk)
@@ -108,12 +110,22 @@ class GotThisViewModelTest {
 
     @Test
     fun `hints are empty and untracked when hints are switched off`() = runTest {
-        val vm = viewModel(showsHints = false, shadows = false)
+        val vm = viewModel(showsHints = false, shadowsHints = false)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.hints.collect {} }
 
         hintsFlow.value = mapOf("i1" to milk)
 
         assertEquals(emptyMap<String, BoughtHint>(), vm.hints.value)
+        coVerify(exactly = 0) { tracker.onHintsPresent(any(), any()) }
+    }
+
+    @Test
+    fun `in the holdout with hints off but running low on, hints are untracked`() = runTest {
+        val vm = viewModel(showsHints = false, showsRunningLow = false, shadowsRunningLow = true)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.hints.collect {} }
+
+        hintsFlow.value = mapOf("i1" to milk)
+
         coVerify(exactly = 0) { tracker.onHintsPresent(any(), any()) }
     }
 
@@ -244,7 +256,7 @@ class GotThisViewModelTest {
 
     @Test
     fun `the holdout gets no row but the tracker still hears about it`() = runTest {
-        val vm = viewModel(showsRunningLow = false, shadows = true)
+        val vm = viewModel(showsRunningLow = false, shadowsRunningLow = true)
         collectUsuals(vm)
 
         usualsFlow.value = due(8)
@@ -255,7 +267,7 @@ class GotThisViewModelTest {
 
     @Test
     fun `switched off gets no row and no tracking`() = runTest {
-        val vm = viewModel(showsRunningLow = false, shadows = false)
+        val vm = viewModel(showsRunningLow = false, shadowsHints = true)
         collectUsuals(vm)
 
         usualsFlow.value = due(8)

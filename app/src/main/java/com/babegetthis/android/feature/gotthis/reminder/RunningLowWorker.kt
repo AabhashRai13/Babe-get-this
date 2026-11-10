@@ -79,8 +79,10 @@ class RunningLowWorker @AssistedInject constructor(
         val usual = ShopDay.usualWeekday(repository.purchaseDays(owner), now, tz)
         if (usual != null && Days.weekday(Days.epochDay(now, tz) + 1) != usual) return
 
-        val holdout = access.isHoldout(owner)
-        if (!holdout && !notificationGate.notificationsEnabled()) return
+        // Both groups need the permission, so "would have posted" in the
+        // holdout counts the same people as "posted" outside it.
+        if (!notificationGate.notificationsEnabled()) return
+        val holdout = access.shadowsRunningLow(owner)
         if (!claimWeek(owner, week)) return
 
         val named = due.take(GotThisRules.MAX_NOTIFICATION_NAMES)

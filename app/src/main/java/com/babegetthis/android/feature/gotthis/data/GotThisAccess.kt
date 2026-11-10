@@ -27,8 +27,15 @@ class GotThisAccess(private val flags: FeatureFlagCache, private val prefs: GotT
 
     fun showsRunningLow(accountId: String?): Boolean = !prefs.killed && prefs.runningLowEnabled && !isHoldout(accountId)
 
-    /** True when the person is held out: log what would have shown, show nothing. */
-    fun shadows(accountId: String?): Boolean = !prefs.killed && isHoldout(accountId)
+    // Held out: log what would have shown, show nothing. Each follows its own
+    // Settings switch, so the holdout is measured as the treated group is.
+
+    /** True when hints would show but the person is held out. */
+    fun shadowsHints(accountId: String?): Boolean = !prefs.killed && prefs.hintsEnabled && isHoldout(accountId)
+
+    /** True when running-low would show but the person is held out. */
+    fun shadowsRunningLow(accountId: String?): Boolean =
+        !prefs.killed && prefs.runningLowEnabled && isHoldout(accountId)
 
     /** The later of the last applied reset and a pending clear; null with neither. */
     fun watermark(accountId: String): Long? = prefs.watermark(accountId)
