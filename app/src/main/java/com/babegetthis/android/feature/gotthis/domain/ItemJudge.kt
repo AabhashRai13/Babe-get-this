@@ -87,3 +87,16 @@ object ItemJudge {
         return steady >= ceil(GotThisRules.STEADY_SHARE * gaps.size).toInt()
     }
 }
+
+// The forecast held after the previous shop, scored when the newest purchase
+// starts a new shop: positive means bought later than predicted. Null unless the
+// item was regular (lapse ignored) on the history before that purchase.
+fun ItemJudge.scoreLatestShop(purchases: List<JudgedPurchase>, tz: TimeZone): Int? {
+    val days = purchases.sortedBy { it.boughtAt }.map { Days.epochDay(it.boughtAt, tz) }
+    val newest = days.lastOrNull() ?: return null
+    val window = window(shopDays(days.dropLast(1)))
+    val m = usualGap(window)
+    val startsNewShop = window.isNotEmpty() && newest - window.last() >= GotThisRules.SHOP_JOIN_DAYS
+    if (m == null || !startsNewShop || !meetsRules(window, m)) return null
+    return (newest - (window.last() + floor(m + 0.5).toLong())).toInt()
+}
