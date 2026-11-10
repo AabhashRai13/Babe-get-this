@@ -11,6 +11,7 @@ import com.babegetthis.android.core.featureflags.data.FeatureFlagRepository
 import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.sync.SyncTrigger
 import com.babegetthis.android.core.telemetry.TelemetryContext
+import com.babegetthis.android.feature.gotthis.data.GotThisAccess
 import dagger.hilt.android.HiltAndroidApp
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
@@ -43,6 +44,8 @@ class BabeGetThisApp :
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
     @Inject lateinit var reminderScheduler: ReminderScheduler
+
+    @Inject lateinit var gotThisAccess: GotThisAccess
 
     // The one process-wide scope (CoroutinesModule), shared with everything
     // else that outlives a screen — not a second private one that happened to
@@ -83,6 +86,8 @@ class BabeGetThisApp :
             // Shopping reminder: the flag may just have turned off, so reconcile
             // the pending job. The scheduler acts only on a flag known to be off.
             reminderScheduler.onFlagsLoaded()
+            // Got This: copy the kill switch and holdout flags into its prefs.
+            gotThisAccess.onFlagsLoaded()
         }
         // Token rotation and session loss, mirrored into local auth state and
         // telemetry identity. See SessionObserver for the transitions and for

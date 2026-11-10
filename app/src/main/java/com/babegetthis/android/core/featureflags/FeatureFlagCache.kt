@@ -18,6 +18,9 @@ class FeatureFlagCache @Inject constructor() {
     @Volatile
     private var loaded = false
 
+    /** True once a fetch has landed. */
+    val isLoaded: Boolean get() = loaded
+
     fun update(newFlags: Map<String, Boolean>) {
         flags = newFlags
         loaded = true

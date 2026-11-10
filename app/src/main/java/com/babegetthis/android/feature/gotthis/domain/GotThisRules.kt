@@ -24,6 +24,7 @@ object GotThisRules {
     const val IMPRESSION_PRUNE_DAYS = 30
     const val FOLLOW_UP_DAYS = 7
     const val UNKNOWN_WINDOW_DAYS = 7
+    const val HOLDOUT_PERCENT = 10
 
     // Hint window in days -> default category ids. cat-other and custom
     // categories are in no group and fall to UNKNOWN_WINDOW_DAYS.
