@@ -325,12 +325,12 @@ select results_eq(
   $q$ values ('0000000e-0000-0000-0000-000000000112'::uuid) $q$,
   '8. B is credited only with the item ticked after B joined'
 );
-select results_eq(
-  $q$ select tgname::text, tgenabled::text from pg_catalog.pg_trigger
-      where tgrelid = 'public.items'::regclass
-        and tgname in ('items_set_updated_at', 'items_track_picked_up_at')
-      order by tgname $q$,
-  $q$ values ('items_set_updated_at'::text, 'O'::text), ('items_track_picked_up_at'::text, 'O'::text) $q$,
+select is(
+  (select string_agg(tgname::text || ':' || tgenabled::text, ',' order by tgname::text)
+     from pg_catalog.pg_trigger
+    where tgrelid = 'public.items'::regclass
+      and tgname in ('items_set_updated_at', 'items_track_picked_up_at')),
+  'items_set_updated_at:O,items_track_picked_up_at:O',
   '8. backfill leaves both items triggers enabled'
 );
 select is(got_this_private.backfill_ticked_items(), 0, '8. a second backfill finds nothing to do');
