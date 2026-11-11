@@ -37,7 +37,7 @@ class SharedPrefsGotThisPrefsTest {
         assertNull(prefs.lastSummaryWeek)
         assertTrue(prefs.hintsEnabled)
         assertTrue(prefs.runningLowEnabled)
-        assertFalse(prefs.killed)
+        assertTrue(prefs.killed)
         assertTrue(prefs.holdoutOn)
     }
 

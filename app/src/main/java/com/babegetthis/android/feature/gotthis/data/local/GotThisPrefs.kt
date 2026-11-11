@@ -30,7 +30,11 @@ interface GotThisPrefs {
     var hintsEnabled: Boolean
     var runningLowEnabled: Boolean
 
-    /** Copy of the `got_this` kill switch, written when flags load. */
+    /**
+     * Copy of the `got_this` kill switch, written when flags load. True until
+     * they first do, so a fresh install stays hidden and silent until the flag
+     * says otherwise.
+     */
     var killed: Boolean
 
     /** Copy of the `got_this_holdout` flag, written when flags load. */
@@ -121,7 +125,7 @@ class SharedPrefsGotThisPrefs(context: Context, private val random: Random = Ran
         }
 
     override var killed: Boolean
-        get() = prefs.getBoolean(KEY_KILLED, false)
+        get() = prefs.getBoolean(KEY_KILLED, true)
         set(value) {
             prefs.edit { putBoolean(KEY_KILLED, value) }
         }

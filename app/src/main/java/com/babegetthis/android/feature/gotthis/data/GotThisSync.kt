@@ -50,7 +50,10 @@ class GotThisSync(
         }
     }
 
+    // Switched off, nothing goes to the server: ticks and clears stay queued on
+    // the phone and are sent once it is switched on again.
     suspend fun push(userId: String) {
+        if (prefs.killed) return
         pushPendingClear(userId)
         pushOutbox(userId)
         pushOwnPurchases(userId)
@@ -64,6 +67,7 @@ class GotThisSync(
     // before the last applied reset or the pending clear is ever written, even
     // when the server has not heard of the clear yet.
     suspend fun pull(userId: String) {
+        if (prefs.killed) return
         applyServerReset(userId)
         val fetched = remote.fetchPurchases(syncPoints.get(point(userId)))
         if (fetched.isEmpty()) return
@@ -82,7 +86,10 @@ class GotThisSync(
                 kept.filter { it.deletedAt != null || it.tickId !in undoPending }.map { it.toEntity(userId) },
             )
         }
-        syncPoints.set(point(userId), fetched.maxOf { it.updatedAt })
+        // Trails the newest row by PULL_LAG_MILLIS, and never moves back.
+        val next = fetched.maxOf { it.updatedAt.isoToMillis() } - GotThisRules.PULL_LAG_MILLIS
+        val current = syncPoints.get(point(userId))?.isoToMillis()
+        if (current == null || next > current) syncPoints.set(point(userId), next.millisToIso())
     }
 
     private suspend fun applyServerReset(userId: String) {
@@ -183,8 +190,11 @@ class GotThisSync(
 
     private suspend fun pushOutbox(userId: String) {
         // The server would reject them, and kept they hold the sign-out warning
-        // up for good. Their purchases stay on the phone.
-        purchaseDao.deleteOutboxTickedBefore(userId, clock.now() - GotThisRules.PAST_ACCEPT_MILLIS)
+        // up for good. Their purchases stay on the phone and go up as the
+        // person's own, so their other phones and a reinstall see them.
+        val cutoff = clock.now() - GotThisRules.PAST_ACCEPT_MILLIS
+        purchaseDao.markPendingUploadForOutboxTickedBefore(userId, cutoff)
+        purchaseDao.deleteOutboxTickedBefore(userId, cutoff)
         // Rows sent in this push. Retry rows and rows changed during the call
         // stay in the table, so without this the loop would read them forever.
         val sent = mutableSetOf<String>()
@@ -200,8 +210,14 @@ class GotThisSync(
             for (row in batch) {
                 if (row.tickId !in finished) continue
                 val deleted = purchaseDao.deleteOutboxIfRevision(row.tickId, row.revision) > 0
-                if (deleted && row.tickId in reply.rejected && row.tickedAt > farFuture) {
+                if (!deleted || row.tickId !in reply.rejected) continue
+                if (row.tickedAt > farFuture) {
                     purchaseDao.deleteByTickId(row.tickId)
+                } else if (row.undoneAt == null) {
+                    // Not a member, say, or outside the window: the phone keeps the
+                    // purchase, so the server must still hear of it, as the
+                    // person's own (pushOwnPurchases, right after this).
+                    purchaseDao.markPendingUploadByTickIds(listOf(row.tickId))
                 }
             }
         }

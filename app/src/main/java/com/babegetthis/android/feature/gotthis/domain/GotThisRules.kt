@@ -34,6 +34,12 @@ object GotThisRules {
     const val PAST_ACCEPT_MILLIS = 30L * 24 * 60 * 60 * 1000
     const val SQL_IN_CHUNK = 900
 
+    // The purchases sync point trails the newest updated_at by this much. The
+    // server stamps a row with its transaction's start time, so a slower
+    // transaction can commit a row older than one a pull has already seen;
+    // refetching the last few minutes picks it up (upserts are idempotent).
+    const val PULL_LAG_MILLIS = 5L * 60 * 1000
+
     // Hint window in days -> default category ids. cat-other and custom
     // categories are in no group and fall to UNKNOWN_WINDOW_DAYS.
     val CATEGORY_GROUPS: Map<Int, List<String>> = mapOf(

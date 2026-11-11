@@ -8,7 +8,7 @@
 -- it would try to re-apply 001-005, which are not recorded as applied there.
 -- Compatible with old app versions: they keep working unchanged. They never
 -- send items.picked_up_at, and a tick they make is recorded by the items
--- trigger at the end of this file as a 'legacy' tick.
+-- trigger (section 12) as a 'legacy' tick.
 
 -- ─── 1. Private schema: internal functions, never reachable from the API ────
 
@@ -148,9 +148,11 @@ revoke all on function got_this_private.record_tick_rows(uuid, uuid, uuid, times
   from public, anon, authenticated;
 
 -- ─── 6. Ticks become purchases ───────────────────────────────────────────────
--- Credited: the list's creator and every member who joined at or before the
--- tick, minus anyone who has cleared their history since then. Only the first
--- copy of a live tick creates purchases; an undo tombstones them for everyone.
+-- Credited: the list's creator, every member who joined at or before the tick,
+-- and the person who sent it (their phone's clock may put the tick before they
+-- joined, and they must not lose their own purchase), minus anyone who has
+-- cleared their history since then. Only the first copy of a live tick creates
+-- purchases; an undo tombstones them for everyone.
 
 create function got_this_private.ticks_make_purchases()
 returns trigger
@@ -172,6 +174,10 @@ begin
       select m.user_id
       from public.list_members m
       where m.list_id = new.list_id and m.joined_at <= new.ticked_at
+      union
+      -- Null without a session (the backfill); the senders of record_ticks and
+      -- of old-app item pushes are members of the list.
+      select auth.uid() where auth.uid() is not null
     ) credited
     -- A clear racing this tick under READ COMMITTED can let in a purchase at or
     -- before the new reset; the phone's watermark still hides it.
@@ -497,19 +503,30 @@ select cron.schedule('got_this_purge_ticks', '0 3 * * *', 'select got_this_priva
 
 -- ─── 12. Old app versions: record their ticks from the items they push ──────
 -- Versions without Got This never send picked_up_at. When such a push ticks an
--- item (is_picked_up turns true and picked_up_at arrives unchanged), stamp the
--- item with the server time and write a 'legacy' tick. A current app's own
--- tick never takes this path: it always sends a new picked_up_at with it.
--- Accepted limitation: a stale whole-row push that re-ticks an item another
--- phone unticked (true, P after the server's false, P) cannot be told apart
--- from an old-app tick, and is recorded as one, crediting a second purchase.
+-- item (is_picked_up turns true and the push carried no tick time), stamp the
+-- item with the server time and write a 'legacy' tick. A current app's own tick
+-- never takes this path: it always sends a new picked_up_at with it, and the
+-- tick itself arrives through record_ticks.
+--
+-- Whether a push carried a tick time cannot be read from the UPDATE alone: an
+-- upsert that leaves picked_up_at out and one that repeats the stored value
+-- look the same there. The BEFORE INSERT call sees the proposed row, so it
+-- leaves a note for its own item and transaction (a setting, got_this.t<id>):
+-- 'yes' when the row carried picked_up_at, 'no' when it did not. A stale push
+-- from a current app (the server holds false, P after another phone's untick,
+-- and the push says true, P) carries P, so it is not mistaken for an old app's
+-- tick. A plain UPDATE leaves no note and is treated as an old app's, as before.
 -- Otherwise picked_up_at only moves forward: greatest() ignores nulls, so a
--- null or older value from any client keeps the stored one.
+-- null or older value from any client keeps the stored one. The exception is a
+-- tick (false to true) that carries its own time: it is kept even when older
+-- than the stored one, because that phone's clock is behind and it derives the
+-- tick id for a later undo from its own time (arrival order, not the clock,
+-- says which tick is the latest).
 --
 -- Clients push with upsert (INSERT ... ON CONFLICT (id) DO UPDATE). Postgres
 -- fires BEFORE INSERT for the proposed row before it finds the conflict, then
--- BEFORE UPDATE for the existing row. So the INSERT branch must do nothing when
--- the row already exists, and let the UPDATE branch decide.
+-- BEFORE UPDATE for the existing row. So the INSERT branch must do nothing but
+-- leave its note when the row already exists, and let the UPDATE branch decide.
 --
 -- Times are truncated to milliseconds, so the stored time and the tick id
 -- agree with what a phone computes from the same value.
@@ -520,12 +537,20 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_note text;
 begin
   if tg_op = 'INSERT' then
     -- Two concurrent first pushes of the same new ticked item can both pass
     -- this check and both write a legacy tick (different now(), different ids).
     if exists (select 1 from public.items i where i.id = new.id) then
-      return new;   -- an upsert of an existing row: BEFORE UPDATE decides
+      -- an upsert of an existing row: BEFORE UPDATE decides
+      perform set_config(
+        'got_this.t' || replace(new.id::text, '-', ''),
+        case when new.picked_up_at is null then 'no' else 'yes' end,
+        true
+      );
+      return new;
     end if;
     if new.is_picked_up and new.picked_up_at is null then
       new.picked_up_at := date_trunc('milliseconds', now());
@@ -537,14 +562,20 @@ begin
     return new;
   end if;
 
+  v_note := coalesce(current_setting('got_this.t' || replace(new.id::text, '-', ''), true), '');
+  perform set_config('got_this.t' || replace(new.id::text, '-', ''), '', true);
+
   if not old.is_picked_up
      and new.is_picked_up
-     and new.picked_up_at is not distinct from old.picked_up_at then
+     and new.picked_up_at is not distinct from old.picked_up_at
+     and v_note <> 'yes' then
     new.picked_up_at := date_trunc('milliseconds', now());
     perform got_this_private.record_tick_rows(
       got_this_private.tick_id(new.id, new.picked_up_at),
       new.id, new.list_id, new.picked_up_at, left(new.name, 500), new.category_id, null, 'legacy'
     );
+  elsif not old.is_picked_up and new.is_picked_up and new.picked_up_at is not null then
+    null;   -- a tick with its own time: keep it
   else
     new.picked_up_at := greatest(new.picked_up_at, old.picked_up_at);
   end if;

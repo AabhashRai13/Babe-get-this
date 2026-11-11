@@ -13,6 +13,7 @@ import com.babegetthis.android.core.telemetry.CrashReporter
 import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -86,11 +87,26 @@ class SyncEngine(
             remote.upsertItems(items.map { it.toRow() })
             items.forEach { itemDao.markItemSynced(it.id, it.updatedAt) }
         }
-        gotThis.push(userId)
+        isolatedGotThis { gotThis.push(userId) }
         // Counts only. A crash mid-sync reads very differently depending on
         // whether the queue was empty or draining hundreds of rows, and
         // that is not recoverable from the report afterwards.
         crashReporter.breadcrumb("sync: pushed ${'$'}{lists.size} lists, ${'$'}{items.size} items")
+    }
+
+    // Got This is an extra on top of lists and items. A failure in it (a server
+    // function not deployed yet, a rate limit) must not fail the whole pass: the
+    // lists synced, and the retry loop would fire for nothing. Its own queues
+    // (the tick outbox, pending uploads, a pending clear) stay as they were and
+    // go out on the next pass.
+    private suspend fun isolatedGotThis(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            crashReporter.breadcrumb("sync: got this failed")
+        }
     }
 
     // Give the device's lists to the account that just signed in (or whose
@@ -242,7 +258,7 @@ class SyncEngine(
             // known list only gets items newer than the account sync point. If
             // the pull fails, the row stays out and the next pass tries again.
             fresh.forEach { apply(userId, listOf(it), remote.fetchItems(it.id, sinceIso = null)) }
-            gotThis.pull(userId)
+            isolatedGotThis { gotThis.pull(userId) }
             // Counts only, like every other sync breadcrumb.
             crashReporter.breadcrumb("sync: account catch-up over ${known.size} lists, ${discovered.size} discovered")
         }

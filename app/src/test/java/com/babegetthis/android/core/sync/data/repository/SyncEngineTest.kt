@@ -652,4 +652,17 @@ class SyncEngineTest {
         assertTrue(remote.insertedLists.isEmpty())
         assertEquals("list-1", result?.listId)
     }
+
+    @Test
+    fun `a failing Got This push does not fail the list sync`() = runTest {
+        dbRule.listDao.insertList(listEntity())
+        dbRule.itemDao.insertItem(itemEntity())
+        tickStore().tick("item-1")
+        gotThisRemote.failRecord = true
+
+        assertTrue(engine.push() is Result.Success)
+
+        assertEquals(1, remote.upsertedItems.size)
+        assertTrue("the tick stays queued", engine.hasUnsyncedChanges("user-1"))
+    }
 }

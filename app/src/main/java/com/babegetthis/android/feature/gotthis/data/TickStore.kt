@@ -39,7 +39,8 @@ class TickStore(
         val item = itemDao.getItemRaw(itemId) ?: return@withTransaction null
         val ownerId = listDao.getListRaw(item.listId)?.accountId
         val synced = ownerId != null
-        val itemKey = ItemKey.of(item.name.take(GotThisRules.MAX_NAME_CHARS))
+        val name = item.name.take(GotThisRules.MAX_NAME_CHARS)
+        val itemKey = ItemKey.of(name)
         // A repeated tap before the UI catches up must not make a second tick.
         if (item.isPickedUp) {
             return@withTransaction TickResult(item.listId, synced, ownerId, itemKey, undone = false, recorded = false)
@@ -47,15 +48,8 @@ class TickStore(
         val now = clock.now()
         itemDao.setPickedUp(itemId, isPickedUp = true, pickedUpAt = now, updatedAt = now, pendingSync = synced)
 
-        val name = item.name.take(GotThisRules.MAX_NAME_CHARS)
         val tickId = GotThisIds.tickId(itemId, now)
-        val purchaseId = if (ownerId !=
-            null
-        ) {
-            GotThisIds.purchaseId(ownerId, tickId)
-        } else {
-            GotThisIds.guestPurchaseId(tickId)
-        }
+        val purchaseId = ownerId?.let { GotThisIds.purchaseId(it, tickId) } ?: GotThisIds.guestPurchaseId(tickId)
         purchaseDao.upsert(
             listOf(
                 PurchaseEntity(
@@ -96,7 +90,8 @@ class TickStore(
         val item = itemDao.getItemRaw(itemId) ?: return@withTransaction null
         val ownerId = listDao.getListRaw(item.listId)?.accountId
         val synced = ownerId != null
-        val itemKey = ItemKey.of(item.name.take(GotThisRules.MAX_NAME_CHARS))
+        val name = item.name.take(GotThisRules.MAX_NAME_CHARS)
+        val itemKey = ItemKey.of(name)
         // Already unticked: a second untick must not move the tombstone or the revision.
         if (!item.isPickedUp) {
             return@withTransaction TickResult(item.listId, synced, ownerId, itemKey, undone = false, recorded = false)
@@ -112,11 +107,11 @@ class TickStore(
 
         val pickedUpAt = item.pickedUpAt
         val undone = pickedUpAt != null && now - pickedUpAt in 0 until GotThisRules.UNDO_WINDOW_MILLIS
-        if (undone) undo(item, requireNotNull(pickedUpAt), ownerId, now)
+        if (undone) undo(item, name, requireNotNull(pickedUpAt), ownerId, now)
         TickResult(item.listId, synced, ownerId, itemKey, undone, recorded = false)
     }
 
-    private suspend fun undo(item: ShoppingItemEntity, pickedUpAt: Long, ownerId: String?, now: Long) {
+    private suspend fun undo(item: ShoppingItemEntity, name: String, pickedUpAt: Long, ownerId: String?, now: Long) {
         val tickId = GotThisIds.tickId(item.id, pickedUpAt)
         if (ownerId == null) {
             purchaseDao.deleteByTickId(tickId)
@@ -133,7 +128,7 @@ class TickStore(
                     itemId = item.id,
                     listId = item.listId,
                     tickedAt = pickedUpAt,
-                    name = purchase?.name ?: item.name.take(GotThisRules.MAX_NAME_CHARS),
+                    name = purchase?.name ?: name,
                     categoryId = if (purchase != null) purchase.categoryId else item.categoryId,
                     undoneAt = now,
                     revision = 0,

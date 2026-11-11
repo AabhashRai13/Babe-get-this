@@ -384,6 +384,35 @@ class GotThisRepositoryTest {
     }
 
     @Test
+    fun `an edit that changes no unticked name does not recompute the usuals`() = runTest {
+        list()
+        buy("Eggs", 21, 14, 7)
+        repo.usualsFor("u1").test {
+            assertEquals(1, awaitItem().size)
+            // A ticked item changes the items table but no unticked name.
+            item("Bread", ticked = true)
+            // The next emission must come from this mute, not from the edit above.
+            dbRule.stateDao.upsertMute(ItemMuteEntity("u1", ItemKey.of("Eggs"), 2, now + day))
+            assertTrue(awaitItem().isEmpty())
+            cancel()
+        }
+    }
+
+    @Test
+    fun `an edit that changes no unticked name does not recompute the hints`() = runTest {
+        list()
+        item("milk")
+        buy("milk", 1, category = "cat-dairy-eggs")
+        repo.hintsFor("list-1").test {
+            assertEquals(1, awaitItem().size)
+            item("Bread", ticked = true)
+            dbRule.stateDao.upsertMute(ItemMuteEntity("u1", ItemKey.of("milk"), 2, now + day))
+            assertTrue(awaitItem().isEmpty())
+            cancel()
+        }
+    }
+
+    @Test
     fun `a guest mute is read under the empty account id`() = runTest {
         buy("Eggs", 21, 14, 7, account = null)
         repo.usualsFor(null).test {

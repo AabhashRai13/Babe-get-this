@@ -1,6 +1,7 @@
 package com.babegetthis.android.feature.gotthis.data
 
 import com.babegetthis.android.core.sync.data.mapper.isoToMillis
+import com.babegetthis.android.core.sync.data.mapper.millisToIso
 import com.babegetthis.android.feature.gotthis.data.local.model.HintImpressionEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
@@ -8,6 +9,7 @@ import com.babegetthis.android.feature.gotthis.data.local.model.ReminderFollowUp
 import com.babegetthis.android.feature.gotthis.data.local.model.TickOutboxEntity
 import com.babegetthis.android.feature.gotthis.data.remote.PurchaseRow
 import com.babegetthis.android.feature.gotthis.domain.GotThisIds
+import com.babegetthis.android.feature.gotthis.domain.GotThisRules
 import com.babegetthis.android.testing.FakeGotThisPrefs
 import com.babegetthis.android.testing.FakeGotThisRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
@@ -80,6 +82,9 @@ class GotThisSyncPullTest {
 
     private suspend fun ids() = dao.live("u1").map { it.tickId }.sorted()
 
+    // The point trails the newest update by the safety lag.
+    private fun lagged(iso: String) = (iso.isoToMillis() - GotThisRules.PULL_LAG_MILLIS).millisToIso()
+
     @Test
     fun `rows are upserted with a locally computed key and the point moves to the newest update`() = runTest {
         remote.purchaseRows = listOf(
@@ -95,8 +100,42 @@ class GotThisSyncPullTest {
         assertEquals(false, t2.pendingUpload)
         assertEquals(t11.isoToMillis(), t2.boughtAt)
         assertEquals(listOf("t1", "t2"), ids())
-        assertEquals(t12, syncPoints.get("purchases:u1"))
+        assertEquals(lagged(t12), syncPoints.get("purchases:u1"))
         assertEquals(listOf(null), remote.fetchSince)
+    }
+
+    @Test
+    fun `a purchase committed after a newer one is still fetched on a later pull`() = runTest {
+        // B's row is visible first and moves the point; A's row has an older
+        // updated_at but commits later (it came from a longer transaction).
+        remote.purchaseRows = listOf(row("b", t12, updatedAt = t12))
+        sync.pull("u1")
+        remote.purchaseRows = listOf(row("b", t12, updatedAt = t12), row("a", t11, updatedAt = "2026-11-01T11:58:00Z"))
+
+        sync.pull("u1")
+
+        assertEquals(listOf("a", "b"), ids())
+    }
+
+    @Test
+    fun `the point never moves back`() = runTest {
+        syncPoints.set("purchases:u1", t12)
+        remote.purchaseRows = listOf(row("t1", t12, updatedAt = "2026-11-01T12:01:00Z"))
+
+        sync.pull("u1")
+
+        assertEquals(t12, syncPoints.get("purchases:u1"))
+    }
+
+    @Test
+    fun `a pull while the feature is killed fetches nothing`() = runTest {
+        prefs.killed = true
+        remote.purchaseRows = listOf(row("t1", t10))
+
+        sync.pull("u1")
+
+        assertTrue(remote.calls.isEmpty())
+        assertTrue(ids().isEmpty())
     }
 
     @Test
@@ -188,7 +227,7 @@ class GotThisSyncPullTest {
         assertEquals(listOf("t11"), ids())
         assertTrue(dao.byTickId("t09").isEmpty())
         // Discarded rows still count for the point.
-        assertEquals(t11, syncPoints.get("purchases:u1"))
+        assertEquals(lagged(t11), syncPoints.get("purchases:u1"))
     }
 
     @Test
@@ -226,7 +265,7 @@ class GotThisSyncPullTest {
         sync.pull("u1")
 
         assertTrue(dao.byTickId("t09").isEmpty())
-        assertEquals(t12, syncPoints.get("purchases:u1"))
+        assertEquals(lagged(t12), syncPoints.get("purchases:u1"))
     }
 
     @Test
@@ -242,7 +281,7 @@ class GotThisSyncPullTest {
 
         assertEquals(t11.isoToMillis(), dao.byTickId("t1").single().deletedAt)
         assertEquals(listOf("t2"), ids())
-        assertEquals(t12, syncPoints.get("purchases:u1"))
+        assertEquals(lagged(t12), syncPoints.get("purchases:u1"))
     }
 
     @Test

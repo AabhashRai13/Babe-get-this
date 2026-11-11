@@ -106,14 +106,6 @@ class GotThisAccessTest {
     }
 
     @Test
-    fun `flags never loaded leave not killed and holdout on`() {
-        access.onFlagsLoaded()
-
-        assertFalse(prefs.killed)
-        assertTrue(prefs.holdoutOn)
-    }
-
-    @Test
     fun `flags not loaded leave stored values unchanged`() {
         prefs.killed = true
         prefs.holdoutOn = false

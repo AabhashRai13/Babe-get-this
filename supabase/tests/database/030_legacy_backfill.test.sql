@@ -7,7 +7,7 @@
 -- get one (I2, R) are therefore seeded with older tick times.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(33);
 
 -- An event as the phone sends it, with the id computed the way GotThisIds does.
 create function tests.ev(
@@ -150,7 +150,9 @@ select results_eq(
   '5. a new-app tick is recorded once, from its event, as source app'
 );
 
--- 6. New-app untick (same time), then a re-tick with a clock behind the server's.
+-- 6. New-app untick (same time), then a re-tick whose clock is behind the
+--    stored time. The re-tick is a new tick by that writer, so its time is
+--    kept: the phone derives the tick id for an undo from it.
 select tests.act_as('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
 update public.items set is_picked_up = false, picked_up_at = tests.ms_ago('30 minutes')
 where id = '0000000e-0000-0000-0000-000000000102';
@@ -159,14 +161,26 @@ where id = '0000000e-0000-0000-0000-000000000102';
 reset role;
 select is(
   (select picked_up_at from public.items where id = '0000000e-0000-0000-0000-000000000102'),
-  tests.ms_ago('30 minutes'),
-  '6. an older picked_up_at from a new app leaves the stored value'
+  tests.ms_ago('90 minutes'),
+  '6. a re-tick from a new app keeps its own time, even when older than the stored one'
 );
 select is(
   (select count(*)::int from public.ticks
    where item_id = '0000000e-0000-0000-0000-000000000102' and source = 'legacy'),
   0,
-  '6. an older picked_up_at from a new app writes no legacy tick'
+  '6. a re-tick from a new app writes no legacy tick'
+);
+
+-- 6b. A stale whole-row push of an item that is already ticked cannot move
+--     the time back.
+select tests.act_as('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+update public.items set is_picked_up = true, picked_up_at = tests.ms_ago('3 hours')
+where id = '0000000e-0000-0000-0000-000000000102';
+reset role;
+select is(
+  (select picked_up_at from public.items where id = '0000000e-0000-0000-0000-000000000102'),
+  tests.ms_ago('90 minutes'),
+  '6b. an older picked_up_at on an item that stays ticked leaves the stored value'
 );
 
 -- 7. A claimed guest item arrives ticked, with its time; its purchase comes
@@ -285,6 +299,29 @@ select results_eq(
       where source_item_id = '0000000e-0000-0000-0000-000000000106' order by user_id $q$,
   $q$ values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid), ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid) $q$,
   'R4. ... and gives A and B one purchase each'
+);
+
+-- S1. A stale push from a CURRENT app: B unticked the item (the server holds
+--     false with tick time P), and A, who has not pulled, upserts the whole
+--     row again as ticked with the same P. It carries a tick time, so it is
+--     not an old app's tick: no legacy tick, no second purchase.
+insert into public.items (id, list_id, name, is_picked_up, picked_up_at)
+values ('0000000e-0000-0000-0000-000000000107', '0000000a-0000-0000-0000-000000000021', 'Soy milk', false, tests.ms_ago('4 hours'));
+select tests.act_as('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+insert into public.items (id, list_id, name, is_picked_up, picked_up_at)
+values ('0000000e-0000-0000-0000-000000000107', '0000000a-0000-0000-0000-000000000021', 'Soy milk 1L', true, tests.ms_ago('4 hours'))
+on conflict (id) do update
+  set name = excluded.name, is_picked_up = excluded.is_picked_up, picked_up_at = excluded.picked_up_at;
+reset role;
+select is(
+  (select count(*)::int from public.ticks where item_id = '0000000e-0000-0000-0000-000000000107'),
+  0,
+  'S1. a stale push from a current app writes no legacy tick'
+);
+select is(
+  (select picked_up_at from public.items where id = '0000000e-0000-0000-0000-000000000107'),
+  tests.ms_ago('4 hours'),
+  'S1. ... and leaves picked_up_at unchanged'
 );
 
 -- 8. Backfill. Items ticked before 006 have no picked_up_at; seed them with

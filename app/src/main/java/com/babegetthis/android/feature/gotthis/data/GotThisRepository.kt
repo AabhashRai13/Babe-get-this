@@ -18,9 +18,11 @@ import com.babegetthis.android.feature.gotthis.domain.KeyStat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import java.util.TimeZone
 
 data class BoughtHint(val itemId: String, val daysAgo: Int, val source: HintSource, val canonicalKey: String)
@@ -49,15 +51,20 @@ class GotThisRepository(
             flowOf(emptyMap())
         } else {
             val owner = list.accountId
+            // Every flow is cut down to what the result reads and de-duplicated: a
+            // note edit, a tick elsewhere or a pull that re-stores the same rows
+            // would otherwise redo the whole judgement (see due()).
             combine(
-                itemDao.getItemsByListId(listId),
-                purchaseDao.keyStats(owner),
-                stateDao.observeMutes(owner ?: GUEST_STATE_ID),
-            ) { items, rows, mutes ->
+                itemDao.getItemsByListId(listId)
+                    .map { items -> items.filter { !it.isPickedUp && it.deletedAt == null }.map { it.id to it.name } }
+                    .distinctUntilChanged(),
+                purchaseDao.keyStats(owner).distinctUntilChanged(),
+                stateDao.observeMutes(owner ?: GUEST_STATE_ID).distinctUntilChanged(),
+            ) { unticked, rows, mutes ->
                 val now = clock.now()
                 val groups = ItemGroups.build(rows.map(::toKeyStat))
-                val matched = items.filter { !it.isPickedUp && it.deletedAt == null }
-                    .mapNotNull { item -> ItemGroups.groupFor(ItemKey.of(item.name), groups)?.let { item.id to it } }
+                val matched = unticked
+                    .mapNotNull { (id, name) -> ItemGroups.groupFor(ItemKey.of(name), groups)?.let { id to it } }
                 val keys = matched.flatMap { it.second.keys }.distinct()
                 val byKey = keys.chunked(MAX_KEYS_PER_QUERY)
                     .flatMap { purchaseDao.liveForKeys(owner, it) }
@@ -76,10 +83,10 @@ class GotThisRepository(
     }
 
     fun usualsFor(ownerId: String?): Flow<List<UsualItem>> = combine(
-        purchaseDao.keyStats(ownerId),
-        itemDao.uncheckedNames(ownerId),
-        stateDao.observeMutes(ownerId ?: GUEST_STATE_ID),
-        itemDao.lockedItemIds(),
+        purchaseDao.keyStats(ownerId).distinctUntilChanged(),
+        itemDao.uncheckedNames(ownerId).distinctUntilChanged(),
+        stateDao.observeMutes(ownerId ?: GUEST_STATE_ID).distinctUntilChanged(),
+        itemDao.lockedItemIds().distinctUntilChanged(),
     ) { rows, names, mutes, locked ->
         val now = clock.now()
         due(ownerId, rows, names, mutedKeys(mutes, now), locked.toSet(), now)

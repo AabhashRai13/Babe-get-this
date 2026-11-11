@@ -105,6 +105,14 @@ interface PurchaseDao {
     @Query("UPDATE purchases SET pendingUpload = 1 WHERE tickId IN (:tickIds)")
     suspend fun markPendingUploadByTickIds(tickIds: List<String>)
 
+    // The live purchases of outbox events ticked before [before]: events the
+    // server would no longer accept, whose purchases go up as the person's own.
+    @Query(
+        "UPDATE purchases SET pendingUpload = 1 WHERE deletedAt IS NULL AND tickId IN " +
+            "(SELECT tickId FROM tick_outbox WHERE accountId = :accountId AND tickedAt < :before AND undoneAt IS NULL)",
+    )
+    suspend fun markPendingUploadForOutboxTickedBefore(accountId: String, before: Long)
+
     // Live rows only: an undone purchase must not be uploaded as live.
     @Query("SELECT COUNT(*) FROM purchases WHERE accountId = :accountId AND pendingUpload = 1 AND deletedAt IS NULL")
     suspend fun countPendingUploads(accountId: String): Int

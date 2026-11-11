@@ -242,17 +242,41 @@ class GotThisSyncPushTest {
     }
 
     @Test
-    fun `a rejected event more than 30 days ahead drops its purchase, other rejections keep it`() = runTest {
+    fun `a rejected event more than 30 days ahead drops its purchase`() = runTest {
         outbox("far", tickedAt = now + 31 * day)
-        outbox("near", tickedAt = now + 10 * day)
         purchase("far")
-        purchase("near")
         remote.reply = { TickReply(emptyList(), emptyList(), it.map { e -> e.id }) }
 
         sync.push("u1")
 
         assertTrue(dao.byTickId("far").isEmpty())
+        assertEquals(0, dao.countOutbox("u1"))
+        assertTrue(remote.uploadedBatches.isEmpty())
+    }
+
+    @Test
+    fun `any other rejection sends the person's own purchase up on its own`() = runTest {
+        outbox("near", tickedAt = now + 10 * day)
+        purchase("near")
+        remote.reply = { TickReply(emptyList(), emptyList(), it.map { e -> e.id }) }
+
+        sync.push("u1")
+
+        assertEquals(0, dao.countOutbox("u1"))
+        assertEquals(listOf("near"), remote.uploadedBatches.single().map { it.tickId })
+        assertEquals(0, dao.countPendingUploads("u1"))
         assertEquals(1, dao.byTickId("near").size)
+    }
+
+    @Test
+    fun `a rejected undo does not upload the purchase it undid`() = runTest {
+        outbox("undone", tickedAt = now - day, undoneAt = now - day + 1)
+        purchase("undone", deletedAt = now - day + 1)
+        remote.reply = { TickReply(emptyList(), emptyList(), it.map { e -> e.id }) }
+
+        sync.push("u1")
+
+        assertTrue(remote.uploadedBatches.isEmpty())
         assertEquals(0, dao.countOutbox("u1"))
     }
 
@@ -271,7 +295,7 @@ class GotThisSyncPushTest {
     }
 
     @Test
-    fun `outbox rows more than 30 days old are dropped unsent and their purchases stay`() = runTest {
+    fun `outbox rows more than 30 days old are dropped unsent and their purchases upload on their own`() = runTest {
         outbox("old", tickedAt = now - 30 * day - 1)
         purchase("old")
         outbox("edge", tickedAt = now - 30 * day)
@@ -282,7 +306,21 @@ class GotThisSyncPushTest {
         assertEquals(listOf("edge"), remote.recordedBatches.flatten().map { it.id })
         assertNull(dao.outboxByTickId("old"))
         assertEquals(1, dao.byTickId("old").size)
+        assertEquals(listOf("old"), remote.uploadedBatches.single().map { it.tickId })
         assertNotNull("another account's rows are not this push's", dao.outboxByTickId("other"))
+    }
+
+    @Test
+    fun `a push while the feature is killed sends nothing and keeps the rows`() = runTest {
+        prefs.killed = true
+        outbox("t1")
+        purchase("t2", pendingUpload = true)
+        prefs.setPendingClear("u1", now)
+
+        sync.push("u1")
+
+        assertTrue(remote.calls.isEmpty())
+        assertEquals(3, sync.unsyncedCount("u1"))
     }
 
     @Test

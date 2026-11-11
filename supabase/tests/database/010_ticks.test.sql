@@ -3,7 +3,7 @@
 -- no list until case 10; D is on L5. Most ticks are one day old (T).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(29);
 
 -- An event as the phone sends it, with the id computed the way GotThisIds does.
 create function tests.ev(
@@ -441,6 +441,24 @@ select throws_ok(
   '21. anon cannot call record_ticks'
 );
 reset role;
+
+-- 22. The ticker always gets their own purchase, even when their phone's clock
+--     puts the tick before they joined (C joined L2 in case 10).
+insert into public.items (id, list_id, name)
+values ('0000000e-0000-0000-0000-000000000015', '0000000a-0000-0000-0000-000000000002', 'Milk');
+select tests.act_as('cccccccc-cccc-cccc-cccc-cccccccccccc');
+select public.record_ticks(jsonb_build_array(
+  tests.ev('0000000e-0000-0000-0000-000000000015', '0000000a-0000-0000-0000-000000000002', now() - interval '1 hour')
+));
+reset role;
+select results_eq(
+  $q$ select user_id from public.purchases
+      where source_item_id = '0000000e-0000-0000-0000-000000000015' order by user_id $q$,
+  $q$ values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'::uuid),
+             ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'::uuid),
+             ('cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid) $q$,
+  '22. a member who ticks is credited although the tick time is before they joined'
+);
 
 select * from finish();
 rollback;

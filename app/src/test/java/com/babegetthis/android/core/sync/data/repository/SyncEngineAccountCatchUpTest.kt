@@ -352,4 +352,13 @@ class SyncEngineAccountCatchUpTest {
 
         assertTrue(dbRule.purchaseDao.live("user-1").isEmpty())
     }
+
+    @Test
+    fun `a failing Got This pull does not fail the account catch-up`() = runTest {
+        seedAccountList("known")
+        gotThisRemote.failFetch = true
+
+        assertTrue(engine.catchUpAccount() is Result.Success)
+        assertEquals(listOf("fetchResetAt"), gotThisRemote.calls)
+    }
 }

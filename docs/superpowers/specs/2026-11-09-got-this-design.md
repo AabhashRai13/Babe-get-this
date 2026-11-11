@@ -74,7 +74,7 @@ tests (D17) and the repository tests check them directly.
 |---|---|
 | I1 | A tick is identified by `tick_id = id(item id, tick time)`. The same tick has the same id everywhere. |
 | I2 | A tick produces at most one purchase per person: `purchase_id = id(person, tick_id)`. |
-| I3 | The people credited with a tick are the list's creator and the members whose `joined_at` is at or before the tick time. Nothing else changes who is credited. |
+| I3 | The people credited with a tick are the list's creator, the members whose `joined_at` is at or before the tick time, and the person who sent the tick (their phone's clock may put the tick before they joined). Nothing else changes who is credited. |
 | I4 | A tick that is undone has no live purchases, whichever of its tick and undo reaches the server first. An undo affects that tick's purchases and nothing else. |
 | I5 | Every tick made on a current app version reaches the server as its own event, carrying the name and category the item had when it was ticked, provided the phone reconnects within 30 days of the tick and the person does not choose to sign out with it unsent (D20). A tick on a list that never reached the server reaches it as that person's own purchase instead (D19). Clearing history never discards an unsent event. |
 | I6 | After a person's reset time, they have no purchase with a tick time at or before it, on the server or any phone. Purchases with a later tick time are kept. On a phone, a clear that has not reached the server yet counts as a reset from the moment it is pressed. |
@@ -534,7 +534,7 @@ two Settings switches.
    |---|---|---|
    | accepted | every check passed | deletes the outbox row |
    | retry | the item is not on the server yet, or `ticked_at` is between 1 and 30 days ahead of the server clock | keeps the row unchanged and sends it again on later pushes |
-   | rejected | anything else: wrong id, size limits, not a member, older than 30 days, more than 30 days ahead | deletes the outbox row |
+   | rejected | anything else: wrong id, size limits, not a member, older than 30 days, more than 30 days ahead | deletes the outbox row; the phone then sends its own live purchase as an own purchase, except for more than 30 days ahead |
 
    An event's time and id never change. A future-dated event is accepted as
    it stands once the server clock comes within a day of its time.
@@ -584,16 +584,25 @@ two Settings switches.
       ticks: set `picked_up_at := now()` and write a tick through
       `record_tick_rows` with `source = 'legacy'`, the item's current name
       and category, and `ticked_at` equal to that value.
-    - **Update:** when `is_picked_up` turns from false to true and the
-      incoming `picked_up_at` is unchanged, the writer did not send a tick
-      time (such versions never send the column): set it and write a legacy
-      tick the same way. In every other case, `new.picked_up_at :=
-      greatest(new.picked_up_at, old.picked_up_at)`. `greatest` ignores
-      nulls, so a null or older value from any client leaves the newer one
-      in place.
+    - **Update:** when `is_picked_up` turns from false to true, the
+      incoming `picked_up_at` is unchanged, and the push did not carry a
+      tick time, the writer is an old app version (they never send the
+      column): set it and write a legacy tick the same way. Whether the push
+      carried one is read at the before-insert call, which sees the proposed
+      row: for an existing row it leaves a transaction-local note,
+      `got_this.t<item id>` = `yes` when the row carried `picked_up_at` and
+      `no` when it did not. A plain UPDATE leaves no note and counts as an old
+      app's. A stale whole-row push from a current app (the server holds
+      false with tick time P after another phone's untick, and the push says
+      true with P) carries P, so it records no tick.
+    - A tick (false to true) that carries a time of its own keeps it, even
+      when it is older than the stored one: that phone's clock is behind, and
+      it derives the tick id for a later undo from its own time. In every
+      other case, `new.picked_up_at := greatest(new.picked_up_at,
+      old.picked_up_at)`. `greatest` ignores nulls, so a null or older value
+      from any other write leaves the newer one in place.
 
-    Current app versions always send a new `picked_up_at` with a tick, even
-    one that is older than the stored value because of clock skew, so the
+    Current app versions always send a `picked_up_at` with a tick, so the
     legacy path never fires for them and never duplicates their event.
     Pushing an already-ticked item again (a rename, say) writes no tick.
 
@@ -635,7 +644,11 @@ Then, after the existing item push, in this order:
 2. `tick_outbox` rows go to `record_ticks` in batches of 500. Accepted and
    rejected rows are deleted only if their `revision` is unchanged since they
    were read, so an undo made during the call is sent next time. Rows to
-   retry stay.
+   retry stay. A live purchase whose event was rejected (and not more than
+   30 days ahead), and the live purchases of rows dropped for being more than
+   30 days old, get `pendingUpload` so that step 3 sends them as the person's
+   own: the phone keeps showing them, so the server and the person's other
+   phones must hear of them.
 3. Purchases with `pendingUpload` (guest-era, and D19) go to
    `upload_own_purchases` in batches of 500.
 
@@ -668,7 +681,11 @@ and still returns the old purchases.
    (`purchases:<user id>`; one per account, so a second account on the phone
    never starts from the first one's point), paged like every multi-row read
    (`fetchAll`, PostgREST's 1000-row cap). Discard every row with `boughtAt`
-   at or before the watermark. Upsert the rest into Room by id with their
+   at or before the watermark. Store the sync point as the newest `updated_at`
+   seen minus 5 minutes, and never earlier than the stored point: the server
+   stamps a row with its transaction's start time, so a slower transaction
+   can commit a row older than one this pull has already seen, and the lag
+   makes the next pull fetch it again (upserts are idempotent). Upsert the rest into Room by id with their
    keys computed locally; a tombstone replaces the row, but a live row does
    not replace a local tombstone whose undo is still in the outbox. The
    point moves only after everything landed, as for items; discarded rows
@@ -785,16 +802,19 @@ the thresholds. Without a usable dataset, the release relies on
 
 ## Feature flags
 
-- `got_this` (kill switch): off hides hints, suggestions and notifications.
-  Recording continues. A missing row reads as off, so the row is inserted
-  as `true` at release.
+- `got_this` (kill switch): off hides hints, suggestions and notifications,
+  and stops all Got This traffic to the server (outbox, own purchases,
+  pending clear, purchases pull). Recording on the phone continues and the
+  queues are sent once it is on again. A missing row reads as off, so the row
+  is inserted as `true` at release.
 - `got_this_holdout`: on at release, off after 8 weeks (D14).
 
 Both are copied to `GotThisPrefs` when the flags load in the UI process, and
 every reader, including the background worker, uses that copy: the flag
 cache is empty on a background cold start (reminders spec, D8). Before any
-load, the feature is on and the holdout applies. A failed fetch leaves the
-stored copy as it was.
+load, the feature is off (killed) and the holdout applies, so a fresh
+install shows and sends nothing until the flag has been read. A failed fetch
+leaves the stored copy as it was.
 
 Plus adds its own flag and gate in `GotThisAccess` in its own spec. Hints and
 history will never be gated.
@@ -864,7 +884,7 @@ history will never be gated.
   server rejects it for good and the phone deletes both the outbox row and
   the local purchase.
 - **An outbox event older than 30 days:** rejected by the server; the phone
-  drops it, and its purchase stays on that phone only.
+  drops it and sends its purchase as the person's own instead.
 - **Item or list deleted after the tick:** the purchase stays (no foreign
   key). If the item or list reached the server, it is still there as a
   tombstone when its tick is sent, so the event validates. Items added
@@ -916,7 +936,10 @@ exercised, not bypassed.
 | `clear_purchase_history` | returns the resulting `reset_at` |
 | An old-app push (no `picked_up_at`) that ticks | `picked_up_at` set to now; one legacy tick; purchases created |
 | An old-app push that edits or unticks | nothing changes in history |
-| A new-app push with `picked_up_at` null or older | `picked_up_at` unchanged |
+| A new-app push with `picked_up_at` null or older, on an item that stays ticked | `picked_up_at` unchanged |
+| A new-app re-tick whose time is older than the stored one | its own time is kept; no legacy tick |
+| A stale whole-row push from a current app (false, P on the server; true, P pushed) | no legacy tick; `picked_up_at` unchanged |
+| A member whose clock puts the tick before they joined sends it | they are credited too |
 | A new-app tick (newer `picked_up_at`) plus its event | exactly one tick, source `app` |
 | A guest item with a backfilled tick, then claim and `upload_own_purchases` | exactly one purchase; no legacy tick |
 | Clear history, then an event from before the reset | no purchase (I6); an event after it creates one |
@@ -1064,14 +1087,10 @@ shows the first in the field; the second is a submission checklist item.
 - The category windows are judgment, not data. They tell us how long food
   keeps, not how fast it is used up, and are tuned from telemetry.
 - A partner on an old app version cannot undo an accidental tick.
-- A stale push can record a tick nobody made: if one phone unticks an item
-  another phone ticked (after 2 hours, leaving two purchases for one tick;
-  within 2 hours, bringing an undone purchase back), and that other phone,
-  not yet having pulled the untick, pushes an edit of the item, the server
-  sees
-  the item ticked again with an unchanged tick time, which is exactly what an
-  old app's tick looks like, and records a second purchase. Telling the two
-  apart needs a marker from the client; not built.
+- A stale push from an old app version can still record a tick nobody made:
+  an old app that has not pulled another phone's untick pushes an edit of
+  the item, which looks like a tick (the push carries no tick time).
+  Current apps are not affected: their pushes carry the tick time.
 - A list member who fabricates event times can undo another member's tick
   from the last 30 days (D18).
 - A phone offline for more than 30 days keeps those ticks to itself.
