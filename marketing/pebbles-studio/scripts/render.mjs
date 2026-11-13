@@ -4,26 +4,16 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { analyzeAudio } from './analyze.mjs';
-import { KIT, mediaDir, stageAudio } from './media.mjs';
+import { prepareAudio } from './load-script.mjs';
+import { KIT, mediaDir } from './media.mjs';
 
 const slug = process.argv[2];
 if (!slug) {
   console.error('usage: npm run render <slug>');
   process.exit(1);
 }
-const scriptFile = path.join(KIT, 'src', 'videos', slug, 'script.ts');
-if (!fs.existsSync(scriptFile)) {
-  console.error(`No script at ${scriptFile}`);
-  process.exit(1);
-}
-const audio = fs.readFileSync(scriptFile, 'utf8').match(/\baudio:\s*['"]([^'"]+)['"]/)?.[1];
-
 try {
-  if (audio) {
-    stageAudio(slug, audio);
-    await analyzeAudio(slug, audio);
-  }
+  await prepareAudio(slug); // validates the script, replaces stale staged audio, writes the envelope
 } catch (e) {
   console.error(String(e.message ?? e));
   process.exit(1);

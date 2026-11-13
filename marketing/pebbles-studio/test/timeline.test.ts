@@ -52,6 +52,29 @@ describe('validateScript', () => {
     expect(validateScript(s).join(' ')).toMatch(/shot 1/);
   });
 
+  it('rejects a frame the set does not have', () => {
+    const s = fixture();
+    s.shots[2].frame = 'wide'; // kitchen has no wide framing
+    expect(validateScript(s).join(' ')).toMatch(/shot 2: no framing wide in set kitchen/);
+  });
+
+  it('rejects unknown expression, pose and prop names in shots and beats', () => {
+    const s = fixture();
+    (s.shots[0].mr as Record<string, unknown>).expression = 'sideeye';
+    (s.shots[1].beats![0].mrs as Record<string, unknown>).pose = 'dance';
+    (s.shots[2] as unknown as Record<string, unknown>).mrs = { holding: 'cake' };
+    const errs = validateScript(s).join(' ');
+    expect(errs).toMatch(/shot 0: unknown expression sideeye/);
+    expect(errs).toMatch(/shot 1: beat at 3: unknown pose dance/);
+    expect(errs).toMatch(/shot 2: unknown prop cake/);
+  });
+
+  it('rejects a caption too long to fit above the faces', () => {
+    const s = fixture();
+    s.shots[0].caption = 'word '.repeat(80).trim();
+    expect(validateScript(s).join(' ')).toMatch(/shot 0: caption covers a face/);
+  });
+
   it('video() throws with the slug and shot index', () => {
     const s = fixture();
     s.shots[1].speaker = 'mr';
@@ -123,6 +146,32 @@ describe('resolveAt', () => {
     const viaJson = JSON.parse(JSON.stringify(t));
     expect(resolveAt(viaJson, 1).cast.mr!.holding).toBe('phone');
     expect(resolveAt(viaJson, 3).cast.mr!.holding).toBeUndefined();
+  });
+
+  it('a new expression brings back its own pupils after an earlier look', () => {
+    const t = video({ ...fixture(), shots: [
+      { at: 0, set: 'couch', frame: 'two-shot', mr: { look: 'other' } },
+      { at: 2, set: 'couch', frame: 'two-shot', mr: { expression: 'eyeRoll' } },
+    ] });
+    expect(resolveAt(t, 1).cast.mr!.face.look).toEqual({ x: 12, y: 2 });
+    expect(resolveAt(t, 3).cast.mr!.face.look).toEqual(faceFor('eyeRoll').look);
+  });
+
+  it('look: null clears an earlier look', () => {
+    const t = video({ ...fixture(), shots: [
+      { at: 0, set: 'couch', frame: 'two-shot', mr: { expression: 'smug', look: 'other' } },
+      { at: 2, set: 'couch', frame: 'two-shot', mr: { look: null } },
+    ] });
+    expect(resolveAt(JSON.parse(JSON.stringify(t)), 3).cast.mr!.face.look).toEqual(faceFor('smug').look);
+  });
+
+  it('setting walkIn again restarts the walk', () => {
+    const t = video({ ...fixture(), shots: [
+      { at: 0, set: 'kitchen', frame: 'single-mr', mr: { pose: 'walkIn' } },
+      { at: 4, set: 'kitchen', frame: 'single-mrs' },
+      { at: 5.5, set: 'kitchen', frame: 'single-mr', mr: { pose: 'walkIn' } },
+    ] });
+    expect(resolveAt(t, 5.6).cast.mr!.poseSince).toBe(5.5);
   });
 
   it('look other points toward the other character', () => {

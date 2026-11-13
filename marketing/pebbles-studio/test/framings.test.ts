@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRAMINGS, SAFE, captionLayout, isSafe } from '../src/kit/framings';
+import { FRAMINGS, SAFE, captionLayout, isSafe, overlaps } from '../src/kit/framings';
 import type { FrameName, SetName, Who } from '../src/kit/types';
 
 const VERSE = 'Mañana por la mañana, la extraña araña de España araña con maña la telaraña de la montaña';
@@ -43,6 +43,13 @@ describe('safe area', () => {
       const c = captionLayout(VERSE, 'verse', f);
       expect(isSafe(c.box), JSON.stringify(c.box)).toBe(true);
       expect(c.fontSize).toBeGreaterThanOrEqual(40);
+    });
+
+    it(`${name}: long captions shrink rather than cover a face`, () => {
+      const text = 'Babe can you also grab the oat milk not the almond one and the eggs and bananas that are not too green please';
+      const c = captionLayout(text, 'line', f);
+      for (const face of Object.values(f.faces)) expect(overlaps(c.box, face!), JSON.stringify(c.box)).toBe(false);
+      expect(c.fits).toBe(true);
     });
 
     it(`${name}: a single long line stays safe`, () => {

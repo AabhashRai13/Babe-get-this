@@ -27,7 +27,15 @@ export async function analyzeAudio(slug, file, publicDir = path.join(KIT, 'publi
   return out;
 }
 
+// npm run analyze <slug>: stage the script's audio and write the envelope (for timing shots before a render).
 if (process.argv[1] === new URL(import.meta.url).pathname) {
-  const [slug, file] = process.argv.slice(2);
-  console.log('wrote', await analyzeAudio(slug, file));
+  const { prepareAudio } = await import('./load-script.mjs');
+  const slug = process.argv[2];
+  try {
+    const s = await prepareAudio(slug);
+    console.log(s.audio ? `wrote public/media/${slug}/envelope.json (db per frame at ${FPS}fps)` : `${slug} has no audio`);
+  } catch (e) {
+    console.error(String(e.message ?? e));
+    process.exit(1);
+  }
 }

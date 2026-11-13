@@ -26,17 +26,20 @@ This repo is public. Audio, reference clips and renders live only on the Mac:
 2. Put the audio in `~/Documents/Pebbles Videos/<yyyy-mm-dd>-<slug>/`.
 3. Time the shots to the audio (below), and write captions and expressions.
 4. Register it in `src/videos/index.ts`.
-5. `npm test` (validates every registered script), then `npm run render <yyyy-mm-dd>-<slug>`.
+5. `npm run typecheck && npm test`, then `npm run render <yyyy-mm-dd>-<slug>`.
+   The tests validate every registered script: framings that exist for the set, known expression/pose/prop
+   names, speakers on screen, and captions that fit above the faces. A render validates the script again first.
 6. Check a few frames: `ffmpeg -ss 3 -i ".../out/reel.mp4" -frames:v 1 check.png`.
 
 To preview: `npm run studio`, then open `v-<slug>`. Set `showSafeArea` in the props panel to see the UI zones.
 
 ### Timing shots to audio
 
-Speech onsets come from the voice-band loudness, the same pass the lip sync uses:
+Speech onsets come from the voice-band loudness, the same pass the lip sync uses. With the script's `audio`
+field set and the file in the media folder (the script doesn't need registering yet):
 
 ```
-node scripts/analyze.mjs <slug> <audio>    # after staging; npm run render stages it
+npm run analyze <slug>
 ```
 
 That writes `public/media/<slug>/envelope.json` (`db` per frame at 30fps). Values above about −30 dB are speech.
@@ -55,7 +58,8 @@ Shot fields:
 - `mr` / `mrs`: cast state. It carries over to later shots until changed. The fields are:
   - `expression`: a name, or `{ ...partial face }` over the current one
   - `pose`
-  - `look`: `camera` | `left` | `right` | `other` | `{x,y}`
+  - `look`: `camera` | `left` | `right` | `other` | `{x,y}`. Any new expression set without a `look` goes back to
+    that expression's own pupils; `look: null` clears it too. `facing` does not move the pupils, so pair `facing: 'left'` with `look: 'left'` (or `other`).
   - `holding`: `phone` | `bag` | `list` | `mug` | `sticks`, or `null` to drop it
   - `headphones`: on by default in podcast and band only
   - `facing`: `left` | `right`

@@ -3,10 +3,12 @@
 // green-chair guy -> Mr Pebbles, beige-chair guy -> Mrs Pebbles.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const DIR = path.dirname(new URL(import.meta.url).pathname);
-const REF = '/Users/aabhashrai/Downloads/WhatsApp Video 2026-11-12 at 18.26.06.mp4';
+// The reference clip lives with the video's media, outside the repo.
+const REF = path.join(os.homedir(), 'Documents', 'Pebbles Videos', '2026-11-12-spanish-song', 'reference.mp4');
 const AUD = path.join(DIR, 'audio'); fs.mkdirSync(AUD, { recursive: true });
 const FPS = 30, SR = 44100;
 const SONG_END = 35.27, END_CARD = 3.0;

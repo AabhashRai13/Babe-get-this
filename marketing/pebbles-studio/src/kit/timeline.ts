@@ -1,4 +1,7 @@
-import { blendFace, faceFor } from './expressions';
+import { EXPRESSIONS, blendFace, faceFor } from './expressions';
+import { FRAMINGS, captionLayout } from './framings';
+import { POSES } from './poses';
+import { PROP_NAMES } from './types';
 import type { CastState, ExpressionName, Face, FrameName, Look, PoseName, PropName, Shot, VideoScript, Who } from './types';
 
 export const FPS = 30;
@@ -43,8 +46,21 @@ export function validateScript(s: VideoScript): string[] {
   const errs: string[] = [];
   if (s.shots.length === 0) return ['shot 0: the script has no shots'];
   if (s.shots[0].at !== 0) errs.push('shot 0: the first shot must start at 0');
+  const castErrors = (c: CastState | undefined, where: string) => {
+    if (!c) return;
+    if (typeof c.expression === 'string' && !(c.expression in EXPRESSIONS)) errs.push(`${where}: unknown expression ${c.expression}`);
+    if (c.pose !== undefined && !(c.pose in POSES)) errs.push(`${where}: unknown pose ${c.pose}`);
+    if (c.holding && !(PROP_NAMES as readonly string[]).includes(c.holding)) errs.push(`${where}: unknown prop ${c.holding}`);
+  };
   s.shots.forEach((shot, i) => {
     const next = s.shots[i + 1]?.at ?? s.end;
+    const framing = FRAMINGS[shot.set]?.[shot.frame];
+    if (!framing) errs.push(`shot ${i}: no framing ${shot.frame} in set ${shot.set}`);
+    const captionFits = (text: string | undefined) =>
+      !text || !framing || captionLayout(text, shot.captionStyle ?? 'line', framing).fits;
+    castErrors(shot.mr, `shot ${i}`);
+    castErrors(shot.mrs, `shot ${i}`);
+    if (!captionFits(shot.caption)) errs.push(`shot ${i}: caption covers a face or the app UI even at 40px; shorten it`);
     if (i > 0 && shot.at <= s.shots[i - 1].at) errs.push(`shot ${i}: shots must be in time order (at ${shot.at})`);
     if (shot.speaker && !FRAME_CAST[shot.frame].includes(shot.speaker)) {
       errs.push(`shot ${i}: speaker ${shot.speaker} is not on screen in ${shot.frame}`);
@@ -56,6 +72,9 @@ export function validateScript(s: VideoScript): string[] {
       if (b.speaker && !FRAME_CAST[shot.frame].includes(b.speaker)) {
         errs.push(`shot ${i}: beat at ${b.at}: speaker ${b.speaker} is not on screen in ${shot.frame}`);
       }
+      castErrors(b.mr, `shot ${i}: beat at ${b.at}`);
+      castErrors(b.mrs, `shot ${i}: beat at ${b.at}`);
+      if (!captionFits(b.caption)) errs.push(`shot ${i}: beat at ${b.at}: caption covers a face or the app UI even at 40px; shorten it`);
       prevBeat = b.at;
     }
   });
@@ -102,8 +121,11 @@ function apply(r: Running, c: CastState | undefined, at: number, eased: boolean)
     r.changedAt = at;
     r.eased = eased;
   }
-  if (c.pose !== undefined && c.pose !== r.pose) { r.pose = c.pose; r.poseSince = at; }
-  if (c.look !== undefined) r.look = c.look;
+  // Setting a pose (even the same one) restarts it, so a second walkIn walks again.
+  if (c.pose !== undefined) { r.pose = c.pose; r.poseSince = at; }
+  // A new expression brings back its own pupils unless the same change also sets a look.
+  if (c.look !== undefined) r.look = c.look ?? undefined;
+  else if (c.expression !== undefined) r.look = undefined;
   if (c.holding !== undefined) r.holding = c.holding ?? undefined;
   if (c.headphones !== undefined) r.headphones = c.headphones;
   if (c.facing !== undefined) r.facing = c.facing;

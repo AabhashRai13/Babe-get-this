@@ -86,15 +86,21 @@ function wrap(text: string, maxW: number, fs: number): string[] {
   return lines;
 }
 
-/** Wraps a caption for a framing, stepping the size down (min 40) until the box is inside the safe area. */
-export function captionLayout(text: string, style: 'line' | 'verse', f: Framing): { fontSize: number; lines: string[]; box: Rect } {
-  let out = { fontSize: 0, lines: [] as string[], box: { x: 0, y: 0, w: 0, h: 0 } };
+export const overlaps = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+/**
+ * Wraps a caption for a framing, stepping the size down (min 40) until the box is inside the safe area
+ * and clear of every face. `fits` is false when even 40px can't manage it (validateScript rejects that).
+ */
+export function captionLayout(text: string, style: 'line' | 'verse', f: Framing): { fontSize: number; lines: string[]; box: Rect; fits: boolean } {
+  let out = { fontSize: 0, lines: [] as string[], box: { x: 0, y: 0, w: 0, h: 0 }, fits: false };
   for (let fs = style === 'verse' ? 54 : 52; fs >= 40; fs -= 4) {
     const lines = wrap(text, f.caption.maxW, fs);
     const w = Math.max(...lines.map((l) => l.length)) * GLYPH * fs;
     const box = { x: W / 2 - w / 2, y: f.caption.y, w, h: lines.length * fs * 1.18 };
-    out = { fontSize: fs, lines, box };
-    if (isSafe(box)) break;
+    const fits = isSafe(box) && Object.values(f.faces).every((face) => !overlaps(box, face!));
+    out = { fontSize: fs, lines, box, fits };
+    if (fits) break;
   }
   return out;
 }

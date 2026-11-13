@@ -40,7 +40,8 @@ export interface Body {
   hand: 0 | 1;
 }
 
-export type PropName = 'phone' | 'bag' | 'list' | 'mug' | 'sticks';
+export const PROP_NAMES = ['phone', 'bag', 'list', 'mug', 'sticks'] as const;
+export type PropName = (typeof PROP_NAMES)[number];
 export type SetName = 'podcast' | 'band' | 'kitchen' | 'couch' | 'aisle';
 export type FrameName = 'single-mr' | 'single-mrs' | 'two-shot' | 'wide';
 export type Look = 'camera' | 'left' | 'right' | 'other' | { x: number; y: number };
@@ -48,7 +49,8 @@ export type Look = 'camera' | 'left' | 'right' | 'other' | { x: number; y: numbe
 export interface CastState {
   expression?: ExpressionName | Partial<Face>;
   pose?: PoseName;
-  look?: Look;
+  /** Where the pupils point. Cleared (`null`, or any new expression without a look) back to the expression's own. */
+  look?: Look | null;
   /** A held prop; `null` drops it (undefined would be lost when Remotion serialises props). */
   holding?: PropName | null;
   headphones?: boolean;
