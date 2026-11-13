@@ -1,0 +1,9 @@
+node_modules/
+out/
+public/media/
+*.mp4
+*.m4a
+*.mp3
+*.wav
+*.aiff
+*.mov
