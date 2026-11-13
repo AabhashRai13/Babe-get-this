@@ -42,7 +42,7 @@ export function liveFace(who: Who, rc: ResolvedCast, ctx: LiveCtx): Face {
   };
 }
 
-export type BodyMode = 'chair' | 'drum' | 'mic' | 'free';
+export type BodyMode = 'chair' | 'drum' | 'mic' | 'stand' | 'free';
 
 /** Poses that leave the hand arm free to gesture while talking. */
 const RESTING = new Set(['sit', 'stand']);
@@ -60,6 +60,7 @@ export function liveBody(who: Who, rc: ResolvedCast, ctx: LiveCtx, mode: BodyMod
   const resting = RESTING.has(rc.pose);
 
   if (mode === 'chair' && resting) b = bodyFor(who, 'sit', ctx.t, 0);
+  if (mode === 'stand' && rc.pose === 'sit') b = bodyFor(who, 'stand', ctx.t, 0);
   if (mode === 'mic' && resting) {
     const sx = C.inner.w * 0.5 - 34;
     b = { ...b, arms: [{ x: -sx, y: 30, rot: 0.75 }, { x: sx, y: 30, rot: -0.75 }] };

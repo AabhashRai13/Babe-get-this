@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { KIT, mediaRoot } from './media.mjs';
 
-export const SHEETS = ['sheet-expressions', 'sheet-poses'];
+export const SHEETS = ['sheet-expressions', 'sheet-poses', 'sheet-sets'];
 
 const outDir = path.join(mediaRoot(), '_sheets');
 fs.mkdirSync(outDir, { recursive: true });

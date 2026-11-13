@@ -19,9 +19,14 @@ describe('safe area', () => {
     expect(isSafe({ x: 800, y: 300, w: 200, h: 100 })).toBe(true); // right but above the buttons
   });
 
-  it('covers podcast and band framings', () => {
+  it('covers every set in the spec', () => {
     expect(all.map((a) => a.name)).toEqual(
-      expect.arrayContaining(['podcast/single-mr', 'podcast/single-mrs', 'podcast/two-shot', 'band/two-shot']),
+      expect.arrayContaining([
+        'podcast/single-mr', 'podcast/single-mrs', 'podcast/two-shot', 'band/two-shot',
+        'kitchen/single-mr', 'kitchen/single-mrs', 'kitchen/two-shot',
+        'couch/single-mr', 'couch/single-mrs', 'couch/two-shot',
+        'aisle/single-mr', 'aisle/single-mrs', 'aisle/two-shot', 'aisle/wide',
+      ]),
     );
   });
 

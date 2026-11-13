@@ -43,6 +43,23 @@ export const FRAMINGS: Partial<Record<SetName, Partial<Record<FrameName, Framing
     'single-mrs': framing({ mrs: { x: 540, y: 1081, scale: 1.12 } }, { y: 510, maxW: 900 }),
     'two-shot': framing({ mr: { x: 300, y: 1180, scale: 0.62 }, mrs: { x: 770, y: 1196, scale: 0.68 } }, { y: 560, maxW: 900 }),
   },
+  // Standing sets: feet on a floor line at y≈1440, just above the bottom UI zone.
+  kitchen: {
+    'single-mr': framing({ mr: { x: 540, y: 1103, scale: 1.0 } }, { y: 510, maxW: 900 }),
+    'single-mrs': framing({ mrs: { x: 540, y: 1131, scale: 1.1 } }, { y: 510, maxW: 900 }),
+    'two-shot': framing({ mr: { x: 330, y: 1197, scale: 0.72 }, mrs: { x: 760, y: 1221, scale: 0.78 } }, { y: 560, maxW: 900 }),
+  },
+  couch: {
+    'single-mr': framing({ mr: { x: 540, y: 1100, scale: 1.0 } }, { y: 510, maxW: 900 }),
+    'single-mrs': framing({ mrs: { x: 540, y: 1125, scale: 1.1 } }, { y: 510, maxW: 900 }),
+    'two-shot': framing({ mr: { x: 350, y: 1180, scale: 0.7 }, mrs: { x: 740, y: 1196, scale: 0.76 } }, { y: 560, maxW: 900 }),
+  },
+  aisle: {
+    'single-mr': framing({ mr: { x: 540, y: 1103, scale: 1.0 } }, { y: 510, maxW: 900 }),
+    'single-mrs': framing({ mrs: { x: 540, y: 1131, scale: 1.1 } }, { y: 510, maxW: 900 }),
+    'two-shot': framing({ mr: { x: 330, y: 1197, scale: 0.72 }, mrs: { x: 760, y: 1221, scale: 0.78 } }, { y: 560, maxW: 900 }),
+    wide: framing({ mr: { x: 290, y: 1255, scale: 0.55 }, mrs: { x: 540, y: 1271, scale: 0.6 } }, { y: 560, maxW: 900 }),
+  },
   band: {
     // The prototype's band layout (art at 1080x1920) drawn through translate(0,-275) scale(0.86).
     'two-shot': framing({ mr: { x: 284, y: 843, scale: 0.533 }, mrs: { x: 688, y: 1200, scale: 1.049 } }, { y: 330, maxW: 640 }),

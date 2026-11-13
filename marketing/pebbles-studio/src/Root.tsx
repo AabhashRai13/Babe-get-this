@@ -5,6 +5,7 @@ import type { Body, Face } from './kit/types';
 import { EXPRESSIONS } from './kit/expressions';
 import { ExpressionSheet, SHEET_H, SHEET_W } from './sheets/ExpressionSheet';
 import { POSE_SHEET_H, POSE_SHEET_W, PoseSheet } from './sheets/PoseSheet';
+import { SET_SHEET_H, SET_SHEET_W, SetSheet } from './sheets/SetSheet';
 import { VideoComposition, calculateVideoMetadata } from './kit/scene/VideoComposition';
 import { framesFor, video } from './kit/timeline';
 import { VIDEOS } from './videos';
@@ -56,6 +57,7 @@ export const RemotionRoot: React.FC = () => (
     <Still id="debug-pebbles" component={DebugPebbles} width={2160} height={1080} />
     <Still id="sheet-expressions" component={ExpressionSheet} width={SHEET_W} height={SHEET_H} />
     <Still id="sheet-poses" component={PoseSheet} width={POSE_SHEET_W} height={POSE_SHEET_H} />
+    <Still id="sheet-sets" component={SetSheet} width={SET_SHEET_W} height={SET_SHEET_H} />
     <Composition id="debug-scene" component={VideoComposition} width={1080} height={1920} fps={30}
       durationInFrames={framesFor(DEBUG_SCENE)} defaultProps={{ script: DEBUG_SCENE, envelope: [], showSafeArea: false }}
       calculateMetadata={calculateVideoMetadata} />

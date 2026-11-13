@@ -4,13 +4,12 @@ import { AbsoluteFill, Audio, staticFile, useCurrentFrame } from 'remotion';
 import { drumHits } from '../drums';
 import { envelopeFromDb } from '../envelope';
 import { framingFor } from '../framings';
-import { BandSet } from '../sets/Band';
 import { Paper, SoftDefs } from '../sets/Paper';
-import { PodcastSet } from '../sets/PodcastSet';
 import { END_CARD_SEC, FPS, framesFor, resolveAt } from '../timeline';
 import type { VideoScript } from '../types';
 import type { LiveCtx } from './live';
 import { Caption, EndCard, SafeAreaGuide } from './Overlays';
+import { SceneLayer } from './SceneLayer';
 
 export type VideoProps = { script: VideoScript; envelope: number[]; showSafeArea?: boolean };
 
@@ -45,8 +44,7 @@ export const VideoComposition: React.FC<VideoProps> = ({ script, envelope, showS
           <EndCard p={t - script.end} dur={END_CARD_SEC} subtitle={script.endCard?.subtitle ?? ''} />
         ) : (
           <>
-            {set === 'podcast' && <PodcastSet frame={r.shot.frame} cast={r.cast} ctx={ctx} />}
-            {set === 'band' && <BandSet cast={r.cast} ctx={ctx} />}
+            <SceneLayer set={set} frame={r.shot.frame} cast={r.cast} ctx={ctx} />
             <Caption text={r.caption} style={r.shot.captionStyle ?? 'line'} framing={framing} />
           </>
         )}
