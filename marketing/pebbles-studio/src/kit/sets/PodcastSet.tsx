@@ -21,9 +21,9 @@ const Seated: React.FC<{ who: Who; rc: ResolvedCast; ctx: LiveCtx; x: number; y:
   return (
     <g>
       <ChairBack x={x} y={chairY} s={cs} col={CHAIR[who]} />
-      <Pebble who={who} x={x} y={y} scale={s} face={face} body={body} t={ctx.t} layers={['body']} />
+      <Pebble who={who} x={x} y={y} scale={s} face={face} body={body} t={ctx.t} layers={['body']} facing={rc.facing} />
       <ChairFront x={x} y={chairY} s={cs} col={CHAIR[who]} />
-      <Pebble who={who} x={x} y={y} scale={s} face={face} body={body} t={ctx.t} layers={['feet', 'arms', 'phones']} phonesSlot={phones} />
+      <Pebble who={who} x={x} y={y} scale={s} face={face} body={body} t={ctx.t} layers={['feet', 'arms', 'phones']} phonesSlot={phones} holding={rc.holding} facing={rc.facing} />
       {who === 'mr'
         ? <PopMic x={x + 150 * cs} y={y + 95 * s} s={cs} floorY={chairY + 455 * cs} />
         : <StandMic x={x - 22 * cs} y={y + 150 * s} s={1.05 * cs} floorY={chairY + 458 * cs} />}

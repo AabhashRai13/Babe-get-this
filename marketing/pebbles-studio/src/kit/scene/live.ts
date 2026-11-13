@@ -5,6 +5,7 @@ import { mouthOpen } from '../envelope';
 import { CHARACTERS } from '../geometry';
 import { SEED, blink, breathe, drift, settle, sway } from '../motion';
 import type { ResolvedCast } from '../timeline';
+import { bodyFor } from '../poses';
 import type { Body, Face, Who } from '../types';
 
 export interface LiveCtx {
@@ -41,52 +42,55 @@ export function liveFace(who: Who, rc: ResolvedCast, ctx: LiveCtx): Face {
   };
 }
 
-export type BodyMode = 'chair' | 'stand' | 'drum' | 'mic';
+export type BodyMode = 'chair' | 'drum' | 'mic' | 'free';
 
-/** Interim bodies until the pose library (Task 7) takes over. */
+/** Poses that leave the hand arm free to gesture while talking. */
+const RESTING = new Set(['sit', 'stand']);
+
+/**
+ * The resolved pose plus life: breathing, sway, the settle after a cut, talking bob and hand gestures.
+ * `mode` lets a set adapt resting poses (armrests in the podcast chairs, drumming, holding a stand mic).
+ */
 export function liveBody(who: Who, rc: ResolvedCast, ctx: LiveCtx, mode: BodyMode): Body {
   const C = CHARACTERS[who];
   const seed = SEED[who];
   const open = mouthOpen(ctx.env, ctx.frame, rc.speaking);
   const g = clamp(talkEnergy(ctx.env, ctx.frame, rc.speaking) * 2.2, 0, 1);
-  const base = {
-    tilt: sway(ctx.t, seed),
-    squash: breathe(ctx.t, seed) + settle(ctx.sinceCut) + open * 0.012,
-    dy: -open * 7,
-    feet: 'apart' as const,
-    hand: 1 as const,
-  };
-  if (mode === 'drum') {
+  let b = bodyFor(who, rc.pose, ctx.t, ctx.t - rc.poseSince);
+  const resting = RESTING.has(rc.pose);
+
+  if (mode === 'chair' && resting) b = bodyFor(who, 'sit', ctx.t, 0);
+  if (mode === 'mic' && resting) {
+    const sx = C.inner.w * 0.5 - 34;
+    b = { ...b, arms: [{ x: -sx, y: 30, rot: 0.75 }, { x: sx, y: 30, rot: -0.75 }] };
+  }
+  if (mode === 'drum' || rc.pose === 'drum') {
     const on = ctx.drums;
     const lV = on ? pulse(ctx.hits, ctx.t, ['snare', 'hat', 'ohat'], 18) : 0;
     const rV = on ? pulse(ctx.hits, ctx.t, ['crash', 'kick'], 16) : 0;
     const kick = on ? pulse(ctx.hits, ctx.t, ['kick'], 12) : 0;
-    return {
-      ...base,
-      dy: base.dy + kick * 10,
-      squash: base.squash + kick * 0.02,
+    b = {
+      ...b,
+      dy: b.dy + kick * 10,
+      squash: b.squash + kick * 0.02,
       arms: [
         { x: -150, y: 40, rot: on ? 0.2 + (1 - lV) * 0.6 : 0.45 },
         { x: 150, y: 40, rot: on ? -0.2 - (1 - rV) * 0.6 : -0.45 },
       ],
     };
   }
-  if (mode === 'mic') {
-    const swayBeat = ctx.drums ? Math.sin((ctx.sinceCut * Math.PI) / ctx.beat) * 0.035 : 0;
-    const sx = C.inner.w * 0.5 - 34;
-    return { ...base, tilt: base.tilt + swayBeat, arms: [{ x: -sx, y: 30, rot: 0.75 }, { x: sx, y: 30, rot: -0.75 - g * 0.6 }] };
+
+  const arms: [Body['arms'][0], Body['arms'][1]] = [{ ...b.arms[0] }, { ...b.arms[1] }];
+  if (resting && mode !== 'drum') {
+    arms[0].rot += Math.sin(ctx.t * 3) * 0.02;
+    arms[1].rot += -g * 0.55 - Math.sin(ctx.t * 2.3) * 0.02;
   }
-  if (mode === 'chair') {
-    const sx = C.inner.w * 0.5 - 34;
-    const sy = C.bottom * 0.1;
-    return {
-      ...base,
-      arms: [
-        { x: -sx, y: sy, rot: 0.95 + Math.sin(ctx.t * 3) * 0.02 },
-        { x: sx, y: sy, rot: -0.95 - g * 0.55 - Math.sin(ctx.t * 2.3) * 0.02 },
-      ],
-    };
-  }
-  const sx = C.inner.w * 0.5 - 20;
-  return { ...base, arms: [{ x: -sx, y: 40, rot: 0.6 }, { x: sx, y: 40, rot: -0.6 - g * 0.5 }] };
+  const swayBeat = mode === 'mic' && ctx.drums ? Math.sin((ctx.sinceCut * Math.PI) / ctx.beat) * 0.035 : 0;
+  return {
+    ...b,
+    arms,
+    tilt: b.tilt + sway(ctx.t, seed) + swayBeat,
+    squash: b.squash + breathe(ctx.t, seed) + settle(ctx.sinceCut) + open * 0.012,
+    dy: b.dy - open * 7,
+  };
 }

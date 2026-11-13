@@ -40,7 +40,7 @@ export const BandSet: React.FC<{ cast: Record<Who, ResolvedCast | null>; ctx: Li
       <ellipse cx={wp.x} cy={2062} rx={300} ry={34} fill="rgba(110,70,35,0.22)" filter="url(#soft-16)" />
       {mrs && (
         <Pebble who="mrs" x={wp.x} y={wp.y} scale={wScale} face={liveFace('mrs', mrs, ctx)} body={liveBody('mrs', mrs, ctx, 'mic')} t={ctx.t}
-          phonesSlot={mrs.headphones ? <Headphones who="mrs" /> : null} />
+          phonesSlot={mrs.headphones ? <Headphones who="mrs" /> : null} holding={mrs.holding} facing={mrs.facing} />
       )}
       <StandMic x={690} y={1795} s={1.15} floorY={2066} />
     </g>
