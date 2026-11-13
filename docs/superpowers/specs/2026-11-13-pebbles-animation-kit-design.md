@@ -34,6 +34,12 @@ choosing pieces and timing them to audio.
   `docs/superpowers/specs/2026-11-13-pebbles-prototype/icon.svg` and copied
   into the kit as `public/icon.svg`. *(Claude's call: this is the owner's
   own artwork. The Android launcher resources are not re-derived.)*
+  **Not part of the character:** the icon's cream rim around each Pebble. It
+  was only there to separate the two characters in the icon. In the kit the
+  rim is off by default and kept as an option (the owner's decision on
+  2026-11-13). A soft ground shadow keeps standing characters grounded, and
+  sets stay out of the Pebbles' blue-grey range so the characters stand out
+  without an outline.
 - **A sketch kit, not one format.** It covers the podcast format from the
   first video and also everyday couple sketches: at home, in the kitchen, on
   the couch, in the shops.

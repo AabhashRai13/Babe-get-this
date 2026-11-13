@@ -15,6 +15,10 @@ export interface PebbleProps {
   body: Body;
   layers?: PebbleLayer[];
   t: number;
+  /** Cream rim from the app icon. Off by default: it was only there to separate the icon's two characters. */
+  outline?: boolean;
+  /** Soft contact shadow under the feet. */
+  shadow?: boolean;
   /** Optional slot rendered in the phones layer (headphones). */
   phonesSlot?: React.ReactNode;
   /** Optional slot rendered after the arms (held props). */
@@ -26,7 +30,7 @@ const capsule = (cx: number, cy: number, w: number, h: number, fill: string) => 
 );
 
 /** A Pebble drawn in art units, placed at (x, y) = body centre on screen. Layers let sets interleave props. */
-export const Pebble: React.FC<PebbleProps> = ({ who, x, y, scale, face, body, layers = ALL, t, phonesSlot, handSlot }) => {
+export const Pebble: React.FC<PebbleProps> = ({ who, x, y, scale, face, body, layers = ALL, t, outline = false, shadow = false, phonesSlot, handSlot }) => {
   const C = CHARACTERS[who];
   const sq = body.squash;
   const gradId = `pebble-grad-${who}`;
@@ -44,7 +48,8 @@ export const Pebble: React.FC<PebbleProps> = ({ who, x, y, scale, face, body, la
         </defs>
         {has('body') && (
           <g>
-            {capsule(C.outer.x, C.outer.y, C.outer.w, C.outer.h, CREAM)}
+            {shadow && <ellipse cx={0} cy={C.bottom + 34} rx={C.inner.w * 0.62} ry={22} fill="rgba(90,55,25,0.18)" />}
+            {outline && capsule(C.outer.x, C.outer.y, C.outer.w, C.outer.h, CREAM)}
             {capsule(0, 0, C.inner.w, C.inner.h, `url(#${gradId})`)}
             <Face who={who} face={face} t={t} />
           </g>
