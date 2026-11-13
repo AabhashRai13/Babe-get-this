@@ -41,6 +41,22 @@ interface ShoppingListDao {
     )
     fun getListsWithItemCount(accountId: String?): Flow<List<ShoppingListWithItemCount>>
 
+    // The list the person edited last, finished or not; the same owner rule as
+    // the catalog above. Nothing bumps a list's updatedAt for item edits, so the
+    // later of it and the newest item updatedAt (deleted items too) counts.
+    @Query(
+        """
+        SELECT l.* FROM shopping_lists l
+        WHERE l.deletedAt IS NULL
+          AND ((:accountId IS NULL AND l.accountId IS NULL AND l.shareCode IS NULL)
+               OR l.accountId = :accountId)
+        ORDER BY MAX(l.updatedAt, COALESCE((SELECT MAX(i.updatedAt) FROM shopping_items i WHERE i.listId = l.id), 0)) DESC,
+                 l.createdAt DESC
+        LIMIT 1
+    """,
+    )
+    suspend fun mostRecentlyEdited(accountId: String?): ShoppingListEntity?
+
     @Query("SELECT * FROM shopping_lists WHERE id = :listId AND deletedAt IS NULL")
     fun getListById(listId: String): Flow<ShoppingListEntity?>
 
@@ -146,6 +162,9 @@ interface ShoppingListDao {
     @Query("DELETE FROM shopping_lists WHERE onServer = 0 AND deletedAt IS NOT NULL")
     suspend fun deleteNeverSentDeletedLists()
 
+    @Query("SELECT id FROM shopping_lists WHERE onServer = 0 AND deletedAt IS NOT NULL")
+    suspend fun neverSentDeletedListIds(): List<String>
+
     // Sharing a list that already syncs: the server set the code, record it.
     @Query("UPDATE shopping_lists SET shareCode = :code WHERE id = :id")
     suspend fun setShareCode(id: String, code: String)
@@ -163,6 +182,10 @@ interface ShoppingListDao {
     // Sync-internal read: NO tombstone filter — LWW must see deleted rows too.
     @Query("SELECT * FROM shopping_lists WHERE id = :listId")
     suspend fun getListRaw(listId: String): ShoppingListEntity?
+
+    // The device's own (guest) live lists — the start-up backfill's input.
+    @Query("SELECT id FROM shopping_lists WHERE accountId IS NULL AND deletedAt IS NULL")
+    suspend fun getGuestListIds(): List<String>
 
     // The account's live lists — what account-wide catch-up already knows.
     @Query("SELECT id FROM shopping_lists WHERE accountId = :accountId AND deletedAt IS NULL")

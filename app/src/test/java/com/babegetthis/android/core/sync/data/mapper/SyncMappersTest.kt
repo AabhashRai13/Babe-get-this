@@ -27,10 +27,11 @@ class SyncMappersTest {
         pendingSync = true,
     )
 
-    private fun itemEntity(deletedAt: Long? = null) = ShoppingItemEntity(
+    private fun itemEntity(deletedAt: Long? = null, pickedUpAt: Long? = null) = ShoppingItemEntity(
         id = "item-1", listId = "list-1", name = "Milk", quantity = "2 bags",
         isPickedUp = true, categoryId = "cat-1", shop = "Costco", note = "the blue one",
         createdAt = 1L, updatedAt = 2L, deletedAt = deletedAt, pendingSync = true,
+        pickedUpAt = pickedUpAt,
     )
 
     // --- iso helpers ---
@@ -89,7 +90,21 @@ class SyncMappersTest {
         )
     }
 
+    @Test
+    fun `picked up time travels as ISO picked_up_at and null stays null`() {
+        assertEquals(iso, itemEntity(pickedUpAt = ms).toRow().pickedUpAt)
+        assertNull(itemEntity().toRow().pickedUpAt)
+    }
+
     // --- row → entity (apply direction) ---
+
+    @Test
+    fun `item row picked_up_at lands as millis and null stays null`() {
+        val row = ItemRow(id = "i", listId = "l", name = "n", quantity = "1", updatedAt = iso)
+
+        assertEquals(ms, row.copy(pickedUpAt = iso).toEntity(local = null).pickedUpAt)
+        assertNull(row.toEntity(local = null).pickedUpAt)
+    }
 
     @Test
     fun `new list row lands clean with the server clock`() {

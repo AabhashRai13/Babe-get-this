@@ -1,6 +1,7 @@
 package com.babegetthis.android.core.telemetry.model
 
 import com.babegetthis.android.core.error.AppError
+import com.babegetthis.android.feature.gotthis.domain.HintSource
 
 // THE EVENT CATALOG. Everything this app can report is in this file.
 //
@@ -137,6 +138,57 @@ sealed interface AnalyticsEvent {
 
     // The user tapped the reminder notification and opened the app.
     data object ReminderTapped : AnalyticsEvent
+
+    // -- Got This ----------------------------------------------------------
+    // Question: does remembering what was bought stop people buying it twice,
+    // and is the repurchase prediction good enough to lean on? `holdout` marks
+    // the people who are measured but shown nothing, so every rate below can be
+    // compared against a control. No item name or key is ever sent.
+
+    // A "Bought N days ago" hint applied to an item (or would have, in the
+    // holdout). Once per item. Question: how often do hints appear, and from
+    // which source (the person's own rhythm or the category default)?
+    data class GotThisHintShown(val source: HintSource, val daysAgo: Int, val holdout: Boolean) : AnalyticsEvent
+
+    // What the person then did with that item. Question: does the hint change
+    // behaviour: removed it (saved a purchase), ticked it anyway (hint wrong or
+    // ignored), or muted it (hint unwanted)? A delete followed by Undo still
+    // counts as Removed, because the impression is consumed by the delete.
+    data class GotThisHintOutcome(val outcome: HintOutcome, val holdout: Boolean) : AnalyticsEvent
+
+    // The "your usuals" chips were on screen, at most once a day. Question: how
+    // many people have usuals to offer?
+    data class GotThisUsualsShown(val count: Int, val holdout: Boolean) : AnalyticsEvent
+
+    // A usual was tapped into the list. Question: are the suggestions useful?
+    data object GotThisUsualAdded : AnalyticsEvent
+
+    // The "running low" reminder was posted. Question: how often, and how many
+    // items does it carry?
+    data class GotThisReminderPosted(val itemCount: Int, val holdout: Boolean) : AnalyticsEvent
+
+    // The person opened the app from that reminder. Question: is it noticed?
+    data object GotThisReminderOpened : AnalyticsEvent
+
+    // Seven days after a reminder: did the person add any of what it named?
+    // Question: does the reminder lead to shopping the items?
+    data class GotThisReminderFollowUp(val addedAny: Boolean, val holdout: Boolean) : AnalyticsEvent
+
+    // A regular item was bought again; errorDays is bought-day minus predicted
+    // day (positive = later than predicted). Question: how accurate is the
+    // repurchase prediction?
+    data class GotThisPredictionScored(val errorDays: Int) : AnalyticsEvent
+
+    // One per week. Question: how many regulars and purchases does a typical
+    // person have?
+    data class GotThisWeeklySummary(val regulars: Int, val purchases: Int) : AnalyticsEvent
+}
+
+// What a person did with an item that had a "Bought N days ago" hint.
+enum class HintOutcome(val value: String) {
+    Removed("removed"),
+    Ticked("ticked"),
+    Muted("muted"),
 }
 
 // How an item got into the list. The whole voice bet is measured by the

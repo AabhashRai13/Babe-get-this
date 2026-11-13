@@ -8,7 +8,11 @@ import androidx.navigation.navArgument
 import androidx.navigation.testing.TestNavHostController
 import androidx.test.core.app.ApplicationProvider
 import com.babegetthis.android.core.reminder.ReminderTarget
+import com.babegetthis.android.feature.shoppinglist.ui.applyPendingCreateList
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -102,5 +106,37 @@ class BgtNavGraphTest {
         navController.openReminder(target)
 
         assertOnTarget(target)
+    }
+
+    @Test
+    fun `a create-list request from another screen returns to the catalog`() {
+        navController.navigate(Routes.shoppingItems("other", "Other list"))
+        navController.navigate(Routes.SETTINGS)
+
+        navController.showListCatalog()
+
+        assertEquals(listOf(Routes.SHOPPING_LIST), stack())
+    }
+
+    @Test
+    fun `a create-list request on the catalog leaves it in place`() {
+        navController.showListCatalog()
+
+        assertEquals(listOf(Routes.SHOPPING_LIST), stack())
+    }
+
+    @Test
+    fun `the create dialog opens once for a pending request`() {
+        val showCreateDialog = MutableStateFlow(false)
+        var pending = true
+
+        applyPendingCreateList(pending, showCreateDialog) { pending = false }
+        assertTrue(showCreateDialog.value)
+        assertFalse(pending)
+
+        // The person dismisses it; the consumed request must not reopen it.
+        showCreateDialog.value = false
+        applyPendingCreateList(pending, showCreateDialog) { pending = false }
+        assertFalse(showCreateDialog.value)
     }
 }

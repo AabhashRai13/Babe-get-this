@@ -1,8 +1,5 @@
 package com.babegetthis.android.feature.settings.ui
 
-import android.content.Intent
-import android.os.Build
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -15,6 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.LockReset
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -22,6 +21,7 @@ import androidx.compose.material.icons.outlined.Password
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.StarRate
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,6 +29,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -45,7 +46,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -57,6 +57,7 @@ import com.babegetthis.android.core.pin.ui.RecoveryResetDialog
 import com.babegetthis.android.core.pin.ui.RegenerateRecoveryDialog
 import com.babegetthis.android.core.pin.ui.RemovePinDialog
 import com.babegetthis.android.core.reminder.ui.NOTIFICATION_PERMISSION
+import com.babegetthis.android.core.reminder.ui.notificationSettingsIntent
 import com.babegetthis.android.core.reminder.ui.rememberPermissionState
 import com.babegetthis.android.core.review.openPlayListing
 import com.babegetthis.android.core.ui.components.BgtTopAppBar
@@ -66,15 +67,7 @@ import kotlinx.coroutines.launch
 
 // The same page the Play listing links to.
 
-// The per-app notification page exists from API 26; below that the app details page is the closest.
-private fun notificationSettingsIntent(packageName: String): Intent =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-    } else {
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:$packageName".toUri())
-    }
-
-private enum class SettingsDialog { None, SetUp, Change, Remove, Regenerate, Forgot }
+private enum class SettingsDialog { None, SetUp, Change, Remove, Regenerate, Forgot, ClearHistory }
 
 // The replacement LocalLifecycleOwner lives in lifecycle-runtime-compose 2.8+; this project is on 2.6.1.
 @Suppress("DEPRECATION")
@@ -93,6 +86,8 @@ fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel
     LaunchedEffect(pinExists) { viewModel.refreshLockedCount() }
 
     val reminderRow by viewModel.reminderRow.collectAsState()
+    val gotThisHints by viewModel.gotThisHints.collectAsState()
+    val gotThisRunningLow by viewModel.gotThisRunningLow.collectAsState()
     val permission = rememberPermissionState(requested = viewModel.permissionRequested())
     LaunchedEffect(permission) { viewModel.updatePermissionState(permission) }
     // Returning from system settings leaves the permission state unchanged when only the OS
@@ -206,6 +201,53 @@ fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel
                         onCheckedChange = { viewModel.onReminderSwitch(it) },
                     )
                 },
+            )
+
+            Text(
+                text = stringResource(R.string.settings_got_this_section),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp),
+            )
+
+            SettingsRow(
+                icon = Icons.Outlined.Lightbulb,
+                title = stringResource(R.string.settings_got_this_hints_title),
+                subtitle = stringResource(R.string.settings_got_this_hints_subtitle),
+                onClick = { viewModel.onGotThisHintsSwitch(!gotThisHints) },
+                trailing = {
+                    Switch(
+                        checked = gotThisHints,
+                        onCheckedChange = { viewModel.onGotThisHintsSwitch(it) },
+                    )
+                },
+            )
+
+            SettingsRow(
+                icon = Icons.Outlined.NotificationsActive,
+                title = stringResource(R.string.settings_got_this_running_low_title),
+                subtitle = stringResource(
+                    if (gotThisRunningLow == ReminderRowState.Blocked) {
+                        R.string.settings_got_this_running_low_blocked
+                    } else {
+                        R.string.settings_got_this_running_low_subtitle
+                    },
+                ),
+                onClick = { viewModel.onGotThisRunningLowRowTap() },
+                trailing = {
+                    Switch(
+                        checked = gotThisRunningLow != ReminderRowState.Off,
+                        onCheckedChange = { viewModel.onGotThisRunningLowSwitch(it) },
+                    )
+                },
+            )
+
+            SettingsRow(
+                icon = Icons.Outlined.DeleteSweep,
+                title = stringResource(R.string.settings_got_this_clear_title),
+                onClick = { dialog = SettingsDialog.ClearHistory },
+                tint = MaterialTheme.colorScheme.error,
             )
 
             Text(
@@ -337,6 +379,22 @@ fun SettingsScreen(onNavigateBack: () -> Unit = {}, viewModel: SettingsViewModel
         SettingsDialog.Forgot -> RecoveryResetDialog(
             onComplete = { dialog = SettingsDialog.None },
             onDismiss = { dialog = SettingsDialog.None },
+        )
+        SettingsDialog.ClearHistory -> AlertDialog(
+            onDismissRequest = { dialog = SettingsDialog.None },
+            title = { Text(stringResource(R.string.settings_got_this_clear_title)) },
+            text = { Text(stringResource(R.string.settings_got_this_clear_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.onClearPurchaseHistory()
+                        dialog = SettingsDialog.None
+                    },
+                ) { Text(stringResource(R.string.settings_got_this_clear_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialog = SettingsDialog.None }) { Text(stringResource(R.string.cancel)) }
+            },
         )
         SettingsDialog.None -> Unit
     }

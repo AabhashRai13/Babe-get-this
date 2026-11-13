@@ -54,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -69,8 +70,10 @@ import com.babegetthis.android.core.auth.ui.AuthPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptDialog
 import com.babegetthis.android.core.pin.ui.PinPromptPurpose
 import com.babegetthis.android.core.pin.ui.PinSetupDialog
+import com.babegetthis.android.core.reminder.PermissionState
 import com.babegetthis.android.core.reminder.ui.NOTIFICATION_PERMISSION
 import com.babegetthis.android.core.reminder.ui.ReminderPermissionSheet
+import com.babegetthis.android.core.reminder.ui.notificationSettingsIntent
 import com.babegetthis.android.core.reminder.ui.rememberPermissionState
 import com.babegetthis.android.core.review.requestInAppReview
 import com.babegetthis.android.core.ui.TestTags
@@ -79,6 +82,8 @@ import com.babegetthis.android.core.ui.components.SwipeableCard
 import com.babegetthis.android.core.ui.haptics.Haptic
 import com.babegetthis.android.core.ui.haptics.rememberHaptic
 import com.babegetthis.android.core.voice.ui.VoiceCaptureSheet
+import com.babegetthis.android.feature.gotthis.ui.UsualsRow
+import com.babegetthis.android.feature.gotthis.ui.viewModels.GotThisViewModel
 import com.babegetthis.android.feature.shoppingitems.ui.components.CategorySubHeader
 import com.babegetthis.android.feature.shoppingitems.ui.components.FirstItemPrompt
 import com.babegetthis.android.feature.shoppingitems.ui.components.ProgressCard
@@ -88,6 +93,8 @@ import com.babegetthis.android.feature.shoppingitems.ui.components.ShoppingItemC
 import com.babegetthis.android.feature.shoppingitems.ui.viewModels.ShoppingItemsViewModel
 import kotlinx.coroutines.launch
 
+// The replacement LocalLifecycleOwner lives in lifecycle-runtime-compose 2.8+; this project is on 2.6.1.
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShoppingItemsScreen(
@@ -95,8 +102,12 @@ fun ShoppingItemsScreen(
     onNavigateToLogin: () -> Unit = {},
     onNavigateToRegister: () -> Unit = {},
     viewModel: ShoppingItemsViewModel = hiltViewModel(),
+    gotThisViewModel: GotThisViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val hints by gotThisViewModel.hints.collectAsState()
+    val usuals by gotThisViewModel.usuals.collectAsState()
+    var showHeadsUpPrompt by remember { mutableStateOf(false) }
     val categories by viewModel.categories.collectAsState()
     val showDialog by viewModel.showAddItemDialog.collectAsState()
     val editingItem by viewModel.editingItem.collectAsState()
@@ -111,12 +122,25 @@ fun ShoppingItemsScreen(
     val permission = rememberPermissionState(requested = viewModel.permissionRequested())
     LaunchedEffect(permission) { viewModel.updatePermissionState(permission) }
 
+    // The heads-up offer depends on the OS notification switch, which can change while away.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) gotThisViewModel.onResumed()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // Only launched via UiEvent.RequestNotificationPermission, which is only
     // emitted from the prompt's accept button, which is only offered while the
     // state is Requestable (API 33+).
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> viewModel.onNotificationPermissionResult(granted) }
+    ) { granted ->
+        viewModel.onNotificationPermissionResult(granted)
+        gotThisViewModel.onResumed()
+    }
 
     val isLocked by viewModel.isLocked.collectAsState()
     val sessionUnlocked by viewModel.sessionUnlocked.collectAsState()
@@ -160,6 +184,25 @@ fun ShoppingItemsScreen(
     val haptic = rememberHaptic()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    val usualsRow: @Composable () -> Unit = {
+        usuals?.let { state ->
+            UsualsRow(
+                state = state,
+                onChip = gotThisViewModel::onChip,
+                onExpand = gotThisViewModel::onExpand,
+                onNotNow = gotThisViewModel::onNotNow,
+                onHeadsUp = {
+                    // The system dialog only works while the permission is still askable.
+                    if (permission == PermissionState.Requestable) {
+                        showHeadsUpPrompt = true
+                    } else {
+                        context.startActivity(notificationSettingsIntent(context.packageName))
+                    }
+                },
+            )
+        }
+    }
 
     // Drives the voice-capture sheet for adding items to THIS list.
     var showVoiceSheet by remember { mutableStateOf(false) }
@@ -337,12 +380,18 @@ fun ShoppingItemsScreen(
                     .fillMaxSize(),
             )
         } else if (uiState.isEmpty) {
-            FirstItemPrompt(
+            Column(
                 modifier = Modifier
                     .padding(padding)
-                    .fillMaxSize(),
-                onAddItem = { viewModel.onAddItemClick() },
-            )
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+            ) {
+                usualsRow()
+                FirstItemPrompt(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    onAddItem = { viewModel.onAddItemClick() },
+                )
+            }
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -357,6 +406,13 @@ fun ShoppingItemsScreen(
                         completedCount = uiState.completedCount,
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                if (usuals != null) {
+                    item(key = "usuals") {
+                        usualsRow()
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
 
                 // -- ACTIVE ITEMS --
@@ -415,6 +471,9 @@ fun ShoppingItemsScreen(
                                         ShoppingItemCard(
                                             item = shoppingItem,
                                             onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                            hint = hints[shoppingItem.id],
+                                            onHintRemove = { viewModel.deleteItem(shoppingItem.id) },
+                                            onHintMute = { gotThisViewModel.onHintMute(shoppingItem.id) },
                                             onTogglePickedUp = {
                                                 // The satisfying "check it off" moment — buzz to match
                                                 // the un-check path on completed items.
@@ -457,6 +516,9 @@ fun ShoppingItemsScreen(
                                 ShoppingItemCard(
                                     item = shoppingItem,
                                     onClick = { viewModel.onEditItemClick(shoppingItem) },
+                                    hint = hints[shoppingItem.id],
+                                    onHintRemove = { viewModel.deleteItem(shoppingItem.id) },
+                                    onHintMute = { gotThisViewModel.onHintMute(shoppingItem.id) },
                                     onTogglePickedUp = {
                                         haptic(Haptic.Light)
                                         viewModel.togglePickedUp(
@@ -561,6 +623,18 @@ fun ShoppingItemsScreen(
         ReminderPermissionSheet(
             onAccept = viewModel::onReminderPromptAccepted,
             onDecline = viewModel::onReminderPromptDeclined,
+        )
+    }
+
+    if (showHeadsUpPrompt) {
+        ReminderPermissionSheet(
+            onAccept = {
+                showHeadsUpPrompt = false
+                viewModel.onHeadsUpAccepted()
+            },
+            onDecline = { showHeadsUpPrompt = false },
+            title = stringResource(R.string.got_this_prompt_title),
+            body = stringResource(R.string.got_this_prompt_body),
         )
     }
 

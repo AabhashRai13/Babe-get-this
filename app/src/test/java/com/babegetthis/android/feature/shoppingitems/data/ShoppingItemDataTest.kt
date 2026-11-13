@@ -2,6 +2,7 @@ package com.babegetthis.android.feature.shoppingitems.data
 
 import com.babegetthis.android.core.error.AppError
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toDomain
 import com.babegetthis.android.feature.shoppingitems.data.mapper.toEntity
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
@@ -29,10 +30,13 @@ class ShoppingItemDataTest {
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
     private var kicks = 0
+    private val tickStore by lazy {
+        TickStore(dbRule.db, dbRule.itemDao, dbRule.listDao, dbRule.purchaseDao) { System.currentTimeMillis() }
+    }
     private val repository by lazy {
         ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {
             kicks++
-        }, FakeReminderKicker(), unreportedSafeCall())
+        }, FakeReminderKicker(), unreportedSafeCall(), tickStore)
     }
 
     private fun <T> Result<T>.data(): T = (this as Result.Success).data
@@ -153,11 +157,11 @@ class ShoppingItemDataTest {
     }
 
     @Test
-    fun `updatePickedUpStatus writes the flag and a new timestamp`() = runTest {
+    fun `setPickedUp writes the flag and a new timestamp`() = runTest {
         seedList()
         dbRule.itemDao.insertItem(TestData.itemEntity(id = "i1", isPickedUp = false, updatedAt = 1L))
 
-        dbRule.itemDao.updatePickedUpStatus("i1", isPickedUp = true, updatedAt = 999L, pendingSync = false)
+        dbRule.itemDao.setPickedUp("i1", isPickedUp = true, pickedUpAt = null, updatedAt = 999L, pendingSync = false)
 
         val stored = dbRule.itemDao.getItemsByListIdOnce("list-1").single()
         assertTrue(stored.isPickedUp)

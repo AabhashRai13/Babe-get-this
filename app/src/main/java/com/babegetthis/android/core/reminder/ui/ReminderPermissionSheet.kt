@@ -25,7 +25,12 @@ import com.babegetthis.android.R
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReminderPermissionSheet(onAccept: () -> Unit, onDecline: () -> Unit) {
+fun ReminderPermissionSheet(
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    title: String = stringResource(R.string.reminder_prompt_title),
+    body: String = stringResource(R.string.reminder_prompt_body),
+) {
     ModalBottomSheet(
         onDismissRequest = onDecline,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -41,12 +46,12 @@ fun ReminderPermissionSheet(onAccept: () -> Unit, onDecline: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = stringResource(R.string.reminder_prompt_title),
+                text = title,
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = stringResource(R.string.reminder_prompt_body),
+                text = body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

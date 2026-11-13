@@ -167,6 +167,16 @@
     <string name="settings_reminders_subtitle">A nudge when you leave items unticked after a shop</string>
     <string name="settings_reminders_blocked_subtitle">Allow notifications in system settings to turn this on</string>
 
+    <string name="settings_got_this_section">Got This</string>
+    <string name="settings_got_this_hints_title">Bought-recently hints</string>
+    <string name="settings_got_this_hints_subtitle">Show when an item on your list was bought recently</string>
+    <string name="settings_got_this_running_low_title">Running-low reminders</string>
+    <string name="settings_got_this_running_low_subtitle">Suggest things you usually buy, with one heads-up a week</string>
+    <string name="settings_got_this_running_low_blocked">Notifications are off for this app</string>
+    <string name="settings_got_this_clear_title">Clear purchase history</string>
+    <string name="settings_got_this_clear_message">This deletes your purchase history on all your devices. Your lists stay as they are, and people you share lists with keep their own history.</string>
+    <string name="settings_got_this_clear_confirm">Clear</string>
+
     <!-- PIN entry -->
     <string name="pin_label">PIN</string>
     <string name="pin_unlock_title">Unlock list</string>
@@ -226,4 +236,25 @@
     <string name="join_list_hint">6-character code</string>
     <string name="join_list_button">Join</string>
     <string name="join_list_action">Join a shared list</string>
+
+    <string name="got_this_bought_today">Bought today</string>
+    <string name="got_this_bought_yesterday">Bought yesterday</string>
+    <plurals name="got_this_bought_days_ago">
+        <item quantity="one">Bought %d day ago</item>
+        <item quantity="other">Bought %d days ago</item>
+    </plurals>
+    <string name="got_this_hint_remove">Remove from list</string>
+    <string name="got_this_hint_mute">Don\'t remind me about this</string>
+    <string name="got_this_usuals_title">Usually bought around now</string>
+    <string name="got_this_usuals_more">+%d</string>
+    <string name="got_this_usuals_not_now">Not now</string>
+    <string name="got_this_heads_up">Get a weekly heads-up</string>
+    <string name="got_this_prompt_title">Running low?</string>
+    <string name="got_this_prompt_body">Get one heads-up a week for things you usually buy.</string>
+    <string name="got_this_channel_name">Running-low reminders</string>
+    <string name="got_this_notification_title">Running low?</string>
+    <string name="got_this_notification_one">%1$s is usually bought around now.</string>
+    <string name="got_this_notification_two">%1$s and %2$s are usually bought around now.</string>
+    <string name="got_this_notification_three">%1$s, %2$s and %3$s are usually bought around now.</string>
+    <string name="got_this_notification_more" tools:ignore="PluralsCandidate">%1$s, %2$s, %3$s and %4$d more are usually bought around now.</string>
 </resources>

@@ -21,7 +21,7 @@ class ReminderNotifier(private val context: Context, private val notifications: 
 
     fun text(content: ReminderContent): ReminderText {
         val res = context.resources
-        val names = content.uncheckedNames.map(::clip)
+        val names = content.uncheckedNames.map { clip(it) }
         val body = when {
             content.isLocked -> res.getQuantityString(
                 R.plurals.reminder_body_locked,
@@ -86,19 +86,19 @@ class ReminderNotifier(private val context: Context, private val notifications: 
         notifications.cancel(NOTIFICATION_ID)
     }
 
-    // Counted in code points, not UTF-16 chars, so an emoji at the cut is kept
-    // or dropped whole rather than split into a lone surrogate.
-    private fun clip(name: String): String = if (name.codePointCount(0, name.length) > MAX_NAME_CHARS) {
-        name.substring(0, name.offsetByCodePoints(0, MAX_NAME_CHARS - 1)) + ELLIPSIS
-    } else {
-        name
-    }
-
     companion object {
         const val CHANNEL_ID = "reminders"
         const val NOTIFICATION_ID = 1001
         const val REQUEST_CODE = 1001
         const val MAX_NAME_CHARS = 40
         private const val ELLIPSIS = "…"
+
+        // Counted in code points, not UTF-16 chars, so an emoji at the cut is kept
+        // or dropped whole rather than split into a lone surrogate.
+        fun clip(name: String): String = if (name.codePointCount(0, name.length) > MAX_NAME_CHARS) {
+            name.substring(0, name.offsetByCodePoints(0, MAX_NAME_CHARS - 1)) + ELLIPSIS
+        } else {
+            name
+        }
     }
 }

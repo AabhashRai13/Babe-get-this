@@ -9,6 +9,16 @@ import org.junit.Test
 class FeatureFlagCacheTest {
 
     @Test
+    fun `isLoaded is false until an update lands`() {
+        val cache = FeatureFlagCache()
+        assertFalse(cache.isLoaded)
+
+        cache.update(emptyMap())
+
+        assertTrue(cache.isLoaded)
+    }
+
+    @Test
     fun `an unloaded cache does not know the key is off`() {
         val cache = FeatureFlagCache()
 

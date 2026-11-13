@@ -10,8 +10,10 @@ import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
 import com.babegetthis.android.core.sync.data.remote.SharedListRemote
 import com.babegetthis.android.core.telemetry.CrashReporter
+import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -30,6 +32,7 @@ class SyncEngine(
     private val remote: SharedListRemote,
     private val syncPoints: SyncPointStore,
     private val ownership: ListOwnershipStore,
+    private val gotThis: GotThisSync,
     private val currentUserId: () -> String?,
     private val crashReporter: CrashReporter,
     private val safeCall: SafeCall,
@@ -59,7 +62,7 @@ class SyncEngine(
         // can't race the INSERT that would have put it on the server. Needs no
         // session: it is outbox housekeeping, and it keeps the sign-out
         // warning honest for a session that has expired.
-        listDao.deleteNeverSentDeletedLists()
+        gotThis.dropNeverSentLists()
         val userId = currentUserId() ?: return
         val lists = listDao.getPendingAccountLists(userId)
         val (existing, brandNew) = lists.partition { it.onServer }
@@ -84,10 +87,26 @@ class SyncEngine(
             remote.upsertItems(items.map { it.toRow() })
             items.forEach { itemDao.markItemSynced(it.id, it.updatedAt) }
         }
+        isolatedGotThis { gotThis.push(userId) }
         // Counts only. A crash mid-sync reads very differently depending on
         // whether the queue was empty or draining hundreds of rows, and
         // that is not recoverable from the report afterwards.
         crashReporter.breadcrumb("sync: pushed ${'$'}{lists.size} lists, ${'$'}{items.size} items")
+    }
+
+    // Got This is an extra on top of lists and items. A failure in it (a server
+    // function not deployed yet, a rate limit) must not fail the whole pass: the
+    // lists synced, and the retry loop would fire for nothing. Its own queues
+    // (the tick outbox, pending uploads, a pending clear) stay as they were and
+    // go out on the next pass.
+    private suspend fun isolatedGotThis(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            crashReporter.breadcrumb("sync: got this failed")
+        }
     }
 
     // Give the device's lists to the account that just signed in (or whose
@@ -97,6 +116,8 @@ class SyncEngine(
     // lists moved in, and adds them to the notice the lists screen shows.
     suspend fun claimDeviceLists(userId: String): Result<Int> = safeCall {
         mutex.withLock {
+            // Before the lists change hands, so guest ticks have their times.
+            gotThis.prepareClaim()
             listDao.getOtherAccountListIds(userId).forEach { syncPoints.remove(it) }
             // The first claim after the update also takes the existing shared
             // replicas: they predate owners, and they belong to whoever is signed
@@ -109,6 +130,8 @@ class SyncEngine(
             if (firstClaim) ownership.setUnverifiedListIds(listDao.getOwnerlessSharedListIds().toSet())
             val claimed = listDao.claimDeviceLists(userId, includeOwnerlessShared = firstClaim)
             finishFirstRun()
+            // After the first-run bookkeeping: a failure here must not skip it.
+            gotThis.claimGuestHistory(userId)
             if (claimed > 0) ownership.setAdoptionNotice(ownership.adoptionNotice.value + claimed)
             // Count only. Which lists moved is the user's business.
             crashReporter.breadcrumb("sync: claimed $claimed lists")
@@ -235,6 +258,7 @@ class SyncEngine(
             // known list only gets items newer than the account sync point. If
             // the pull fails, the row stays out and the next pass tries again.
             fresh.forEach { apply(userId, listOf(it), remote.fetchItems(it.id, sinceIso = null)) }
+            isolatedGotThis { gotThis.pull(userId) }
             // Counts only, like every other sync breadcrumb.
             crashReporter.breadcrumb("sync: account catch-up over ${known.size} lists, ${discovered.size} discovered")
         }
@@ -255,6 +279,7 @@ class SyncEngine(
             safeCall { pushLocked() }
             // Hard local delete, not tombstones: this is eviction, not a deletion
             // to sync. CASCADE clears the items.
+            gotThis.evict()
             listDao.deleteAccountLists()
             syncPoints.clear()
             crashReporter.breadcrumb("sync: evicted account lists")
@@ -267,7 +292,8 @@ class SyncEngine(
     // released first-run claim, another account's leftovers) aren't counted:
     // a warning about them could never be cleared by going online.
     suspend fun hasUnsyncedChanges(accountId: String): Boolean =
-        listDao.countPendingAccountLists(accountId) + itemDao.countPendingSyncItemsForAccount(accountId) > 0
+        listDao.countPendingAccountLists(accountId) + itemDao.countPendingSyncItemsForAccount(accountId) +
+            gotThis.unsyncedCount(accountId) > 0
 
     private suspend fun apply(userId: String, listRows: List<ListRow>, itemRows: List<ItemRow>) {
         val lockedIds = ownership.lockedListIds()

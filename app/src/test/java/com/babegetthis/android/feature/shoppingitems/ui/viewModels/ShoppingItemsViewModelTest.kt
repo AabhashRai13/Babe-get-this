@@ -19,6 +19,8 @@ import com.babegetthis.android.core.telemetry.TelemetryMarkers
 import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.CategorySource
 import com.babegetthis.android.core.telemetry.model.InputMethod
+import com.babegetthis.android.feature.gotthis.data.GotThisTracker
+import com.babegetthis.android.feature.gotthis.data.TickResult
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
@@ -69,6 +71,7 @@ class ShoppingItemsViewModelTest {
     private lateinit var analytics: AnalyticsRepository
     private lateinit var markers: TelemetryMarkers
     private lateinit var reminderScheduler: ReminderScheduler
+    private lateinit var gotThisTracker: GotThisTracker
     private lateinit var itemsFlow: MutableStateFlow<List<ShoppingItem>>
     private lateinit var shareCodeFlow: MutableStateFlow<String?>
 
@@ -89,6 +92,7 @@ class ShoppingItemsViewModelTest {
         markers = mockk(relaxed = true)
         // relaxed shouldOfferPermission() returns false, i.e. "do not prompt".
         reminderScheduler = mockk(relaxed = true)
+        gotThisTracker = mockk(relaxed = true)
         itemsFlow = MutableStateFlow(emptyList())
         shareCodeFlow = MutableStateFlow(null)
 
@@ -119,6 +123,7 @@ class ShoppingItemsViewModelTest {
         analytics = analytics,
         markers = markers,
         reminderScheduler = reminderScheduler,
+        gotThisTracker = gotThisTracker,
         applicationScope = CoroutineScope(testDispatcher),
     )
 
@@ -561,6 +566,7 @@ class ShoppingItemsViewModelTest {
             analytics = analytics,
             markers = markers,
             reminderScheduler = reminderScheduler,
+            gotThisTracker = gotThisTracker,
             applicationScope = CoroutineScope(testDispatcher),
         )
 
@@ -734,12 +740,89 @@ class ShoppingItemsViewModelTest {
 
     @Test
     fun `togglePickedUp delegates to the repository`() = runTest {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         val viewModel = buildViewModel()
 
         viewModel.togglePickedUp("a", true)
 
         coVerify { itemRepository.togglePickedUp("a", true) }
+    }
+
+    @Test
+    fun `ticking hands the tick result to the tracker`() = runTest {
+        val tick = TickResult("L1", true, "u1", "milk", undone = false, recorded = true)
+        coEvery { itemRepository.togglePickedUp("a", true) } returns Result.Success(tick)
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("a", true)
+
+        coVerify(exactly = 1) { gotThisTracker.onItemTicked("a", tick) }
+    }
+
+    @Test
+    fun `unticking and a failed tick do not reach the tracker`() = runTest {
+        coEvery { itemRepository.togglePickedUp("a", false) } returns Result.Success(null)
+        coEvery { itemRepository.togglePickedUp("b", true) } returns Result.Error(AppError.DatabaseError("boom"))
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("a", false)
+        viewModel.togglePickedUp("b", true)
+
+        coVerify(exactly = 0) { gotThisTracker.onItemTicked(any(), any()) }
+    }
+
+    @Test
+    fun `deleting an item tells the tracker once, and a failed delete does not`() = runTest {
+        coEvery { itemRepository.deleteItem("1") } returns Result.Success(Unit)
+        coEvery { itemRepository.deleteItem("2") } returns Result.Error(AppError.DatabaseError("boom"))
+        val viewModel = buildViewModel()
+
+        viewModel.deleteItem("1")
+        viewModel.deleteItem("2")
+
+        coVerify(exactly = 1) { gotThisTracker.onItemDeleted("1") }
+        coVerify(exactly = 0) { gotThisTracker.onItemDeleted("2") }
+    }
+
+    @Test
+    fun `delete bookkeeping is finished before the tracker runs`() = runTest {
+        itemsFlow.value = listOf(item("1", name = "Milk"))
+        coEvery { itemRepository.deleteItem("1") } returns Result.Success(Unit)
+        coEvery { itemRepository.restoreItem(any()) } returns Result.Success(Unit)
+        val viewModel = collecting(buildViewModel())
+        val undoEvents = mutableListOf<String>()
+        val undoneWhenTrackerRan = mutableListOf<Int>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.undoDeleteEvent.collect {
+                undoEvents +=
+                    it
+            }
+        }
+        coEvery { gotThisTracker.onItemDeleted("1") } coAnswers {
+            undoneWhenTrackerRan += undoEvents.size
+            // Models a tracker bug: everything above has already been done.
+        }
+
+        viewModel.deleteItem("1")
+        viewModel.undoDeleteItem()
+
+        assertEquals(listOf(1), undoneWhenTrackerRan)
+        coVerify { itemRepository.restoreItem(match { it.id == "1" }) }
+    }
+
+    @Test
+    fun `tick bookkeeping is finished before the tracker runs`() = runTest {
+        coEvery { itemRepository.togglePickedUp(any(), true) } returns Result.Success(null)
+        every { markers.has(Marker.JoinedList, "L1") } returns true
+        every { markers.firstTime(Marker.SharedListFirstEdit, "L1") } returns true
+        val order = mutableListOf<String>()
+        every { analytics.track(AnalyticsEvent.SharedListFirstEditByJoiner) } answers { order += "list-edited" }
+        coEvery { gotThisTracker.onItemTicked(any(), any()) } coAnswers { order += "tracker" }
+        val viewModel = buildViewModel()
+
+        viewModel.togglePickedUp("a", true)
+
+        assertEquals(listOf("list-edited", "tracker"), order)
     }
 
     @Test
@@ -1048,7 +1131,7 @@ class ShoppingItemsViewModelTest {
 
     @Test
     fun `checking an item off is reported, un-checking is not`() = runTest {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         val viewModel = buildViewModel()
 
         viewModel.togglePickedUp("i1", isPickedUp = true)
@@ -1114,7 +1197,7 @@ class ShoppingItemsViewModelTest {
         every { markers.has(Marker.JoinedList, "L1") } returns true
         every { markers.firstTime(Marker.SharedListFirstEdit, "L1") } returnsMany
             listOf(true, false)
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         val viewModel = buildViewModel()
 
         viewModel.togglePickedUp("i1", isPickedUp = true)
@@ -1129,7 +1212,7 @@ class ShoppingItemsViewModelTest {
         // the marker written at join time doing the only work that can tell
         // them apart.
         every { markers.has(Marker.JoinedList, "L1") } returns false
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         val viewModel = buildViewModel()
 
         viewModel.togglePickedUp("i1", isPickedUp = true)
@@ -1162,7 +1245,7 @@ class ShoppingItemsViewModelTest {
 
     @Test
     fun `a tick asks the scheduler with the reported permission state and shows the prompt on true`() = runTest {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         coEvery { reminderScheduler.shouldOfferPermission("L1", PermissionState.Requestable) } returns true
         val viewModel = buildViewModel()
         viewModel.updatePermissionState(PermissionState.Requestable)
@@ -1176,7 +1259,7 @@ class ShoppingItemsViewModelTest {
 
     @Test
     fun `a tick after the last item is not offered when the scheduler says no`() = runTest {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         coEvery { reminderScheduler.shouldOfferPermission(any(), any()) } returns false
         val viewModel = buildViewModel()
         viewModel.updatePermissionState(PermissionState.Requestable)
@@ -1189,7 +1272,7 @@ class ShoppingItemsViewModelTest {
 
     @Test
     fun `unticking never asks`() = runTest {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         coEvery { reminderScheduler.shouldOfferPermission(any(), any()) } returns true
         val viewModel = buildViewModel()
         viewModel.updatePermissionState(PermissionState.Requestable)
@@ -1202,7 +1285,7 @@ class ShoppingItemsViewModelTest {
 
     @Test
     fun `accepting records the request, hides the sheet and emits the launch event`() = runTest {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         coEvery { reminderScheduler.shouldOfferPermission(any(), any()) } returns true
         val viewModel = buildViewModel()
         viewModel.togglePickedUp("i1", isPickedUp = true)
@@ -1220,7 +1303,7 @@ class ShoppingItemsViewModelTest {
 
     @Test
     fun `declining denies and hides the sheet`() = runTest {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         coEvery { reminderScheduler.shouldOfferPermission(any(), any()) } returns true
         val viewModel = buildViewModel()
         viewModel.togglePickedUp("i1", isPickedUp = true)
@@ -1246,8 +1329,51 @@ class ShoppingItemsViewModelTest {
     }
 
     @Test
+    fun `heads-up accepted then denied leaves the shopping reminder alone`() = runTest {
+        val viewModel = buildViewModel()
+
+        viewModel.events.test {
+            viewModel.onHeadsUpAccepted()
+            assertEquals(ShoppingItemsViewModel.UiEvent.RequestNotificationPermission, awaitItem())
+        }
+        verify { reminderScheduler.onPermissionRequested() }
+
+        viewModel.onNotificationPermissionResult(granted = false)
+
+        verify(exactly = 0) { reminderScheduler.onPermissionDenied() }
+        verify(exactly = 0) { reminderScheduler.snoozePrompt() }
+        coVerify(exactly = 0) { reminderScheduler.onPermissionGranted(any()) }
+        coVerify(exactly = 0) { reminderScheduler.arm(any()) }
+    }
+
+    @Test
+    fun `heads-up accepted then granted does not arm a reminder`() = runTest {
+        val viewModel = buildViewModel()
+        viewModel.onHeadsUpAccepted()
+
+        viewModel.onNotificationPermissionResult(granted = true)
+
+        coVerify(exactly = 0) { reminderScheduler.onPermissionGranted(any()) }
+        coVerify(exactly = 0) { reminderScheduler.arm(any()) }
+        verify(exactly = 0) { reminderScheduler.onPermissionDenied() }
+    }
+
+    @Test
+    fun `a heads-up result does not leak into a later reminder result`() = runTest {
+        val viewModel = buildViewModel()
+        viewModel.onHeadsUpAccepted()
+        viewModel.onNotificationPermissionResult(granted = false)
+
+        viewModel.onNotificationPermissionResult(granted = true)
+        viewModel.onNotificationPermissionResult(granted = false)
+
+        coVerify(exactly = 1) { reminderScheduler.onPermissionGranted("L1") }
+        verify(exactly = 1) { reminderScheduler.onPermissionDenied() }
+    }
+
+    @Test
     fun `no prompt before the screen reports a permission state`() = runTest {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         val viewModel = buildViewModel()
 
         viewModel.togglePickedUp("i1", isPickedUp = true)

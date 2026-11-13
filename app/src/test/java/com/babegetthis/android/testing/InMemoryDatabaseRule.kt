@@ -23,6 +23,8 @@ class InMemoryDatabaseRule : ExternalResource() {
     val listDao get() = db.shoppingListDao()
     val itemDao get() = db.shoppingItemDao()
     val categoryDao get() = db.categoryDao()
+    val purchaseDao get() = db.purchaseDao()
+    val stateDao get() = db.gotThisStateDao()
 
     override fun before() {
         db = Room.inMemoryDatabaseBuilder(

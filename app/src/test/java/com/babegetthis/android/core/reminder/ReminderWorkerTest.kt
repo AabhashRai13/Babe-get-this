@@ -310,8 +310,20 @@ class ReminderWorkerTest {
     @Test
     fun `list finished posts nothing and clears`() = runTest {
         armL1()
-        dbRule.itemDao.updatePickedUpStatus("L1-b", isPickedUp = true, updatedAt = TestData.T0, pendingSync = false)
-        dbRule.itemDao.updatePickedUpStatus("L1-c", isPickedUp = true, updatedAt = TestData.T0, pendingSync = false)
+        dbRule.itemDao.setPickedUp(
+            "L1-b",
+            isPickedUp = true,
+            pickedUpAt = null,
+            updatedAt = TestData.T0,
+            pendingSync = false,
+        )
+        dbRule.itemDao.setPickedUp(
+            "L1-c",
+            isPickedUp = true,
+            pickedUpAt = null,
+            updatedAt = TestData.T0,
+            pendingSync = false,
+        )
 
         assertEquals(ListenableWorker.Result.success(), runWorker())
 
@@ -337,7 +349,13 @@ class ReminderWorkerTest {
         armL1()
         // A synced tick lands in Room without passing through the kicker, so
         // the record is untouched and the snapshot is the only place it shows.
-        dbRule.itemDao.updatePickedUpStatus("L1-b", isPickedUp = true, updatedAt = TestData.T0, pendingSync = false)
+        dbRule.itemDao.setPickedUp(
+            "L1-b",
+            isPickedUp = true,
+            pickedUpAt = null,
+            updatedAt = TestData.T0,
+            pendingSync = false,
+        )
 
         assertEquals(ListenableWorker.Result.success(), runWorker())
 
