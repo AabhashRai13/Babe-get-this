@@ -228,4 +228,42 @@ class ShoppingListDaoTest {
         assertTrue("expected the foreign key to reject the item", failed)
         assertNull("the list insert should have rolled back", listDao.getListById("l1").first())
     }
+
+    @Test
+    fun `mostRecentlyEdited counts item activity, deleted items included`() = runTest {
+        listDao.insertList(TestData.listEntity(id = "renamed", createdAt = 1L, updatedAt = 5_000L))
+        listDao.insertList(TestData.listEntity(id = "busy", createdAt = 2L, updatedAt = 100L))
+        itemDao.insertItem(TestData.itemEntity(id = "i1", listId = "busy", updatedAt = 9_000L))
+
+        assertEquals("busy", listDao.mostRecentlyEdited(null)?.id)
+
+        // Deleting an item is an edit too.
+        itemDao.insertItem(
+            TestData.itemEntity(id = "i2", listId = "renamed", updatedAt = 9_500L).copy(deletedAt = 9_500L),
+        )
+        assertEquals("renamed", listDao.mostRecentlyEdited(null)?.id)
+    }
+
+    @Test
+    fun `mostRecentlyEdited sorts an empty list by its own updatedAt and ties by createdAt`() = runTest {
+        listDao.insertList(TestData.listEntity(id = "old", createdAt = 1L, updatedAt = 10L))
+        listDao.insertList(TestData.listEntity(id = "newer", createdAt = 2L, updatedAt = 10L))
+        assertEquals("newer", listDao.mostRecentlyEdited(null)?.id)
+
+        listDao.insertList(TestData.listEntity(id = "latest", createdAt = 1L, updatedAt = 11L))
+        assertEquals("latest", listDao.mostRecentlyEdited(null)?.id)
+    }
+
+    @Test
+    fun `mostRecentlyEdited keeps its owner scoping and skips deleted lists`() = runTest {
+        listDao.insertList(TestData.listEntity(id = "guest", updatedAt = 1L))
+        listDao.insertList(TestData.listEntity(id = "mine", updatedAt = 2L).copy(accountId = "u1"))
+        listDao.insertList(TestData.listEntity(id = "theirs", updatedAt = 3L).copy(accountId = "u2"))
+        listDao.insertList(TestData.listEntity(id = "gone", updatedAt = 4L).copy(accountId = "u1", deletedAt = 5L))
+        listDao.insertList(TestData.listEntity(id = "orphan", updatedAt = 6L).copy(shareCode = "ABC234"))
+
+        assertEquals("guest", listDao.mostRecentlyEdited(null)?.id)
+        assertEquals("mine", listDao.mostRecentlyEdited("u1")?.id)
+        assertNull(listDao.mostRecentlyEdited("nobody"))
+    }
 }

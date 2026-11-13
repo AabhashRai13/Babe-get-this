@@ -4,6 +4,13 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.babegetthis.android.core.data.local.dao.CategoryDao
 import com.babegetthis.android.core.data.local.model.CategoryEntity
+import com.babegetthis.android.feature.gotthis.data.local.dao.GotThisStateDao
+import com.babegetthis.android.feature.gotthis.data.local.dao.PurchaseDao
+import com.babegetthis.android.feature.gotthis.data.local.model.HintImpressionEntity
+import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
+import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
+import com.babegetthis.android.feature.gotthis.data.local.model.ReminderFollowUpEntity
+import com.babegetthis.android.feature.gotthis.data.local.model.TickOutboxEntity
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppingitems.data.local.model.ShoppingItemEntity
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
@@ -14,8 +21,13 @@ import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingLis
         ShoppingListEntity::class,
         ShoppingItemEntity::class,
         CategoryEntity::class,
+        PurchaseEntity::class,
+        TickOutboxEntity::class,
+        ItemMuteEntity::class,
+        HintImpressionEntity::class,
+        ReminderFollowUpEntity::class,
     ],
-    version = 5,
+    version = 6,
     // exportSchema stays false: Room 2.8.4's schema-JSON exporter uses a
     // kotlinx-serialization build that AbstractMethodErrors against this
     // project's serialization plugin on the KSP classpath. Migrations are
@@ -38,4 +50,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun shoppingListDao(): ShoppingListDao
     abstract fun shoppingItemDao(): ShoppingItemDao
     abstract fun categoryDao(): CategoryDao
+    abstract fun purchaseDao(): PurchaseDao
+    abstract fun gotThisStateDao(): GotThisStateDao
 }

@@ -306,4 +306,112 @@ class MigrationTest {
         }
         db.close()
     }
+
+    @Test
+    fun migrate5To6AddsPickedUpAtAndTheGotThisTablesAndKeepsRows() {
+        context.deleteDatabase(testDb)
+
+        // The v5 lists and items tables, with one ticked item.
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(testDb)
+                .callback(object : SupportSQLiteOpenHelper.Callback(5) {
+                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL(
+                            "CREATE TABLE shopping_lists (" +
+                                "id TEXT NOT NULL PRIMARY KEY, " +
+                                "name TEXT NOT NULL, " +
+                                "createdAt INTEGER NOT NULL, " +
+                                "updatedAt INTEGER NOT NULL, " +
+                                "isLocked INTEGER NOT NULL DEFAULT 0, " +
+                                "shareCode TEXT, " +
+                                "deletedAt INTEGER, " +
+                                "pendingSync INTEGER NOT NULL DEFAULT 0, " +
+                                "accountId TEXT, " +
+                                "onServer INTEGER NOT NULL DEFAULT 0)",
+                        )
+                        db.execSQL(
+                            "CREATE TABLE shopping_items (" +
+                                "id TEXT NOT NULL PRIMARY KEY, " +
+                                "listId TEXT NOT NULL, " +
+                                "name TEXT NOT NULL, " +
+                                "quantity TEXT NOT NULL, " +
+                                "isPickedUp INTEGER NOT NULL DEFAULT 0, " +
+                                "categoryId TEXT, " +
+                                "shop TEXT, " +
+                                "note TEXT, " +
+                                "createdAt INTEGER NOT NULL, " +
+                                "updatedAt INTEGER NOT NULL, " +
+                                "deletedAt INTEGER, " +
+                                "pendingSync INTEGER NOT NULL DEFAULT 0)",
+                        )
+                        db.execSQL(
+                            "INSERT INTO shopping_lists (id, name, createdAt, updatedAt) " +
+                                "VALUES ('list-a', 'Groceries', 100, 200)",
+                        )
+                        db.execSQL(
+                            "INSERT INTO shopping_items " +
+                                "(id, listId, name, quantity, isPickedUp, createdAt, updatedAt) " +
+                                "VALUES ('item-a', 'list-a', 'Milk', '2', 1, 100, 200)",
+                        )
+                    }
+
+                    override fun onUpgrade(
+                        db: androidx.sqlite.db.SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int,
+                    ) = Unit
+                })
+                .build(),
+        )
+
+        val db = helper.writableDatabase
+        MIGRATION_5_6.migrate(db)
+
+        // The list and the ticked item survive; no tick time is invented.
+        db.query("SELECT name FROM shopping_lists WHERE id = 'list-a'").use { c ->
+            assertEquals(1, c.count)
+            c.moveToFirst()
+            assertEquals("Groceries", c.getString(0))
+        }
+        db.query("SELECT name, isPickedUp, pickedUpAt FROM shopping_items WHERE id = 'item-a'").use { c ->
+            assertEquals(1, c.count)
+            c.moveToFirst()
+            assertEquals("Milk", c.getString(0))
+            assertEquals(1, c.getInt(1))
+            assertTrue(c.isNull(2))
+        }
+
+        val expected = mapOf(
+            "purchases" to listOf(
+                "id", "tickId", "accountId", "sourceItemId", "name", "itemKey",
+                "categoryId", "boughtAt", "deletedAt", "pendingUpload",
+            ),
+            "tick_outbox" to listOf(
+                "tickId", "accountId", "itemId", "listId", "tickedAt", "name",
+                "categoryId", "undoneAt", "revision",
+            ),
+            "item_mutes" to listOf("accountId", "itemKey", "keptInARow", "mutedUntil"),
+            "hint_impressions" to listOf("itemId", "accountId", "canonicalKey", "shownAt", "holdout"),
+            "reminder_followups" to listOf("accountId", "isoWeek", "postedAt", "itemKeys", "holdout"),
+        )
+        expected.forEach { (table, columns) ->
+            val actual = mutableListOf<String>()
+            db.query("PRAGMA table_info($table)").use { c ->
+                while (c.moveToNext()) actual += c.getString(c.getColumnIndexOrThrow("name"))
+            }
+            assertEquals(table, columns, actual)
+        }
+
+        fun indexColumns(index: String): List<String> {
+            val cols = mutableListOf<String>()
+            db.query("PRAGMA index_info($index)").use { c ->
+                while (c.moveToNext()) cols += c.getString(c.getColumnIndexOrThrow("name"))
+            }
+            return cols
+        }
+        assertEquals(listOf("accountId", "itemKey"), indexColumns("index_purchases_accountId_itemKey"))
+        assertEquals(listOf("tickId"), indexColumns("index_purchases_tickId"))
+        db.close()
+    }
 }

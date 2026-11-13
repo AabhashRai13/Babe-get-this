@@ -27,10 +27,11 @@ class SyncMappersTest {
         pendingSync = true,
     )
 
-    private fun itemEntity(deletedAt: Long? = null) = ShoppingItemEntity(
+    private fun itemEntity(deletedAt: Long? = null, pickedUpAt: Long? = null) = ShoppingItemEntity(
         id = "item-1", listId = "list-1", name = "Milk", quantity = "2 bags",
         isPickedUp = true, categoryId = "cat-1", shop = "Costco", note = "the blue one",
         createdAt = 1L, updatedAt = 2L, deletedAt = deletedAt, pendingSync = true,
+        pickedUpAt = pickedUpAt,
     )
 
     // --- iso helpers ---
@@ -89,7 +90,41 @@ class SyncMappersTest {
         )
     }
 
+    @Test
+    fun `picked up time travels as ISO picked_up_at and null stays null`() {
+        assertEquals(iso, itemEntity(pickedUpAt = ms).toRow().pickedUpAt)
+        assertNull(itemEntity().toRow().pickedUpAt)
+    }
+
     // --- row → entity (apply direction) ---
+
+    @Test
+    fun `item row picked_up_at lands as millis and null stays null`() {
+        val row = ItemRow(id = "i", listId = "l", name = "n", quantity = "1", updatedAt = iso)
+
+        assertEquals(ms, row.copy(pickedUpAt = iso).toEntity(local = null).pickedUpAt)
+        assertNull(row.toEntity(local = null).pickedUpAt)
+    }
+
+    @Test
+    fun `a ticked item keeps this phone's tick time when the server holds another member's later one`() {
+        val row = ItemRow(id = "item-1", listId = "list-1", name = "Milk", quantity = "1", updatedAt = iso)
+            .copy(isPickedUp = true, pickedUpAt = iso)
+
+        assertEquals(ms - 5_000, row.toEntity(local = itemEntity(pickedUpAt = ms - 5_000)).pickedUpAt)
+    }
+
+    @Test
+    fun `an item not ticked here takes the server's tick time`() {
+        val row = ItemRow(id = "item-1", listId = "list-1", name = "Milk", quantity = "1", updatedAt = iso)
+            .copy(isPickedUp = true, pickedUpAt = iso)
+        val unticked = itemEntity(pickedUpAt = ms - 5_000).copy(isPickedUp = false)
+
+        assertEquals(ms, row.toEntity(local = unticked).pickedUpAt)
+        assertEquals(ms, row.toEntity(local = itemEntity(pickedUpAt = null)).pickedUpAt)
+        // Unticked on the server: nothing of this phone's is left to undo.
+        assertEquals(ms, row.copy(isPickedUp = false).toEntity(local = itemEntity(pickedUpAt = ms - 5_000)).pickedUpAt)
+    }
 
     @Test
     fun `new list row lands clean with the server clock`() {

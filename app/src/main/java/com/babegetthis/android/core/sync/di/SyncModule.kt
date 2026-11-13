@@ -14,6 +14,7 @@ import com.babegetthis.android.core.sync.data.repository.ShareRepository
 import com.babegetthis.android.core.sync.data.repository.SyncEngine
 import com.babegetthis.android.core.sync.data.repository.SyncPointStore
 import com.babegetthis.android.core.telemetry.CrashReporter
+import com.babegetthis.android.feature.gotthis.data.GotThisSync
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import dagger.Module
@@ -49,6 +50,7 @@ object SyncModule {
         remote: SharedListRemote,
         syncPoints: SyncPointStore,
         ownership: ListOwnershipStore,
+        gotThis: GotThisSync,
         authStateManager: AuthStateManager,
         crashReporter: CrashReporter,
         safeCall: SafeCall,
@@ -58,6 +60,7 @@ object SyncModule {
         remote,
         syncPoints,
         ownership,
+        gotThis,
         { authStateManager.liveSessionUserId() },
         crashReporter,
         safeCall,

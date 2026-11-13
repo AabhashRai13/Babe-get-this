@@ -10,7 +10,10 @@ import com.babegetthis.android.core.data.local.MIGRATION_1_2
 import com.babegetthis.android.core.data.local.MIGRATION_2_3
 import com.babegetthis.android.core.data.local.MIGRATION_3_4
 import com.babegetthis.android.core.data.local.MIGRATION_4_5
+import com.babegetthis.android.core.data.local.MIGRATION_5_6
 import com.babegetthis.android.core.data.local.dao.CategoryDao
+import com.babegetthis.android.feature.gotthis.data.local.dao.GotThisStateDao
+import com.babegetthis.android.feature.gotthis.data.local.dao.PurchaseDao
 import com.babegetthis.android.feature.shoppingitems.data.local.dao.ShoppingItemDao
 import com.babegetthis.android.feature.shoppinglist.data.local.dao.ShoppingListDao
 import dagger.Module
@@ -42,7 +45,7 @@ object DatabaseModule {
         AppDatabase::class.java,
         "babe_get_this.db",
     )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
@@ -62,4 +65,10 @@ object DatabaseModule {
 
     @Provides
     fun provideCategoryDao(database: AppDatabase): CategoryDao = database.categoryDao()
+
+    @Provides
+    fun providePurchaseDao(database: AppDatabase): PurchaseDao = database.purchaseDao()
+
+    @Provides
+    fun provideGotThisStateDao(database: AppDatabase): GotThisStateDao = database.gotThisStateDao()
 }

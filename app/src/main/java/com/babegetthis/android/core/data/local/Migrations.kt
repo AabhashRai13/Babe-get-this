@@ -61,3 +61,67 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
         db.execSQL("UPDATE shopping_lists SET onServer = 1 WHERE shareCode IS NOT NULL")
     }
 }
+
+// v5 -> v6: Got This. Additive: one nullable column on items and five new
+// tables (purchase history, the tick outbox, and per-phone mutes, hint
+// impressions and reminder follow-ups). Existing items start with no tick time.
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE shopping_items ADD COLUMN pickedUpAt INTEGER")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS purchases (" +
+                "id TEXT NOT NULL, " +
+                "tickId TEXT NOT NULL, " +
+                "accountId TEXT, " +
+                "sourceItemId TEXT NOT NULL, " +
+                "name TEXT NOT NULL, " +
+                "itemKey TEXT NOT NULL, " +
+                "categoryId TEXT, " +
+                "boughtAt INTEGER NOT NULL, " +
+                "deletedAt INTEGER, " +
+                "pendingUpload INTEGER NOT NULL, " +
+                "PRIMARY KEY(id))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_purchases_accountId_itemKey ON purchases (accountId, itemKey)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_purchases_tickId ON purchases (tickId)")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS tick_outbox (" +
+                "tickId TEXT NOT NULL, " +
+                "accountId TEXT NOT NULL, " +
+                "itemId TEXT NOT NULL, " +
+                "listId TEXT NOT NULL, " +
+                "tickedAt INTEGER NOT NULL, " +
+                "name TEXT NOT NULL, " +
+                "categoryId TEXT, " +
+                "undoneAt INTEGER, " +
+                "revision INTEGER NOT NULL, " +
+                "PRIMARY KEY(tickId))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS item_mutes (" +
+                "accountId TEXT NOT NULL, " +
+                "itemKey TEXT NOT NULL, " +
+                "keptInARow INTEGER NOT NULL, " +
+                "mutedUntil INTEGER, " +
+                "PRIMARY KEY(accountId, itemKey))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS hint_impressions (" +
+                "itemId TEXT NOT NULL, " +
+                "accountId TEXT NOT NULL, " +
+                "canonicalKey TEXT NOT NULL, " +
+                "shownAt INTEGER NOT NULL, " +
+                "holdout INTEGER NOT NULL, " +
+                "PRIMARY KEY(itemId))",
+        )
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS reminder_followups (" +
+                "accountId TEXT NOT NULL, " +
+                "isoWeek TEXT NOT NULL, " +
+                "postedAt INTEGER NOT NULL, " +
+                "itemKeys TEXT NOT NULL, " +
+                "holdout INTEGER NOT NULL, " +
+                "PRIMARY KEY(accountId, isoWeek))",
+        )
+    }
+}

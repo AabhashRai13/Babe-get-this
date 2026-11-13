@@ -62,14 +62,65 @@ interface ShoppingItemDao {
     @Query("DELETE FROM shopping_items WHERE id = :itemId")
     suspend fun deleteItem(itemId: String)
 
+    // A tick or untick: also records the tick time (kept on untick, so the
+    // caller passes the existing time then).
     @Query(
         """
         UPDATE shopping_items
-        SET isPickedUp = :isPickedUp, updatedAt = :updatedAt, pendingSync = :pendingSync
+        SET isPickedUp = :isPickedUp, pickedUpAt = :pickedUpAt, updatedAt = :updatedAt, pendingSync = :pendingSync
         WHERE id = :itemId
     """,
     )
-    suspend fun updatePickedUpStatus(itemId: String, isPickedUp: Boolean, updatedAt: Long, pendingSync: Boolean)
+    suspend fun setPickedUp(
+        itemId: String,
+        isPickedUp: Boolean,
+        pickedUpAt: Long?,
+        updatedAt: Long,
+        pendingSync: Boolean,
+    )
+
+    // Ticked items that predate pickedUpAt (the start-up backfill).
+    @Query(
+        "SELECT * FROM shopping_items WHERE listId = :listId AND isPickedUp = 1 AND deletedAt IS NULL AND pickedUpAt IS NULL",
+    )
+    suspend fun tickedWithoutTime(listId: String): List<ShoppingItemEntity>
+
+    // Leaves updatedAt and pendingSync alone: the backfill is not an edit.
+    @Query("UPDATE shopping_items SET pickedUpAt = :pickedUpAt WHERE id = :itemId")
+    suspend fun setPickedUpAt(itemId: String, pickedUpAt: Long)
+
+    // Names of one owner's live, unticked items (null is the guest's lists).
+    @Query(
+        """
+        SELECT i.name FROM shopping_items i
+        JOIN shopping_lists l ON l.id = i.listId
+        WHERE i.isPickedUp = 0 AND i.deletedAt IS NULL AND l.deletedAt IS NULL
+            AND (l.accountId = :accountId OR (:accountId IS NULL AND l.accountId IS NULL))
+    """,
+    )
+    fun uncheckedNames(accountId: String?): Flow<List<String>>
+
+    // Live items on PIN-locked lists: Got This must not name what was bought there.
+    @Query(
+        """
+        SELECT i.id FROM shopping_items i
+        JOIN shopping_lists l ON l.id = i.listId
+        WHERE l.isLocked = 1 AND i.deletedAt IS NULL
+    """,
+    )
+    fun lockedItemIds(): Flow<List<String>>
+
+    // Names of items added to one owner's live lists since [since], ticked or
+    // deleted afterwards or not (null is the guest's lists).
+    @Query(
+        """
+        SELECT i.name FROM shopping_items i
+        JOIN shopping_lists l ON l.id = i.listId
+        WHERE i.createdAt >= :since AND l.deletedAt IS NULL
+            AND (l.accountId = :accountId OR (:accountId IS NULL AND l.accountId IS NULL))
+    """,
+    )
+    suspend fun namesCreatedSince(accountId: String?, since: Long): List<String>
 
     // ── Sync primitives (shared lists only) — see ShoppingListDao ───────────
 

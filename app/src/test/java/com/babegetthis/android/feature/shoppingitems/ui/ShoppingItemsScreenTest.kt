@@ -21,10 +21,15 @@ import com.babegetthis.android.core.error.Result
 import com.babegetthis.android.core.pin.data.PinRepository
 import com.babegetthis.android.core.reminder.ReminderScheduler
 import com.babegetthis.android.core.ui.TestTags
+import com.babegetthis.android.feature.gotthis.data.GotThisAccess
+import com.babegetthis.android.feature.gotthis.data.GotThisRepository
+import com.babegetthis.android.feature.gotthis.data.UsualItem
+import com.babegetthis.android.feature.gotthis.ui.viewModels.GotThisViewModel
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.ShoppingItem
 import com.babegetthis.android.feature.shoppingitems.ui.viewModels.ShoppingItemsViewModel
 import com.babegetthis.android.feature.shoppinglist.data.repository.ShoppingListRepository
+import com.babegetthis.android.testing.FakeGotThisPrefs
 import com.babegetthis.android.testing.TestData
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -70,8 +75,11 @@ class ShoppingItemsScreenTest {
 
     private val itemsFlow = MutableStateFlow<List<ShoppingItem>>(emptyList())
     private var navigatedBack = false
+    private val usualsFlow = MutableStateFlow<List<UsualItem>>(emptyList())
+    private val gotThisAccess = mockk<GotThisAccess>(relaxed = true)
 
     private lateinit var viewModel: ShoppingItemsViewModel
+    private lateinit var gotThisViewModel: GotThisViewModel
 
     private fun item(id: String, name: String, isPickedUp: Boolean = false, shop: String? = null) =
         TestData.item(id = id, listId = "L1", name = name, isPickedUp = isPickedUp, shop = shop)
@@ -101,14 +109,56 @@ class ShoppingItemsScreenTest {
             analytics = mockk(relaxed = true),
             markers = mockk(relaxed = true),
             reminderScheduler = scheduler,
+            gotThisTracker = mockk(relaxed = true),
             applicationScope = CoroutineScope(UnconfinedTestDispatcher()),
+        )
+        val gotThisRepository = mockk<GotThisRepository>()
+        coEvery { gotThisRepository.ownerOf(any()) } returns null
+        every { gotThisRepository.hintsFor(any()) } returns MutableStateFlow(emptyMap())
+        every { gotThisRepository.usualsFor(any()) } returns usualsFlow
+        gotThisViewModel = GotThisViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("listId" to "L1")),
+            repository = gotThisRepository,
+            access = gotThisAccess,
+            tracker = mockk(relaxed = true),
+            itemRepository = itemRepository,
+            prefs = FakeGotThisPrefs(),
+            notificationGate = { true },
+            analytics = mockk(relaxed = true),
+            clock = { 0L },
         )
         compose.setContent {
             ShoppingItemsScreen(
                 onNavigateBack = { navigatedBack = true },
                 viewModel = viewModel,
+                gotThisViewModel = gotThisViewModel,
             )
         }
+    }
+
+    // --- Got This usuals row ---
+
+    @Test
+    fun `due regulars show above the items and a chip adds one`() {
+        every { gotThisAccess.showsRunningLow(any()) } returns true
+        usualsFlow.value = listOf(UsualItem("eggs", "Eggs", "dairy", 1))
+        coEvery { itemRepository.addItem(any(), any(), any(), any()) } returns Result.Success("new")
+        render(items = listOf(item("i1", "Milk")))
+
+        compose.onNodeWithText("Usually bought around now").assertIsDisplayed()
+        compose.onNodeWithText("+ Eggs").performClick()
+
+        coVerify { itemRepository.addItem("L1", "Eggs", "1", "dairy") }
+    }
+
+    @Test
+    fun `due regulars also show on an empty list`() {
+        every { gotThisAccess.showsRunningLow(any()) } returns true
+        usualsFlow.value = listOf(UsualItem("eggs", "Eggs", null, 1))
+        render(items = emptyList())
+
+        compose.onNodeWithText("Usually bought around now").assertIsDisplayed()
+        compose.onNodeWithText("Add your first item to get started").assertIsDisplayed()
     }
 
     // --- 5.2 states ---
@@ -203,7 +253,7 @@ class ShoppingItemsScreenTest {
 
     @Test
     fun `ticking the checkbox toggles that item`() {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         render(items = listOf(item("i1", "Milk")))
 
         compose.onNodeWithTag(TestTags.itemCheckbox("i1"))
@@ -214,7 +264,7 @@ class ShoppingItemsScreenTest {
 
     @Test
     fun `the reminder sheet shows its copy and routes both buttons`() {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         coEvery { scheduler.shouldOfferPermission(any(), any()) } returns true
         render(items = listOf(item("i1", "Milk"), item("i2", "Eggs")))
 
@@ -231,7 +281,7 @@ class ShoppingItemsScreenTest {
 
     @Test
     fun `un-ticking a picked-up item toggles it back`() {
-        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(Unit)
+        coEvery { itemRepository.togglePickedUp(any(), any()) } returns Result.Success(null)
         render(items = listOf(item("i1", "Milk", isPickedUp = true)))
 
         compose.onNodeWithTag(TestTags.itemCheckbox("i1"))

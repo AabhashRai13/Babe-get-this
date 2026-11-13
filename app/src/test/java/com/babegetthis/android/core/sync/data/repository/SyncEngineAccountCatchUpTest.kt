@@ -1,13 +1,18 @@
 package com.babegetthis.android.core.sync.data.repository
 
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.core.sync.data.mapper.isoToMillis
 import com.babegetthis.android.core.sync.data.model.ItemRow
 import com.babegetthis.android.core.sync.data.model.ListRow
+import com.babegetthis.android.feature.gotthis.data.remote.PurchaseRow
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
+import com.babegetthis.android.testing.FakeGotThisPrefs
+import com.babegetthis.android.testing.FakeGotThisRemote
 import com.babegetthis.android.testing.FakeListOwnershipStore
 import com.babegetthis.android.testing.FakeSharedListRemote
 import com.babegetthis.android.testing.FakeSyncPointStore
 import com.babegetthis.android.testing.InMemoryDatabaseRule
+import com.babegetthis.android.testing.gotThisSyncFor
 import com.babegetthis.android.testing.unreportedSafeCall
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -34,10 +39,20 @@ class SyncEngineAccountCatchUpTest {
     private val syncPoints = FakeSyncPointStore()
     private val ownership = FakeListOwnershipStore()
     private var userId: String? = "user-1"
+    private val gotThisRemote = FakeGotThisRemote()
+    private val gotThisPrefs = FakeGotThisPrefs()
     private val engine by lazy {
-        SyncEngine(dbRule.listDao, dbRule.itemDao, remote, syncPoints, ownership, {
-            userId
-        }, mockk(relaxed = true), unreportedSafeCall())
+        SyncEngine(
+            dbRule.listDao,
+            dbRule.itemDao,
+            remote,
+            syncPoints,
+            ownership,
+            gotThisSyncFor(dbRule, gotThisRemote, gotThisPrefs, syncPoints),
+            { userId },
+            mockk(relaxed = true),
+            unreportedSafeCall(),
+        )
     }
 
     private val t10 = "2026-08-01T10:00:00Z"
@@ -292,5 +307,58 @@ class SyncEngineAccountCatchUpTest {
         engine.catchUpAccount()
 
         assertNotNull(dbRule.itemDao.getItemRaw("old-item"))
+    }
+
+    private fun purchaseRow(tickId: String, boughtAt: String) = PurchaseRow(
+        id = "p-$tickId",
+        userId = "user-1",
+        tickId = tickId,
+        sourceItemId = "item-$tickId",
+        name = "Milk",
+        boughtAt = boughtAt,
+        updatedAt = boughtAt,
+    )
+
+    @Test
+    fun `purchases are fetched only once the items have landed`() = runTest {
+        seedAccountList("known")
+        gotThisRemote.purchaseRows = listOf(purchaseRow("t1", t11))
+        remote.listRows = listOf(listRow("joined"))
+        remote.failItemFetchFor = "joined"
+
+        assertTrue(engine.catchUpAccount() is Result.Error)
+        assertTrue(gotThisRemote.calls.isEmpty())
+
+        remote.failItemFetchFor = null
+        assertTrue(engine.catchUpAccount() is Result.Success)
+
+        assertEquals(listOf("fetchResetAt", "fetchPurchases"), gotThisRemote.calls)
+        assertEquals("t1", dbRule.purchaseDao.live("user-1").single().tickId)
+    }
+
+    // The reviewer's case: the clear call fails, the pull succeeds, and the
+    // server still returns what the person cleared.
+    @Test
+    fun `a failed clear followed by a catch-up does not bring back a cleared purchase`() = runTest {
+        seedAccountList("known")
+        gotThisPrefs.setPendingClear("user-1", t12.isoToMillis())
+        gotThisRemote.failClear = true
+        gotThisRemote.purchaseRows = listOf(purchaseRow("t10", t10), purchaseRow("t11", t11))
+
+        engine.push()
+        assertEquals(listOf("clearHistory"), gotThisRemote.calls)
+        assertEquals(t12.isoToMillis(), gotThisPrefs.pendingClear("user-1"))
+        engine.catchUpAccount()
+
+        assertTrue(dbRule.purchaseDao.live("user-1").isEmpty())
+    }
+
+    @Test
+    fun `a failing Got This pull does not fail the account catch-up`() = runTest {
+        seedAccountList("known")
+        gotThisRemote.failFetch = true
+
+        assertTrue(engine.catchUpAccount() is Result.Success)
+        assertEquals(listOf("fetchResetAt"), gotThisRemote.calls)
     }
 }

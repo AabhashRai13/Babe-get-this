@@ -15,6 +15,7 @@ fun ShoppingItemEntity.toDomain(categoryName: String? = null): ShoppingItem = Sh
     note = note,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    pickedUpAt = pickedUpAt,
 )
 
 fun ShoppingItem.toEntity(): ShoppingItemEntity = ShoppingItemEntity(
@@ -28,4 +29,5 @@ fun ShoppingItem.toEntity(): ShoppingItemEntity = ShoppingItemEntity(
     note = note,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    pickedUpAt = pickedUpAt,
 )

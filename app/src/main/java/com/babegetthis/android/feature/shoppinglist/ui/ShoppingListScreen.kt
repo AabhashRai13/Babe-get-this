@@ -95,6 +95,7 @@ import com.babegetthis.android.feature.shoppinglist.ui.viewModels.ShoppingListVi
 import com.babegetthis.android.ui.theme.DarkListAccentPalette
 import com.babegetthis.android.ui.theme.ListAccentColor
 import com.babegetthis.android.ui.theme.ListAccentPalette
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -102,6 +103,16 @@ private fun getAccentForList(listId: String, isDark: Boolean): ListAccentColor {
     val palette = if (isDark) DarkListAccentPalette else ListAccentPalette
     val index = abs(listId.hashCode()) % palette.size
     return palette[index]
+}
+
+internal fun applyPendingCreateList(
+    pending: Boolean,
+    showCreateDialog: MutableStateFlow<Boolean>,
+    onConsumed: () -> Unit,
+) {
+    if (!pending) return
+    showCreateDialog.value = true
+    onConsumed()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,8 +123,16 @@ fun ShoppingListScreen(
     onNavigateToLogin: () -> Unit = {},
     onNavigateToRegister: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
+    pendingCreateList: Boolean = false,
+    onPendingCreateListConsumed: () -> Unit = {},
     viewModel: ShoppingListViewModel = hiltViewModel(),
 ) {
+    // Opens the name dialog once for a request from the running-low
+    // notification; consuming it keeps a rotation from reopening it.
+    LaunchedEffect(pendingCreateList) {
+        applyPendingCreateList(pendingCreateList, viewModel.showCreateDialog, onPendingCreateListConsumed)
+    }
+
     val uiState by viewModel.uiState.collectAsState()
     val showDialog by viewModel.showCreateDialog.collectAsState()
     val editingList by viewModel.editingList.collectAsState()

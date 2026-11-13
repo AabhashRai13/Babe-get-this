@@ -1,6 +1,7 @@
 package com.babegetthis.android.feature.shoppingitems.data.repository
 
 import com.babegetthis.android.core.error.Result
+import com.babegetthis.android.feature.gotthis.data.TickStore
 import com.babegetthis.android.feature.shoppinglist.data.local.model.ShoppingListEntity
 import com.babegetthis.android.testing.FakeReminderKicker
 import com.babegetthis.android.testing.InMemoryDatabaseRule
@@ -22,8 +23,12 @@ class ShoppingItemRepositoryReminderTest {
     @get:Rule val dbRule = InMemoryDatabaseRule()
 
     private val reminders = FakeReminderKicker()
+    private val tickStore by lazy {
+        TickStore(dbRule.db, dbRule.itemDao, dbRule.listDao, dbRule.purchaseDao) { System.currentTimeMillis() }
+    }
     private val repository by lazy {
-        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {}, reminders, unreportedSafeCall())
+        ShoppingItemRepository(dbRule.itemDao, dbRule.categoryDao, dbRule.listDao, {
+        }, reminders, unreportedSafeCall(), tickStore)
     }
 
     private suspend fun seedList(accountId: String? = null) = dbRule.listDao.insertList(

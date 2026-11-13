@@ -21,6 +21,7 @@ import com.babegetthis.android.core.telemetry.model.AnalyticsEvent
 import com.babegetthis.android.core.telemetry.model.CategorySource
 import com.babegetthis.android.core.telemetry.model.InputMethod
 import com.babegetthis.android.core.voice.model.ItemDraft
+import com.babegetthis.android.feature.gotthis.data.GotThisTracker
 import com.babegetthis.android.feature.shoppingitems.data.repository.ShoppingItemRepository
 import com.babegetthis.android.feature.shoppingitems.model.CategorySection
 import com.babegetthis.android.feature.shoppingitems.model.ShopSection
@@ -60,6 +61,7 @@ class ShoppingItemsViewModel @Inject constructor(
     private val analytics: AnalyticsRepository,
     private val markers: TelemetryMarkers,
     private val reminderScheduler: ReminderScheduler,
+    private val gotThisTracker: GotThisTracker,
     @ApplicationScope private val applicationScope: CoroutineScope,
 ) : ViewModel() {
 
@@ -228,7 +230,21 @@ class ShoppingItemsViewModel @Inject constructor(
         _showReminderPrompt.value = false
     }
 
+    // Got This's "weekly heads-up" shares the system dialog but not the shopping reminder:
+    // its result must neither arm this list nor snooze the reminder prompt.
+    private var headsUpRequestPending = false
+
+    fun onHeadsUpAccepted() {
+        reminderScheduler.onPermissionRequested()
+        headsUpRequestPending = true
+        viewModelScope.launch { _events.emit(UiEvent.RequestNotificationPermission) }
+    }
+
     fun onNotificationPermissionResult(granted: Boolean) {
+        if (headsUpRequestPending) {
+            headsUpRequestPending = false
+            return
+        }
         viewModelScope.launch {
             if (granted) {
                 reminderScheduler.onPermissionGranted(listId)
@@ -450,6 +466,7 @@ class ShoppingItemsViewModel @Inject constructor(
                         }
                     }
                     onListEdited()
+                    if (isPickedUp) gotThisTracker.onItemTicked(itemId, result.data)
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
@@ -472,6 +489,7 @@ class ShoppingItemsViewModel @Inject constructor(
                     if (itemToDelete != null) {
                         _undoDeleteEvent.emit(itemToDelete.name)
                     }
+                    gotThisTracker.onItemDeleted(itemId)
                 }
                 is Result.Error -> {
                     _errorMessage.emit(result.error.message)
