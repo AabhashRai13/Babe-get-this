@@ -2,6 +2,7 @@ import React from 'react';
 import { AbsoluteFill, Still } from 'remotion';
 import { Pebble } from './kit/characters/Pebble';
 import type { Body, Face } from './kit/types';
+import { ExpressionSheet, SHEET_H, SHEET_W } from './sheets/ExpressionSheet';
 
 const flatFace: Face = {
   lid: 0, lidTilt: 0, eyeScale: 1, pupilScale: 1, look: { x: 0, y: 0 }, brow: [0, 0], browTilt: 0,
@@ -24,5 +25,6 @@ const DebugPebbles: React.FC = () => (
 export const RemotionRoot: React.FC = () => (
   <>
     <Still id="debug-pebbles" component={DebugPebbles} width={1080} height={1080} />
+    <Still id="sheet-expressions" component={ExpressionSheet} width={SHEET_W} height={SHEET_H} />
   </>
 );
