@@ -48,18 +48,23 @@ class PurchaseDaoTest {
         pendingUpload = pendingUpload,
     )
 
-    private fun outbox(tickId: String, accountId: String = "u1", listId: String = "l1", revision: Int = 1) =
-        TickOutboxEntity(
-            tickId = tickId,
-            accountId = accountId,
-            itemId = "item-$tickId",
-            listId = listId,
-            tickedAt = 1_000L,
-            name = "Milk",
-            categoryId = null,
-            undoneAt = null,
-            revision = revision,
-        )
+    private fun outbox(
+        tickId: String,
+        accountId: String = "u1",
+        listId: String = "l1",
+        revision: Int = 1,
+        tickedAt: Long = 1_000L,
+    ) = TickOutboxEntity(
+        tickId = tickId,
+        accountId = accountId,
+        itemId = "item-$tickId",
+        listId = listId,
+        tickedAt = tickedAt,
+        name = "Milk",
+        categoryId = null,
+        undoneAt = null,
+        revision = revision,
+    )
 
     @Test
     fun `keyStats counts live rows only and separates guest from account`() = runTest {
@@ -180,8 +185,22 @@ class PurchaseDaoTest {
 
         assertEquals(2, purchases.outboxByTickId("t1")?.revision)
         assertNull(purchases.outboxByTickId("missing"))
-        assertEquals(listOf("t1"), purchases.outboxBatch("u1", limit = 10).map { it.tickId })
+        val batch = purchases.outboxBatchAfter("u1", Long.MIN_VALUE, "", limit = 10)
+        assertEquals(listOf("t1"), batch.map { it.tickId })
         assertEquals(1, purchases.countOutbox("u1"))
+    }
+
+    @Test
+    fun `an outbox batch starts after the given row in tick time then tick id order`() = runTest {
+        purchases.insertOutbox(outbox("b", tickedAt = 1))
+        purchases.insertOutbox(outbox("a", tickedAt = 2))
+        purchases.insertOutbox(outbox("c", tickedAt = 2))
+        purchases.insertOutbox(outbox("d", tickedAt = 3))
+
+        val first = purchases.outboxBatchAfter("u1", Long.MIN_VALUE, "", limit = 2)
+        assertEquals(listOf("b", "a"), first.map { it.tickId })
+        assertEquals(listOf("c", "d"), purchases.outboxBatchAfter("u1", 2, "a", limit = 10).map { it.tickId })
+        assertEquals(listOf("d"), purchases.outboxBatchAfter("u1", 2, "c", limit = 10).map { it.tickId })
     }
 
     @Test

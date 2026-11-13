@@ -8,6 +8,8 @@ import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.dao.KeyStatRow
 import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
+import com.babegetthis.android.feature.gotthis.domain.Days
+import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import com.babegetthis.android.feature.gotthis.domain.HintSource
 import com.babegetthis.android.feature.gotthis.domain.ItemGroup
 import com.babegetthis.android.feature.gotthis.domain.ItemGroups
@@ -59,7 +61,7 @@ class GotThisRepository(
                     .map { items -> items.filter { !it.isPickedUp && it.deletedAt == null }.map { it.id to it.name } }
                     .distinctUntilChanged(),
                 purchaseDao.keyStats(owner).distinctUntilChanged(),
-                stateDao.observeMutes(owner ?: GUEST_STATE_ID).distinctUntilChanged(),
+                stateDao.observeMutes(owner ?: GotThisIds.GUEST_STATE_ID).distinctUntilChanged(),
             ) { unticked, rows, mutes ->
                 val now = clock.now()
                 val groups = ItemGroups.build(rows.map(::toKeyStat))
@@ -82,23 +84,25 @@ class GotThisRepository(
         }
     }
 
+    // The grouping and the purchase scan are redone only when the history
+    // changes; an item typed on a list redoes the cheap filtering alone.
     fun usualsFor(ownerId: String?): Flow<List<UsualItem>> = combine(
-        purchaseDao.keyStats(ownerId).distinctUntilChanged(),
+        purchaseDao.keyStats(ownerId).distinctUntilChanged().map { history(ownerId, it) },
         itemDao.uncheckedNames(ownerId).distinctUntilChanged(),
-        stateDao.observeMutes(ownerId ?: GUEST_STATE_ID).distinctUntilChanged(),
+        stateDao.observeMutes(ownerId ?: GotThisIds.GUEST_STATE_ID).distinctUntilChanged(),
         itemDao.lockedItemIds().distinctUntilChanged(),
-    ) { rows, names, mutes, locked ->
+    ) { history, names, mutes, locked ->
         val now = clock.now()
-        due(ownerId, rows, names, mutedKeys(mutes, now), locked.toSet(), now)
+        due(history, names, mutedKeys(mutes, now), locked.toSet(), now)
     }
 
     suspend fun dueItems(ownerId: String?, withinDays: Int): List<UsualItem> {
         val now = clock.now()
-        val rows = purchaseDao.keyStats(ownerId).first()
+        val history = history(ownerId, purchaseDao.keyStats(ownerId).first())
         val names = itemDao.uncheckedNames(ownerId).first()
-        val mutes = stateDao.mutes(ownerId ?: GUEST_STATE_ID)
+        val mutes = stateDao.mutes(ownerId ?: GotThisIds.GUEST_STATE_ID)
         val locked = itemDao.lockedItemIds().first().toSet()
-        return due(ownerId, rows, names, mutedKeys(mutes, now), locked, now + withinDays * DAY_MILLIS)
+        return due(history, names, mutedKeys(mutes, now), locked, now + withinDays * Days.DAY_MILLIS)
     }
 
     // How many of the owner's item groups are regulars, and how many live purchases there are.
@@ -121,7 +125,7 @@ class GotThisRepository(
         if (ownerId == null) {
             db.withTransaction {
                 purchaseDao.deleteAllFor(null)
-                stateDao.clearState(GUEST_STATE_ID)
+                stateDao.clearState(GotThisIds.GUEST_STATE_ID)
             }
             return
         }
@@ -136,19 +140,22 @@ class GotThisRepository(
 
     suspend fun ownerOf(listId: String): String? = listDao.getListRaw(listId)?.accountId
 
-    private suspend fun due(
-        ownerId: String?,
-        rows: List<KeyStatRow>,
+    // The owner's item groups and their live purchases by item key.
+    private class History(val groups: List<ItemGroup>, val byKey: Map<String, List<PurchaseEntity>>)
+
+    private suspend fun history(ownerId: String?, rows: List<KeyStatRow>) =
+        History(ItemGroups.build(rows.map(::toKeyStat)), purchaseDao.live(ownerId).groupBy { it.itemKey })
+
+    private fun due(
+        history: History,
         unticked: List<String>,
         muted: Set<String>,
         lockedItems: Set<String>,
         judgedAt: Long,
     ): List<UsualItem> {
-        val groups = ItemGroups.build(rows.map(::toKeyStat))
-        val onLists = unticked.mapNotNull { ItemGroups.groupFor(ItemKey.of(it), groups)?.canonicalKey }.toSet()
-        val byKey = purchaseDao.live(ownerId).groupBy { it.itemKey }
-        return groups.mapNotNull { group ->
-            val purchases = group.keys.flatMap { byKey[it].orEmpty() }
+        val onLists = unticked.mapNotNull { ItemGroups.groupFor(ItemKey.of(it), history.groups)?.canonicalKey }.toSet()
+        return history.groups.mapNotNull { group ->
+            val purchases = group.keys.flatMap { history.byKey[it].orEmpty() }
             val profile = ItemJudge.profile(
                 purchases.map { JudgedPurchase(it.boughtAt, it.categoryId) },
                 judgedAt,
@@ -179,8 +186,6 @@ class GotThisRepository(
     private fun toKeyStat(row: KeyStatRow) = KeyStat(row.itemKey, row.purchases, row.lastBoughtAt)
 
     private companion object {
-        const val GUEST_STATE_ID = ""
         const val MAX_KEYS_PER_QUERY = 900
-        const val DAY_MILLIS = 86_400_000L
     }
 }

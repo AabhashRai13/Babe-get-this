@@ -6,7 +6,7 @@ import java.util.TimeZone
 // because java.time is unavailable at minSdk 24.
 object Days {
 
-    private const val DAY_MILLIS = 86_400_000L
+    const val DAY_MILLIS = 86_400_000L
     private const val HOUR_MILLIS = 3_600_000L
 
     fun epochDay(millis: Long, tz: TimeZone): Long = Math.floorDiv(millis + tz.getOffset(millis), DAY_MILLIS)

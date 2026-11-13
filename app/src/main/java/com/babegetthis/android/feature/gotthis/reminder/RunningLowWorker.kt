@@ -19,6 +19,7 @@ import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.model.ReminderFollowUpEntity
 import com.babegetthis.android.feature.gotthis.data.remote.GotThisRemote
 import com.babegetthis.android.feature.gotthis.domain.Days
+import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import com.babegetthis.android.feature.gotthis.domain.GotThisRules
 import com.babegetthis.android.feature.gotthis.domain.ItemKey
 import com.babegetthis.android.feature.gotthis.domain.ShopDay
@@ -79,9 +80,11 @@ class RunningLowWorker @AssistedInject constructor(
         val usual = ShopDay.usualWeekday(repository.purchaseDays(owner), now, tz)
         if (usual != null && Days.weekday(Days.epochDay(now, tz) + 1) != usual) return
 
-        // Both groups need the permission, so "would have posted" in the
-        // holdout counts the same people as "posted" outside it.
-        if (!notificationGate.notificationsEnabled()) return
+        // Both groups need the permission and the channel, so "would have
+        // posted" in the holdout counts the same people as "posted" outside it.
+        // Checked before the claim: a post the system would drop must not
+        // silence the person's other phones for the week, or be logged.
+        if (!notificationGate.notificationsEnabled() || !notifier.channelEnabled()) return
         val holdout = access.shadowsRunningLow(owner)
         if (!claimWeek(owner, week)) return
 
@@ -95,7 +98,7 @@ class RunningLowWorker @AssistedInject constructor(
         }
         db.gotThisStateDao().insertFollowUp(
             ReminderFollowUpEntity(
-                accountId = owner.orEmpty(),
+                accountId = owner ?: GotThisIds.GUEST_STATE_ID,
                 isoWeek = week,
                 postedAt = now,
                 itemKeys = named.joinToString("\n") { it.canonicalKey },
@@ -107,7 +110,7 @@ class RunningLowWorker @AssistedInject constructor(
     // Seven days after a notification: did the person add any item it named?
     private suspend fun scoreFollowUps(owner: String?, now: Long) {
         val stateDao = db.gotThisStateDao()
-        stateDao.followUps(owner.orEmpty())
+        stateDao.followUps(owner ?: GotThisIds.GUEST_STATE_ID)
             .filter { it.postedAt + FOLLOW_UP_MILLIS <= now }
             .forEach { row ->
                 val keys = row.itemKeys.split("\n")
@@ -148,6 +151,6 @@ class RunningLowWorker @AssistedInject constructor(
 
     private companion object {
         const val FAILED = "running low worker"
-        const val FOLLOW_UP_MILLIS = GotThisRules.FOLLOW_UP_DAYS * 86_400_000L
+        const val FOLLOW_UP_MILLIS = GotThisRules.FOLLOW_UP_DAYS * Days.DAY_MILLIS
     }
 }

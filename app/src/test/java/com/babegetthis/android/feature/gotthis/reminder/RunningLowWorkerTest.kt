@@ -1,6 +1,7 @@
 package com.babegetthis.android.feature.gotthis.reminder
 
 import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import androidx.core.app.NotificationManagerCompat
@@ -395,6 +396,35 @@ class RunningLowWorkerTest {
         assertSilent()
         assertEquals(emptyList<String>(), remote.calls)
     }
+
+    @Test
+    fun `with the running-low channel turned off nothing is claimed or logged`() = runTest {
+        blockChannel()
+        weekly()
+
+        run()
+
+        assertSilent()
+        assertEquals(emptyList<String>(), remote.claimedWeeks)
+    }
+
+    @Test
+    fun `a holdout person with the channel turned off logs nothing and claims nothing`() = runTest {
+        storedOwner = StoredOwner { holdoutUser }
+        remote.sessionUser = holdoutUser
+        blockChannel()
+        weekly()
+
+        run()
+
+        assertSilent()
+        assertEquals(emptyList<String>(), remote.claimedWeeks)
+        assertEquals(emptyList<ReminderFollowUpEntity>(), dbRule.stateDao.followUps(holdoutUser))
+    }
+
+    private fun blockChannel() = manager.createNotificationChannel(
+        NotificationChannel(RunningLowNotifier.CHANNEL_ID, "Running low", NotificationManager.IMPORTANCE_NONE),
+    )
 
     @Test
     fun `a holdout person gets no notification but the week is claimed and logged`() = runTest {

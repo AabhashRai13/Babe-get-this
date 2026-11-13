@@ -56,7 +56,7 @@ Recorded with the alternative that was rejected, so they are not re-argued.
 | D11 | **Item matching is conservative**: clean the name, then match exactly or by one typo. | Fuzzy matching on word overlap — "milk" would match "coconut milk". A missed match costs one missing hint; a wrong match puts a wrong one on every list. |
 | D12 | **Doubt means silence** (as in the reminders spec, D9): an item that does not meet every rule shows nothing, and a notification that cannot be confirmed as the person's only one this week is not sent. | Hedged suggestions for borderline items — wrong reminders train people to ignore all of them. |
 | D13 | **Nothing is counted for Plus in this release. When Plus ships, everyone using the app at that point starts with the Plus trial.** | Count free weeks now on the phone — lost on reinstall and doubled across two phones. Count them on the server — a table and an RPC built for a product that does not exist yet, when a trial for everyone keeps the same promise. |
-| D14 | **A 10% holdout per person for the first 8 weeks after release**: history is recorded, nothing is shown, and telemetry logs what would have been shown. A signed-in person's group comes from their account id; a guest's from a number drawn once on the phone. The holdout ends when the `got_this_holdout` flag is switched off. | No holdout — nothing to compare removal and add rates against. Per install — one person's two phones could land in different groups. A holdout period per person — new users after the measurement window would sit in it for no purpose. |
+| D14 | **A 10% holdout per person, built in but off at release**: history is recorded, nothing is shown, and telemetry logs what would have been shown. A signed-in person's group comes from their account id; a guest's from a number drawn once on the phone. It runs while the `got_this_holdout` flag is on. With the current small user base it only hides the feature from someone at random, so the release ships with the flag off (no row); it is switched on for 8 weeks once there are enough users to compare the groups. | No holdout — nothing to compare removal and add rates against. Per install — one person's two phones could land in different groups. A holdout period per person — new users after the measurement window would sit in it for no purpose. |
 | D15 | **Clearing history deletes it.** The person's purchases up to the moment they pressed Clear are deleted on the server and every phone, along with what was learned from them on the phone. A reset time, which only ever moves forward, stops older ticks still waiting on an offline phone from bringing them back. Purchases after the reset are kept. Tick events not yet sent are **not** cleared: they still owe other people on the list their purchases, and the reset stops them creating the person's own. | A tombstone that blanks the name — keeps item ids, categories and times, so it is not what "clear" says. Clearing on one phone only — the next sync brings it back. Deleting everything on each phone when a reset arrives — loses ticks made after it. Dropping unsent tick events with the history — the partner would never get the milk this person bought. |
 | D16 | **"At most one notification a week" is per person.** A signed-in phone claims the week on the server before posting; whichever phone claims first posts. Guests count on the phone. | Per phone — two phones on one account would both post. |
 | D17 | **The database triggers and RPCs have executable tests** (pgTAP, run in CI against a local Supabase). | Manual checks written as SQL comments, as in earlier migrations — the history rules live in those functions, and a regression there produces plausible wrong answers that no UI test notices. |
@@ -411,7 +411,10 @@ Kotlin and SQL.
 of the current or most recent tick. It is never cleared by an untick.
 
 `ItemRow` gains `@SerialName("picked_up_at") pickedUpAt: String?`;
-`ItemRow.toEntity` and the push mapper copy it.
+`ItemRow.toEntity` and the push mapper copy it. A pulled row that is ticked,
+for an item already ticked on this phone, keeps the phone's own time: the
+server holds the latest of two members' ticks, and an untick must undo this
+phone's tick, not the other member's.
 
 New table `purchases`:
 
@@ -639,9 +642,14 @@ Then, after the existing item push, in this order:
    pending clear, unless Clear was pressed again meanwhile. If the server
    answers with a later reset than the phone had applied (another phone
    cleared since), the phone applies it at once, exactly as a pulled reset
-   is applied, before storing it. On failure the push carries on with the next steps and
-   the clear is sent again next time.
-2. `tick_outbox` rows go to `record_ticks` in batches of 500. Accepted and
+   is applied, before storing it. If the reset is earlier than the time
+   sent (the server clamps it to its own clock, so the phone's clock was
+   ahead), the purchases sync point is dropped too: pulls in between kept rows
+   from between the two times out while moving the point past them. On
+   failure the push carries on with the next steps and the clear is sent
+   again next time.
+2. `tick_outbox` rows go to `record_ticks` in batches of 500, each read on
+   from the last row sent (by tick time, then tick id). Accepted and
    rejected rows are deleted only if their `revision` is unchanged since they
    were read, so an undo made during the call is sent next time. Rows to
    retry stay. A live purchase whose event was rejected (and not more than
@@ -653,7 +661,8 @@ Then, after the existing item push, in this order:
    `upload_own_purchases` in batches of 500.
 
 `hasUnsyncedChanges` also counts outbox rows, `pendingUpload` purchases and a
-pending clear for the account (D20).
+pending clear for the account (D20), except while the kill switch is off:
+push sends none of them then, so going online could not clear the warning.
 
 Item rows carry `picked_up_at` as before. An untick sends the same
 `picked_up_at`, which changes nothing on the server.
@@ -773,11 +782,13 @@ bias is under one part in 40 million. A guest uses the phone's drawn number
 (0–99). Below 10 means holdout, while the `got_this_holdout` flag is on. A
 guest who signs in takes the account's number, so they may change group once;
 every event carries `holdout`, so the analysis follows them. The flag is
-switched off 8 weeks after release, which ends the holdout for everyone.
+off at release (D14); once switched on, it is switched off again after 8
+weeks, which ends the holdout for everyone.
 
 The holdout is measured under the same conditions as everyone else, so the
 two groups differ only in what is shown: the "kept twice" mute applies to it
-too, a "would have posted" is logged only when notifications are allowed,
+too, a "would have posted" is logged only when notifications are allowed
+and the running-low channel is not turned off,
 and a "would have shown" only when the matching Settings switch is on.
 
 ### Targets, to review 4 weeks after release
@@ -807,7 +818,9 @@ the thresholds. Without a usable dataset, the release relies on
   pending clear, purchases pull). Recording on the phone continues and the
   queues are sent once it is on again. A missing row reads as off, so the row
   is inserted as `true` at release.
-- `got_this_holdout`: on at release, off after 8 weeks (D14).
+- `got_this_holdout`: off at release, by leaving the row out (a missing row
+  reads as off). Switched on for 8 weeks once the user base is large enough
+  (D14).
 
 Both are copied to `GotThisPrefs` when the flags load in the UI process, and
 every reader, including the background worker, uses that copy: the flag

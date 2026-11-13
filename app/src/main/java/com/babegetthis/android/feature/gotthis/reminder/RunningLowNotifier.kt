@@ -38,6 +38,14 @@ class RunningLowNotifier(private val context: Context, private val notifications
         return res.getString(R.string.got_this_notification_title) to body
     }
 
+    /**
+     * False when the person turned this channel off in the system settings: a
+     * post would be dropped silently. A channel not created yet (nothing posted)
+     * is on, and before Android 8 there are no channels.
+     */
+    fun channelEnabled(): Boolean =
+        notifications.getNotificationChannelCompat(CHANNEL_ID)?.importance != NotificationManagerCompat.IMPORTANCE_NONE
+
     // POST_NOTIFICATIONS is checked by the caller: RunningLowWorker only posts
     // after areNotificationsEnabled() said yes.
     @SuppressLint("MissingPermission")

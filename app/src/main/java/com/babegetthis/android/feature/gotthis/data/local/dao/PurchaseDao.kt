@@ -6,7 +6,11 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.babegetthis.android.feature.gotthis.data.local.model.PurchaseEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.TickOutboxEntity
+import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import kotlinx.coroutines.flow.Flow
+
+// The guest's accountId in the state tables, for the queries below.
+private const val GUEST = GotThisIds.GUEST_STATE_ID
 
 data class KeyStatRow(val itemKey: String, val purchases: Int, val lastBoughtAt: Long)
 
@@ -76,9 +80,9 @@ interface PurchaseDao {
         """
         SELECT accountId FROM purchases WHERE accountId IS NOT NULL AND accountId != :userId
         UNION SELECT accountId FROM tick_outbox WHERE accountId != :userId
-        UNION SELECT accountId FROM item_mutes WHERE accountId != '' AND accountId != :userId
-        UNION SELECT accountId FROM hint_impressions WHERE accountId != '' AND accountId != :userId
-        UNION SELECT accountId FROM reminder_followups WHERE accountId != '' AND accountId != :userId
+        UNION SELECT accountId FROM item_mutes WHERE accountId != '$GUEST' AND accountId != :userId
+        UNION SELECT accountId FROM hint_impressions WHERE accountId != '$GUEST' AND accountId != :userId
+        UNION SELECT accountId FROM reminder_followups WHERE accountId != '$GUEST' AND accountId != :userId
     """,
     )
     suspend fun otherAccountIds(userId: String): List<String>
@@ -125,8 +129,21 @@ interface PurchaseDao {
     @Query("SELECT * FROM tick_outbox WHERE tickId = :tickId")
     suspend fun outboxByTickId(tickId: String): TickOutboxEntity?
 
-    @Query("SELECT * FROM tick_outbox WHERE accountId = :accountId ORDER BY tickedAt, tickId LIMIT :limit")
-    suspend fun outboxBatch(accountId: String, limit: Int): List<TickOutboxEntity>
+    // Keyset paging: the rows after (afterTickedAt, afterTickId) in send order.
+    @Query(
+        """
+        SELECT * FROM tick_outbox
+        WHERE accountId = :accountId
+            AND (tickedAt > :afterTickedAt OR (tickedAt = :afterTickedAt AND tickId > :afterTickId))
+        ORDER BY tickedAt, tickId LIMIT :limit
+    """,
+    )
+    suspend fun outboxBatchAfter(
+        accountId: String,
+        afterTickedAt: Long,
+        afterTickId: String,
+        limit: Int,
+    ): List<TickOutboxEntity>
 
     // Compare-and-delete: a change after the push read bumped the revision, so
     // the row stays for the next push. Returns the rows deleted.

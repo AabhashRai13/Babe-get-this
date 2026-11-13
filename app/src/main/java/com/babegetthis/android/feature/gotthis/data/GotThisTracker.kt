@@ -11,6 +11,7 @@ import com.babegetthis.android.feature.gotthis.data.local.GotThisPrefs
 import com.babegetthis.android.feature.gotthis.data.local.model.HintImpressionEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.domain.Days
+import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import com.babegetthis.android.feature.gotthis.domain.GotThisRules
 import com.babegetthis.android.feature.gotthis.domain.ItemGroups
 import com.babegetthis.android.feature.gotthis.domain.ItemJudge
@@ -45,7 +46,8 @@ class GotThisTracker(
         val holdout = access.isHoldout(ownerId)
         val now = clock.now()
         hints.forEach { hint ->
-            val row = HintImpressionEntity(hint.itemId, ownerId ?: GUEST_STATE_ID, hint.canonicalKey, now, holdout)
+            val accountId = ownerId ?: GotThisIds.GUEST_STATE_ID
+            val row = HintImpressionEntity(hint.itemId, accountId, hint.canonicalKey, now, holdout)
             if (stateDao.insertImpressionIfAbsent(row) != ABSENT) {
                 analytics.track(AnalyticsEvent.GotThisHintShown(hint.source, hint.daysAgo, holdout))
             }
@@ -110,7 +112,7 @@ class GotThisTracker(
         stateDao.upsertMute(row)
     }
 
-    private fun muteEnd(): Long = clock.now() + GotThisRules.MUTE_DAYS * DAY_MILLIS
+    private fun muteEnd(): Long = clock.now() + GotThisRules.MUTE_DAYS * Days.DAY_MILLIS
 
     // Scored on the phone that ticked: the history is read after the tick wrote its purchase.
     private suspend fun scorePrediction(tick: TickResult) {
@@ -127,8 +129,6 @@ class GotThisTracker(
 
     private companion object {
         const val ABSENT = -1L
-        const val DAY_MILLIS = 86_400_000L
-        const val GUEST_STATE_ID = ""
         const val FAILED = "Got This telemetry failed"
     }
 }

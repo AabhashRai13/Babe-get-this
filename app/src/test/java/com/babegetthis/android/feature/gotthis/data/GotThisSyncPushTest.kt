@@ -172,6 +172,36 @@ class GotThisSyncPushTest {
     }
 
     @Test
+    fun `a clear answered with an earlier reset than sent drops the point even when that reset is already applied`() =
+        runTest {
+            val earlier = now - 2 * day
+            val pending = now - day
+            // The server's clock is behind this phone's: it clamps the reset to an
+            // earlier reset this phone has already applied.
+            prefs.setLastAppliedReset("u1", earlier)
+            prefs.setPendingClear("u1", pending)
+            remote.clearReply = { earlier.millisToIso() }
+            syncPoints.set("purchases:u1", "2026-10-01T00:00:00Z")
+
+            sync.push("u1")
+
+            assertNull(syncPoints.get("purchases:u1"))
+            assertEquals(earlier, prefs.lastAppliedReset("u1"))
+            assertNull(prefs.pendingClear("u1"))
+        }
+
+    @Test
+    fun `a clear answered with the time sent keeps the point`() = runTest {
+        prefs.setLastAppliedReset("u1", now - day)
+        prefs.setPendingClear("u1", now - day)
+        syncPoints.set("purchases:u1", "2026-10-01T00:00:00Z")
+
+        sync.push("u1")
+
+        assertEquals("2026-10-01T00:00:00Z", syncPoints.get("purchases:u1"))
+    }
+
+    @Test
     fun `cancellation during the clear is not swallowed`() = runTest {
         prefs.setPendingClear("u1", now - day)
         remote.clearFailure = kotlinx.coroutines.CancellationException("cancelled")
@@ -320,6 +350,11 @@ class GotThisSyncPushTest {
         sync.push("u1")
 
         assertTrue(remote.calls.isEmpty())
+        assertEquals(1, dao.countOutbox("u1"))
+        assertEquals(1, dao.countPendingUploads("u1"))
+        assertEquals(now, prefs.pendingClear("u1"))
+        // Counted again once switched on.
+        prefs.killed = false
         assertEquals(3, sync.unsyncedCount("u1"))
     }
 
@@ -408,5 +443,15 @@ class GotThisSyncPushTest {
 
         prefs.setPendingClear("u1", now)
         assertEquals(1, sync.unsyncedCount("u1"))
+    }
+
+    @Test
+    fun `unsynced count is 0 while the feature is killed, since push cannot send it`() = runTest {
+        outbox("t1")
+        purchase("t2", pendingUpload = true)
+        prefs.setPendingClear("u1", now)
+        prefs.killed = true
+
+        assertEquals(0, sync.unsyncedCount("u1"))
     }
 }

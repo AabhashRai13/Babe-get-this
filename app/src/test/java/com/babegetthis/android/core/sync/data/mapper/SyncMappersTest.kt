@@ -107,6 +107,26 @@ class SyncMappersTest {
     }
 
     @Test
+    fun `a ticked item keeps this phone's tick time when the server holds another member's later one`() {
+        val row = ItemRow(id = "item-1", listId = "list-1", name = "Milk", quantity = "1", updatedAt = iso)
+            .copy(isPickedUp = true, pickedUpAt = iso)
+
+        assertEquals(ms - 5_000, row.toEntity(local = itemEntity(pickedUpAt = ms - 5_000)).pickedUpAt)
+    }
+
+    @Test
+    fun `an item not ticked here takes the server's tick time`() {
+        val row = ItemRow(id = "item-1", listId = "list-1", name = "Milk", quantity = "1", updatedAt = iso)
+            .copy(isPickedUp = true, pickedUpAt = iso)
+        val unticked = itemEntity(pickedUpAt = ms - 5_000).copy(isPickedUp = false)
+
+        assertEquals(ms, row.toEntity(local = unticked).pickedUpAt)
+        assertEquals(ms, row.toEntity(local = itemEntity(pickedUpAt = null)).pickedUpAt)
+        // Unticked on the server: nothing of this phone's is left to undo.
+        assertEquals(ms, row.copy(isPickedUp = false).toEntity(local = itemEntity(pickedUpAt = ms - 5_000)).pickedUpAt)
+    }
+
+    @Test
     fun `new list row lands clean with the server clock`() {
         val entity = ListRow(
             id = "list-1",

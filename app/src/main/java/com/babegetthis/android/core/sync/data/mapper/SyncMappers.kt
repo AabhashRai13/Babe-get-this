@@ -78,6 +78,12 @@ fun ItemRow.toEntity(local: ShoppingItemEntity?): ShoppingItemEntity {
         updatedAt = serverMs,
         deletedAt = deletedAt?.isoToMillis(),
         pendingSync = false,
-        pickedUpAt = pickedUpAt?.isoToMillis(),
+        pickedUpAt = keptTickTime(local) ?: pickedUpAt?.isoToMillis(),
     )
 }
+
+// The server keeps the latest tick time when two phones tick the same item. A
+// phone that ticked it keeps its own, so an untick undoes this phone's tick
+// (TickStore.untick), never another member's.
+private fun ItemRow.keptTickTime(local: ShoppingItemEntity?): Long? =
+    if (isPickedUp && local?.isPickedUp == true) local.pickedUpAt else null

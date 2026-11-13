@@ -8,7 +8,11 @@ import androidx.room.Transaction
 import com.babegetthis.android.feature.gotthis.data.local.model.HintImpressionEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.ItemMuteEntity
 import com.babegetthis.android.feature.gotthis.data.local.model.ReminderFollowUpEntity
+import com.babegetthis.android.feature.gotthis.domain.GotThisIds
 import kotlinx.coroutines.flow.Flow
+
+// The guest's accountId in the state tables, for the queries below.
+private const val GUEST = GotThisIds.GUEST_STATE_ID
 
 // Small per-phone state, never synced. Guests use "" as accountId.
 @Dao
@@ -56,13 +60,13 @@ interface GotThisStateDao {
     suspend fun deleteFollowUps(accountId: String)
 
     // Sign-out: every account's state, the guest's ("") stays.
-    @Query("DELETE FROM item_mutes WHERE accountId != ''")
+    @Query("DELETE FROM item_mutes WHERE accountId != '$GUEST'")
     suspend fun deleteAccountMutes()
 
-    @Query("DELETE FROM hint_impressions WHERE accountId != ''")
+    @Query("DELETE FROM hint_impressions WHERE accountId != '$GUEST'")
     suspend fun deleteAccountImpressions()
 
-    @Query("DELETE FROM reminder_followups WHERE accountId != ''")
+    @Query("DELETE FROM reminder_followups WHERE accountId != '$GUEST'")
     suspend fun deleteAccountFollowUps()
 
     @Transaction
@@ -73,13 +77,13 @@ interface GotThisStateDao {
     }
 
     // Another account signed in over a lost session; the guest's ("") stays.
-    @Query("DELETE FROM item_mutes WHERE accountId != '' AND accountId != :userId")
+    @Query("DELETE FROM item_mutes WHERE accountId != '$GUEST' AND accountId != :userId")
     suspend fun deleteOtherMutes(userId: String)
 
-    @Query("DELETE FROM hint_impressions WHERE accountId != '' AND accountId != :userId")
+    @Query("DELETE FROM hint_impressions WHERE accountId != '$GUEST' AND accountId != :userId")
     suspend fun deleteOtherImpressions(userId: String)
 
-    @Query("DELETE FROM reminder_followups WHERE accountId != '' AND accountId != :userId")
+    @Query("DELETE FROM reminder_followups WHERE accountId != '$GUEST' AND accountId != :userId")
     suspend fun deleteOtherFollowUps(userId: String)
 
     @Transaction
@@ -115,13 +119,13 @@ interface GotThisStateDao {
 
     // OR IGNORE: where the account already has the same key, its row stays and
     // the guest's is dropped by the clearState of "" below.
-    @Query("UPDATE OR IGNORE item_mutes SET accountId = :toAccountId WHERE accountId = ''")
+    @Query("UPDATE OR IGNORE item_mutes SET accountId = :toAccountId WHERE accountId = '$GUEST'")
     suspend fun moveGuestMutes(toAccountId: String)
 
-    @Query("UPDATE hint_impressions SET accountId = :toAccountId WHERE accountId = ''")
+    @Query("UPDATE hint_impressions SET accountId = :toAccountId WHERE accountId = '$GUEST'")
     suspend fun moveGuestImpressions(toAccountId: String)
 
-    @Query("UPDATE OR IGNORE reminder_followups SET accountId = :toAccountId WHERE accountId = ''")
+    @Query("UPDATE OR IGNORE reminder_followups SET accountId = :toAccountId WHERE accountId = '$GUEST'")
     suspend fun moveGuestFollowUps(toAccountId: String)
 
     @Transaction

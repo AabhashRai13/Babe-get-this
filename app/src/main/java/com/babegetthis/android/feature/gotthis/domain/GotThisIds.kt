@@ -8,6 +8,10 @@ import java.util.Locale
 // like a UUID (8-4-4-4-12) but with no version bits.
 object GotThisIds {
 
+    // The accountId of the guest's mutes, impressions and follow-ups, which
+    // have no nullable key. Purchases mark the guest with a null accountId.
+    const val GUEST_STATE_ID = ""
+
     fun tickId(itemId: String, tickedAtMillis: Long): String = md5Uuid("$itemId:$tickedAtMillis")
 
     fun purchaseId(userId: String, tickId: String): String = md5Uuid("$userId:$tickId")

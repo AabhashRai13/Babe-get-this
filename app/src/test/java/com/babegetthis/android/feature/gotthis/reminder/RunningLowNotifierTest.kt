@@ -117,6 +117,20 @@ class RunningLowNotifierTest {
     }
 
     @Test
+    fun `the channel is on until the person turns it off`() {
+        assertTrue(notifier.channelEnabled())
+        notifier.post(listOf("Eggs"), 0, null)
+        assertTrue(notifier.channelEnabled())
+
+        manager.deleteNotificationChannel(RunningLowNotifier.CHANNEL_ID)
+        manager.createNotificationChannel(
+            NotificationChannel(RunningLowNotifier.CHANNEL_ID, "Running low", NotificationManager.IMPORTANCE_NONE),
+        )
+
+        assertFalse(notifier.channelEnabled())
+    }
+
+    @Test
     fun `it has its own channel, created once`() {
         notifier.post(listOf("Eggs"), 0, null)
         notifier.post(listOf("Milk"), 0, null)

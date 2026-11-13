@@ -59,9 +59,14 @@ class GotThisSync(
         pushOwnPurchases(userId)
     }
 
-    suspend fun unsyncedCount(accountId: String): Int = purchaseDao.countOutbox(accountId) +
-        purchaseDao.countPendingUploads(accountId) +
-        if (prefs.pendingClear(accountId) != null) 1 else 0
+    // Switched off, push sends none of it, so going online could never clear a
+    // sign-out warning about it (SyncEngine.hasUnsyncedChanges).
+    suspend fun unsyncedCount(accountId: String): Int {
+        if (prefs.killed) return 0
+        return purchaseDao.countOutbox(accountId) +
+            purchaseDao.countPendingUploads(accountId) +
+            if (prefs.pendingClear(accountId) != null) 1 else 0
+    }
 
     // Brings purchases down behind the account's watermark (I6): nothing at or
     // before the last applied reset or the pending clear is ever written, even
@@ -177,8 +182,13 @@ class GotThisSync(
     private suspend fun pushPendingClear(userId: String) {
         val pending = prefs.pendingClear(userId) ?: return
         try {
-            val resetAt = remote.clearHistory(pending.millisToIso())
-            applyReset(userId, resetAt.isoToMillis())
+            val resetAt = remote.clearHistory(pending.millisToIso()).isoToMillis()
+            applyReset(userId, resetAt)
+            // The server clamps the reset to its own clock. A phone clock ahead of
+            // it kept rows between the two out of earlier pulls while moving the
+            // point past them, and applyReset leaves the point when an earlier
+            // reset already covers this one, so they must be fetched again.
+            if (resetAt < pending) syncPoints.remove(point(userId))
             // A Clear pressed during the call replaced the pending time; it is not sent yet.
             if (prefs.pendingClear(userId) == pending) prefs.setPendingClear(userId, null)
         } catch (e: CancellationException) {
@@ -195,15 +205,16 @@ class GotThisSync(
         val cutoff = clock.now() - GotThisRules.PAST_ACCEPT_MILLIS
         purchaseDao.markPendingUploadForOutboxTickedBefore(userId, cutoff)
         purchaseDao.deleteOutboxTickedBefore(userId, cutoff)
-        // Rows sent in this push. Retry rows and rows changed during the call
-        // stay in the table, so without this the loop would read them forever.
-        val sent = mutableSetOf<String>()
+        // Reads on from the last row sent in this push. Retry rows and rows
+        // changed during the call stay in the table, so reading from the start
+        // would send them again and never end.
+        var afterTickedAt = Long.MIN_VALUE
+        var afterTickId = ""
         while (true) {
-            val batch = purchaseDao.outboxBatch(userId, sent.size + GotThisRules.PUSH_BATCH_SIZE)
-                .filter { it.tickId !in sent }
-                .take(GotThisRules.PUSH_BATCH_SIZE)
+            val batch = purchaseDao.outboxBatchAfter(userId, afterTickedAt, afterTickId, GotThisRules.PUSH_BATCH_SIZE)
             if (batch.isEmpty()) return
-            sent += batch.map { it.tickId }
+            afterTickedAt = batch.last().tickedAt
+            afterTickId = batch.last().tickId
             val reply = remote.recordTicks(batch.map { it.toRow() })
             val finished = (reply.accepted + reply.rejected).toSet()
             val farFuture = clock.now() + GotThisRules.FUTURE_REJECT_MILLIS
