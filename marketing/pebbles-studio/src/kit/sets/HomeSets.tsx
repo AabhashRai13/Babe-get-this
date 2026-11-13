@@ -169,8 +169,20 @@ export const AisleBack: React.FC = () => {
 
 export const Trolley: React.FC<{ x: number; s?: number }> = ({ x, s = 1 }) => (
   <g transform={`translate(${x} ${FLOOR_Y}) scale(${s})`} stroke="#6B5E55" strokeLinecap="round" strokeLinejoin="round" fill="none">
-    <rect x={-60} y={-330} width={30} height={90} rx={10} fill="#D9A86C" stroke="none" transform="rotate(-15 -45 -285)" />
-    <path d="M -20 -320 q 20 -60 50 -10 q -30 -10 -30 20 Z" fill="#7FA36B" stroke="none" />
+    {/* an overflowing load: cereal, milk, bottles, bananas, bread, greens */}
+    <g stroke="none">
+      <rect x={-118} y={-420} width={70} height={120} rx={6} fill="#E07A5F" transform="rotate(-8 -83 -360)" />
+      <rect x={-108} y={-395} width={50} height={22} rx={4} fill="rgba(255,255,255,0.6)" transform="rotate(-8 -83 -360)" />
+      <rect x={-40} y={-400} width={52} height={100} rx={8} fill="#F4F1DE" />
+      <path d="M -40 -400 l 26 -24 l 26 24 Z" fill="#E9E4CC" />
+      <rect x={-34} y={-370} width={40} height={26} rx={4} fill="#81B29A" />
+      <rect x={20} y={-430} width={30} height={130} rx={14} fill="#A3C4A0" />
+      <rect x={28} y={-458} width={14} height={30} rx={5} fill="#7A9E6C" />
+      <rect x={58} y={-395} width={64} height={95} rx={10} fill="#F2CC8F" transform="rotate(10 90 -347)" />
+      <path d="M -10 -315 q 40 -50 95 -25 q -45 -6 -90 40 Z" fill="#F2CC8F" stroke="#D9A86C" strokeWidth={3} />
+      <rect x={-75} y={-345} width={34} height={100} rx={12} fill="#D9A86C" transform="rotate(-25 -58 -295)" />
+      <path d="M 95 -330 q 30 -70 60 -20 q -40 -12 -45 30 Z" fill="#7FA36B" />
+    </g>
     <path d="M -130 -300 H 130 L 105 -120 H -105 Z" strokeWidth={10} />
     {[-80, -30, 20, 70].map((vx) => <line key={vx} x1={vx} y1={-300} x2={vx * 0.82} y2={-120} strokeWidth={5} />)}
     <line x1={-120} y1={-240} x2={120} y2={-240} strokeWidth={5} />
