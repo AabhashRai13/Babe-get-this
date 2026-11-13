@@ -3,10 +3,16 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validateScript } from '../src/kit/timeline';
 import { VIDEOS } from '../src/videos';
+import template from '../src/videos/_template/script';
 
 describe('registered videos', () => {
   it('includes the Spanish-song remake', () => {
     expect(VIDEOS.map((v) => v.slug)).toContain('2026-11-12-spanish-song');
+  });
+
+  it('the template is a valid example and is not registered', () => {
+    expect(validateScript(template)).toEqual([]);
+    expect(VIDEOS.map((v) => v.slug)).not.toContain(template.slug);
   });
 
   for (const v of VIDEOS) {

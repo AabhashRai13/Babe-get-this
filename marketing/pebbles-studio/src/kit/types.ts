@@ -49,7 +49,8 @@ export interface CastState {
   expression?: ExpressionName | Partial<Face>;
   pose?: PoseName;
   look?: Look;
-  holding?: PropName;
+  /** A held prop; `null` drops it (undefined would be lost when Remotion serialises props). */
+  holding?: PropName | null;
   headphones?: boolean;
   facing?: 'left' | 'right';
 }

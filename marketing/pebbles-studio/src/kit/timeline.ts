@@ -104,7 +104,7 @@ function apply(r: Running, c: CastState | undefined, at: number, eased: boolean)
   }
   if (c.pose !== undefined && c.pose !== r.pose) { r.pose = c.pose; r.poseSince = at; }
   if (c.look !== undefined) r.look = c.look;
-  if ('holding' in c) r.holding = c.holding;
+  if (c.holding !== undefined) r.holding = c.holding ?? undefined;
   if (c.headphones !== undefined) r.headphones = c.headphones;
   if (c.facing !== undefined) r.facing = c.facing;
 }

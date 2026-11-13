@@ -115,6 +115,16 @@ describe('resolveAt', () => {
     expect(validateScript(s).join(' ')).toMatch(/shot 1.*not on screen/);
   });
 
+  it('holding: null drops the prop, even after the JSON round-trip Remotion does on props', () => {
+    const t = video({ ...fixture(), shots: [
+      { at: 0, set: 'kitchen', frame: 'single-mr', mr: { holding: 'phone' } },
+      { at: 2, set: 'kitchen', frame: 'single-mr', mr: { holding: null } },
+    ] });
+    const viaJson = JSON.parse(JSON.stringify(t));
+    expect(resolveAt(viaJson, 1).cast.mr!.holding).toBe('phone');
+    expect(resolveAt(viaJson, 3).cast.mr!.holding).toBeUndefined();
+  });
+
   it('look other points toward the other character', () => {
     const t = video({ ...fixture(), shots: [{ at: 0, set: 'couch', frame: 'two-shot', mr: { look: 'other' }, mrs: { look: 'other' } }] });
     const r = resolveAt(t, 1);
