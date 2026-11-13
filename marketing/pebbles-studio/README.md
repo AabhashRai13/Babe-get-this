@@ -15,6 +15,7 @@ This repo is public. Audio, reference clips and renders live only on the Mac:
     <audio file>                       named by the script's `audio` field
     out/reel.mp4                       written by npm run render
     out/no-sound.mp4                   same picture, no audio
+  assets/                              PNG exports (npm run assets)
   _sheets/                             expression, pose and set sheets
 ```
 
@@ -83,6 +84,7 @@ In standing sets (kitchen, aisle), `sit` is drawn as standing. On the couch and 
 | Command | What it does |
 |---|---|
 | `npm run render <slug>` | Stages the audio, builds the lip-sync envelope, renders `reel.mp4` (H.264 High, BT.709, AAC 44.1 kHz), then writes `no-sound.mp4`. |
+| `npm run assets` | Exports every expression and pose for both Pebbles as transparent PNGs (1400×1900, characters at 2×; the hug is one 1800×1900 file), plus empty kitchen, couch, aisle and paper backdrops (1080×1920), to `~/Documents/Pebbles Videos/assets/`. Re-run it after changing the art. |
 | `npm run sheets` | Renders the expression, pose and set sheets to `_sheets/`. |
 | `npm run smoke` | Typecheck, tests, then the sheets. Needs no audio. |
 | `npm run studio` | Remotion Studio preview. |

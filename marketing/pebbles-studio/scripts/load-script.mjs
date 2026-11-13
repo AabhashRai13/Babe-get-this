@@ -8,13 +8,18 @@ import { pathToFileURL } from 'node:url';
 import { analyzeAudio } from './analyze.mjs';
 import { KIT, stageAudio } from './media.mjs';
 
+/** Import a TypeScript module from the kit in Node (bundled with esbuild). */
+export async function importTs(entry) {
+  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pebbles-ts-')), 'mod.mjs');
+  await build({ entryPoints: [entry], bundle: true, format: 'esm', platform: 'node', outfile: out, logLevel: 'silent' });
+  return import(pathToFileURL(out).href);
+}
+
 /** The script object for src/videos/<slug>/script.ts. Throws the script's own validation error if it is invalid. */
 export async function loadScript(slug) {
   const entry = path.join(KIT, 'src', 'videos', slug, 'script.ts');
   if (!fs.existsSync(entry)) throw new Error(`No script at ${entry}`);
-  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pebbles-script-')), 'script.mjs');
-  await build({ entryPoints: [entry], bundle: true, format: 'esm', platform: 'node', outfile: out, logLevel: 'silent' });
-  const mod = await import(pathToFileURL(out).href);
+  const mod = await importTs(entry);
   const script = mod.default;
   if (script?.slug !== slug) throw new Error(`${entry} has slug "${script?.slug}"; it must match its folder "${slug}"`);
   return script;

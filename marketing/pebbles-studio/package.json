@@ -11,6 +11,7 @@
     "render": "node scripts/render.mjs",
     "analyze": "node scripts/analyze.mjs",
     "sheets": "node scripts/sheets.mjs",
+    "assets": "node scripts/export-assets.mjs",
     "smoke": "npm run typecheck && npm test && npm run sheets"
   },
   "dependencies": {
