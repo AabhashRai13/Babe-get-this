@@ -54,7 +54,8 @@ export interface CastState {
   facing?: 'left' | 'right';
 }
 
-export interface Beat { at: number; mr?: CastState; mrs?: CastState; caption?: string }
+/** A change inside a shot, without a cut. `speaker: null` means nobody is talking. */
+export interface Beat { at: number; mr?: CastState; mrs?: CastState; caption?: string; speaker?: Who | null }
 
 export interface Shot {
   at: number;

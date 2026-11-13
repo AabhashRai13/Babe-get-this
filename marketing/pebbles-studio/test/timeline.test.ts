@@ -100,6 +100,21 @@ describe('resolveAt', () => {
     expect(r.cast.mrs!.speaking).toBe(false);
   });
 
+  it('a beat can change or clear the speaker without a cut', () => {
+    const t = video({ ...fixture(), shots: [{ at: 0, set: 'couch', frame: 'two-shot', speaker: 'mr',
+      beats: [{ at: 1, speaker: 'mrs' }, { at: 2, speaker: null }] }] });
+    expect(resolveAt(t, 0.5).cast.mr!.speaking).toBe(true);
+    expect(resolveAt(t, 1.5).cast.mr!.speaking).toBe(false);
+    expect(resolveAt(t, 1.5).cast.mrs!.speaking).toBe(true);
+    expect(resolveAt(t, 2.5).cast.mrs!.speaking).toBe(false);
+  });
+
+  it('rejects a beat speaker who is off screen', () => {
+    const s = fixture();
+    s.shots[1].beats![0].speaker = 'mr';
+    expect(validateScript(s).join(' ')).toMatch(/shot 1.*not on screen/);
+  });
+
   it('look other points toward the other character', () => {
     const t = video({ ...fixture(), shots: [{ at: 0, set: 'couch', frame: 'two-shot', mr: { look: 'other' }, mrs: { look: 'other' } }] });
     const r = resolveAt(t, 1);

@@ -35,7 +35,7 @@ const reel = path.join(outDir, 'reel.mp4');
 execFileSync('npx', [
   'remotion', 'render', 'src/index.ts', `v-${slug}`, reel,
   '--codec=h264', '--crf=16', '--pixel-format=yuv420p', '--color-space=bt709',
-  '--audio-codec=aac', '--audio-bitrate=192k', '--log=error',
+  '--audio-codec=aac', '--audio-bitrate=192k', '--sample-rate=44100', '--log=error',
 ], { cwd: KIT, stdio: 'inherit' });
 execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', reel, '-an', '-c:v', 'copy', '-movflags', '+faststart', path.join(outDir, 'no-sound.mp4')]);
 console.log(`wrote ${reel}\nwrote ${path.join(outDir, 'no-sound.mp4')}`);

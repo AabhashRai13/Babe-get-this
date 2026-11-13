@@ -53,6 +53,9 @@ export function validateScript(s: VideoScript): string[] {
     for (const b of shot.beats ?? []) {
       if (b.at < shot.at || b.at >= next) errs.push(`shot ${i}: beat at ${b.at} is outside the shot (${shot.at}–${next})`);
       if (b.at < prevBeat) errs.push(`shot ${i}: beats must be in time order (at ${b.at})`);
+      if (b.speaker && !FRAME_CAST[shot.frame].includes(b.speaker)) {
+        errs.push(`shot ${i}: beat at ${b.at}: speaker ${b.speaker} is not on screen in ${shot.frame}`);
+      }
       prevBeat = b.at;
     }
   });
@@ -123,6 +126,7 @@ export function resolveAt(s: VideoScript, t: number): Resolved {
   const shot = s.shots[idx];
   const run: Record<Who, Running> = { mr: fresh(), mrs: fresh() };
   let caption = shot.caption ?? '';
+  let speaker: Who | null = shot.speaker ?? null;
 
   for (let i = 0; i <= idx; i++) {
     const sh = s.shots[i];
@@ -131,6 +135,7 @@ export function resolveAt(s: VideoScript, t: number): Resolved {
       if (i === idx && b.at > t) break;
       for (const w of WHO) apply(run[w], b[w], b.at, true);
       if (i === idx && b.caption !== undefined) caption = b.caption;
+      if (i === idx && b.speaker !== undefined) speaker = b.speaker;
     }
   }
 
@@ -149,7 +154,7 @@ export function resolveAt(s: VideoScript, t: number): Resolved {
       holding: r.holding,
       headphones: r.headphones ?? defaultPhones,
       facing: r.facing,
-      speaking: shot.speaker === w,
+      speaking: speaker === w,
       poseSince: r.poseSince,
     };
   }
