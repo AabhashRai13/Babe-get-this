@@ -23,6 +23,8 @@ export interface PebbleProps {
   phonesSlot?: React.ReactNode;
   /** Optional slot rendered after the arms (held props). */
   handSlot?: React.ReactNode;
+  /** Drawn inside each arm's transform, behind the arm (e.g. drum sticks). */
+  armExtra?: (i: 0 | 1) => React.ReactNode;
 }
 
 const capsule = (cx: number, cy: number, w: number, h: number, fill: string) => (
@@ -30,7 +32,7 @@ const capsule = (cx: number, cy: number, w: number, h: number, fill: string) => 
 );
 
 /** A Pebble drawn in art units, placed at (x, y) = body centre on screen. Layers let sets interleave props. */
-export const Pebble: React.FC<PebbleProps> = ({ who, x, y, scale, face, body, layers = ALL, t, outline = false, shadow = false, phonesSlot, handSlot }) => {
+export const Pebble: React.FC<PebbleProps> = ({ who, x, y, scale, face, body, layers = ALL, t, outline = false, shadow = false, phonesSlot, handSlot, armExtra }) => {
   const C = CHARACTERS[who];
   const sq = body.squash;
   const gradId = `pebble-grad-${who}`;
@@ -59,6 +61,7 @@ export const Pebble: React.FC<PebbleProps> = ({ who, x, y, scale, face, body, la
         {has('arms') &&
           body.arms.map((a, i) => (
             <g key={i} transform={`translate(${a.x} ${a.y}) rotate(${(a.rot * 180) / Math.PI})`}>
+              {armExtra?.(i as 0 | 1)}
               <ellipse cx={0} cy={C.armRy * 0.6} rx={C.armRx} ry={C.armRy} fill={C.armColor} />
             </g>
           ))}

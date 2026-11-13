@@ -86,7 +86,7 @@ export const MR: CharacterDef = {
   armRy: 78,
   lashes: false,
   lidW: 7,
-  phones: { cx: -4, cy: -95, r: 236, cupW: 70, cupH: 156, band: '#2C3A41', cup: '#2F3D44', cushion: '#4B5B63' },
+  phones: { cx: 0, cy: -95, r: 212, cupW: 70, cupH: 156, band: '#2C3A41', cup: '#2F3D44', cushion: '#4B5B63' },
   bottom: 300,
 };
 
@@ -116,7 +116,7 @@ export const MRS: CharacterDef = {
   armRy: 64,
   lashes: true,
   lidW: 6,
-  phones: { cx: -6, cy: -62, r: 192, cupW: 58, cupH: 126, band: '#4E7772', cup: '#5F8B85', cushion: '#4A6F6A' },
+  phones: { cx: 0, cy: -62, r: 170, cupW: 58, cupH: 126, band: '#4E7772', cup: '#5F8B85', cushion: '#4A6F6A' },
   bottom: 249,
 };
 
