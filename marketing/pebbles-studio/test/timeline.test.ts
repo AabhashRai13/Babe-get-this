@@ -174,6 +174,51 @@ describe('resolveAt', () => {
     expect(resolveAt(t, 5.6).cast.mr!.poseSince).toBe(5.5);
   });
 
+  it('split and close frames put the right characters on screen', () => {
+    const t = video({ ...fixture(), shots: [
+      { at: 0, set: 'podcast', frame: 'split', speaker: 'mr' },
+      { at: 2, set: 'podcast', frame: 'close-mrs', speaker: 'mrs' },
+      { at: 4, set: 'stage', frame: 'single-mrs', speaker: 'mrs' },
+    ] });
+    expect(resolveAt(t, 1).cast.mr).not.toBeNull();
+    expect(resolveAt(t, 1).cast.mrs).not.toBeNull();
+    expect(resolveAt(t, 3).cast.mr).toBeNull();
+    expect(resolveAt(t, 5).cast.mrs!.speaking).toBe(true);
+  });
+
+  it('per-character captions come from the shot and its beats', () => {
+    const t = video({ ...fixture(), shots: [
+      { at: 0, set: 'podcast', frame: 'split', speaker: 'mr', captions: { mr: { text: 'Bun', style: 'label' } },
+        beats: [{ at: 0.5, speaker: 'mrs', captions: { mrs: { text: '包|bāo', style: 'hanzi' } } },
+          { at: 1.5, captions: { mr: { text: 'Full', style: 'label' }, mrs: null } }] },
+    ] });
+    expect(resolveAt(t, 0.2).captions).toEqual({ mr: { text: 'Bun', style: 'label' } });
+    expect(resolveAt(t, 1).captions.mrs).toEqual({ text: '包|bāo', style: 'hanzi' });
+    expect(resolveAt(t, 2).captions).toEqual({ mr: { text: 'Full', style: 'label' } });
+  });
+
+  it('split shots take per-character captions, not a sentence caption', () => {
+    const s = fixture();
+    s.shots[0] = { at: 0, set: 'podcast', frame: 'split', caption: 'Bun' };
+    expect(validateScript(s).join(' ')).toMatch(/shot 0: split shots use per-character captions/);
+  });
+
+  it('rejects a per-character caption for someone off screen', () => {
+    const s = fixture();
+    s.shots[0].captions = { mrs: { text: '早|zǎo', style: 'hanzi' } };
+    expect(validateScript(s).join(' ')).toMatch(/shot 0: caption for mrs who is not on screen/);
+  });
+
+  it('sunglasses carry over until taken off', () => {
+    const t = video({ ...fixture(), shots: [
+      { at: 0, set: 'podcast', frame: 'single-mrs', mrs: { glasses: true } },
+      { at: 2, set: 'stage', frame: 'single-mrs' },
+      { at: 4, set: 'stage', frame: 'single-mrs', mrs: { glasses: false } },
+    ] });
+    expect(resolveAt(t, 3).cast.mrs!.glasses).toBe(true);
+    expect(resolveAt(t, 5).cast.mrs!.glasses).toBe(false);
+  });
+
   it('look other points toward the other character', () => {
     const t = video({ ...fixture(), shots: [{ at: 0, set: 'couch', frame: 'two-shot', mr: { look: 'other' }, mrs: { look: 'other' } }] });
     const r = resolveAt(t, 1);

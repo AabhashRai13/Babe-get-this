@@ -20,7 +20,7 @@ const LONG_LINE = 'skillfully scratches the spider web on the mountain';
 const VERSE = 'Mañana por la mañana, la extraña araña de España araña con maña la telaraña de la montaña';
 
 const cast = (set: SetName, who: Who): ResolvedCast => ({
-  face: faceFor('neutral'), pose: set === 'band' && who === 'mr' ? 'drum' : 'sit', headphones: set === 'podcast' || set === 'band',
+  face: faceFor('neutral'), pose: (set === 'band' || set === 'stage') && who === 'mr' ? 'drum' : 'sit', headphones: set === 'podcast' || set === 'band' || set === 'stage', glasses: false,
   facing: 'right', speaking: false, poseSince: 0,
 });
 const ctx: LiveCtx = { t: 0.5, frame: 15, env: [], sinceCut: 2, hits: [], beat: 0.4, drums: false };

@@ -7,7 +7,7 @@ import { CHARACTERS } from '../src/kit/geometry';
 import { POSES, bodyFor, handAnchor, walkOffset } from '../src/kit/poses';
 import type { PoseName, Who } from '../src/kit/types';
 
-const NAMES: PoseName[] = ['sit', 'stand', 'walkIn', 'point', 'wave', 'shrug', 'armsCrossed', 'handsOnHips', 'holdPhone', 'holdBag', 'holdList', 'drum', 'hug'];
+const NAMES: PoseName[] = ['sit', 'stand', 'walkIn', 'point', 'wave', 'shrug', 'armsCrossed', 'handsOnHips', 'holdPhone', 'holdBag', 'holdList', 'drum', 'hug', 'asleep'];
 const WHO: Who[] = ['mr', 'mrs'];
 
 describe('pose library', () => {
@@ -39,6 +39,12 @@ describe('pose library', () => {
         expect(Math.abs(a.y), `${who} ${p} y`).toBeLessThanOrEqual(C.outer.h / 2 + 120);
       }
     }
+  });
+
+  it('asleep slumps forward and sinks', () => {
+    const b = bodyFor('mr', 'asleep', 0, 0);
+    expect(Math.abs(b.tilt)).toBeGreaterThan(0.2);
+    expect(b.dy).toBeGreaterThan(10);
   });
 
   it('hug leans each character toward the other', () => {

@@ -30,7 +30,7 @@ export const BandSet: React.FC<{ cast: Record<Who, ResolvedCast | null>; ctx: Li
       <DrumKitBack x={360} y={1560} s={0.9} t={ctx.t} hits={ctx.drums ? ctx.hits : []} />
       {mr && (
         <Pebble who="mr" x={mp.x} y={mp.y} scale={mScale} face={liveFace('mr', mr, ctx)} body={liveBody('mr', mr, ctx, 'drum')} t={ctx.t}
-          layers={['body', 'phones']} phonesSlot={mr.headphones ? <Headphones who="mr" /> : null} />
+          layers={['body', 'phones']} phonesSlot={mr.headphones ? <Headphones who="mr" /> : null} glasses={mr.glasses} />
       )}
       <DrumKitFront x={360} y={1560} s={0.9} t={ctx.t} hits={ctx.drums ? ctx.hits : []} />
       {mr && (
@@ -40,7 +40,7 @@ export const BandSet: React.FC<{ cast: Record<Who, ResolvedCast | null>; ctx: Li
       <ellipse cx={wp.x} cy={2062} rx={300} ry={34} fill="rgba(110,70,35,0.22)" filter="url(#soft-16)" />
       {mrs && (
         <Pebble who="mrs" x={wp.x} y={wp.y} scale={wScale} face={liveFace('mrs', mrs, ctx)} body={liveBody('mrs', mrs, ctx, 'mic')} t={ctx.t}
-          phonesSlot={mrs.headphones ? <Headphones who="mrs" /> : null} holding={mrs.holding} facing={mrs.facing} />
+          phonesSlot={mrs.headphones ? <Headphones who="mrs" /> : null} holding={mrs.holding} facing={mrs.facing} glasses={mrs.glasses} />
       )}
       <StandMic x={690} y={1795} s={1.15} floorY={2066} />
     </g>

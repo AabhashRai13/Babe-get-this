@@ -6,7 +6,7 @@ import { envelopeFromDb } from '../envelope';
 import { framingFor } from '../framings';
 import { Paper, SoftDefs } from '../sets/Paper';
 import { END_CARD_SEC, FPS, framesFor, resolveAt } from '../timeline';
-import type { VideoScript } from '../types';
+import type { CharCaption, VideoScript, Who } from '../types';
 import type { LiveCtx } from './live';
 import { Caption, EndCard, SafeAreaGuide } from './Overlays';
 import { SceneLayer } from './SceneLayer';
@@ -45,7 +45,10 @@ export const VideoComposition: React.FC<VideoProps> = ({ script, envelope, showS
         ) : (
           <>
             <SceneLayer set={set} frame={r.shot.frame} cast={r.cast} ctx={ctx} />
-            <Caption text={r.caption} style={r.shot.captionStyle ?? 'line'} framing={framing} />
+            <Caption text={r.caption} style={r.captionStyle} framing={framing} />
+            {(Object.entries(r.captions) as [Who, CharCaption][]).map(([w, c]) => (
+              <Caption key={w} text={c.text} style={c.style} framing={framing} who={framing.sub?.[w] ? w : undefined} />
+            ))}
           </>
         )}
         {showSafeArea && <SafeAreaGuide />}

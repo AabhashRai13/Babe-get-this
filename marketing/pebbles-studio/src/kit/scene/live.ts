@@ -65,7 +65,7 @@ export function liveBody(who: Who, rc: ResolvedCast, ctx: LiveCtx, mode: BodyMod
     const sx = C.inner.w * 0.5 - 34;
     b = { ...b, arms: [{ x: -sx, y: 30, rot: 0.75 }, { x: sx, y: 30, rot: -0.75 }] };
   }
-  if (mode === 'drum' || rc.pose === 'drum') {
+  if (rc.pose === 'drum') {
     const on = ctx.drums;
     const lV = on ? pulse(ctx.hits, ctx.t, ['snare', 'hat', 'ohat'], 18) : 0;
     const rV = on ? pulse(ctx.hits, ctx.t, ['crash', 'kick'], 16) : 0;

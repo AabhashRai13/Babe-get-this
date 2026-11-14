@@ -28,7 +28,7 @@ export interface Face {
 
 export type PoseName =
   | 'sit' | 'stand' | 'walkIn' | 'point' | 'wave' | 'shrug' | 'armsCrossed' | 'handsOnHips'
-  | 'holdPhone' | 'holdBag' | 'holdList' | 'drum' | 'hug';
+  | 'holdPhone' | 'holdBag' | 'holdList' | 'drum' | 'hug' | 'asleep';
 
 export interface Arm { x: number; y: number; rot: number } // shoulder (art units) + radians
 export interface Body {
@@ -40,10 +40,14 @@ export interface Body {
   hand: 0 | 1;
 }
 
-export const PROP_NAMES = ['phone', 'bag', 'list', 'mug', 'sticks'] as const;
+export const PROP_NAMES = ['phone', 'bag', 'list', 'mug', 'sticks', 'lute'] as const;
 export type PropName = (typeof PROP_NAMES)[number];
-export type SetName = 'podcast' | 'band' | 'kitchen' | 'couch' | 'aisle';
-export type FrameName = 'single-mr' | 'single-mrs' | 'two-shot' | 'wide';
+export type SetName = 'podcast' | 'band' | 'kitchen' | 'couch' | 'aisle' | 'stage';
+export type FrameName = 'single-mr' | 'single-mrs' | 'two-shot' | 'wide' | 'split' | 'split-close' | 'close-mr' | 'close-mrs';
+
+/** line/verse: sentence captions. pop/popYellow: one big shouted word. label: small word. hanzi: "字|pinyin". */
+export type CaptionStyle = 'line' | 'verse' | 'pop' | 'popYellow' | 'label' | 'hanzi';
+export interface CharCaption { text: string; style: CaptionStyle }
 export type Look = 'camera' | 'left' | 'right' | 'other' | { x: number; y: number };
 
 export interface CastState {
@@ -54,11 +58,17 @@ export interface CastState {
   /** A held prop; `null` drops it (undefined would be lost when Remotion serialises props). */
   holding?: PropName | null;
   headphones?: boolean;
+  /** Sunglasses. Carries over until set false. */
+  glasses?: boolean;
   facing?: 'left' | 'right';
 }
 
 /** A change inside a shot, without a cut. `speaker: null` means nobody is talking. */
-export interface Beat { at: number; mr?: CastState; mrs?: CastState; caption?: string; speaker?: Who | null }
+export interface Beat {
+  at: number; mr?: CastState; mrs?: CastState; caption?: string; captionStyle?: CaptionStyle; speaker?: Who | null;
+  /** Captions above one character (split and close shots). null clears it. */
+  captions?: Partial<Record<Who, CharCaption | null>>;
+}
 
 export interface Shot {
   at: number;
@@ -66,7 +76,8 @@ export interface Shot {
   frame: FrameName;
   speaker?: Who;
   caption?: string;
-  captionStyle?: 'line' | 'verse';
+  captionStyle?: CaptionStyle;
+  captions?: Partial<Record<Who, CharCaption | null>>;
   drums?: boolean;
   mr?: CastState;
   mrs?: CastState;

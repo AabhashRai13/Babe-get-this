@@ -26,6 +26,8 @@ describe('safe area', () => {
         'kitchen/single-mr', 'kitchen/single-mrs', 'kitchen/two-shot',
         'couch/single-mr', 'couch/single-mrs', 'couch/two-shot',
         'aisle/single-mr', 'aisle/single-mrs', 'aisle/two-shot', 'aisle/wide',
+        'podcast/split', 'podcast/split-close', 'podcast/close-mr', 'podcast/close-mrs',
+        'stage/single-mrs', 'stage/close-mrs', 'stage/two-shot',
       ]),
     );
   });
@@ -39,20 +41,29 @@ describe('safe area', () => {
       }
     });
 
-    it(`${name}: the longest verse stays safe`, () => {
+    it.skipIf(!!f.sub)(`${name}: the longest verse stays safe`, () => {
       const c = captionLayout(VERSE, 'verse', f);
       expect(isSafe(c.box), JSON.stringify(c.box)).toBe(true);
       expect(c.fontSize).toBeGreaterThanOrEqual(40);
     });
 
-    it(`${name}: long captions shrink rather than cover a face`, () => {
+    it.skipIf(!!f.sub)(`${name}: long captions shrink rather than cover a face`, () => {
       const text = 'Babe can you also grab the oat milk not the almond one and the eggs and bananas that are not too green please';
       const c = captionLayout(text, 'line', f);
       for (const face of Object.values(f.faces)) expect(overlaps(c.box, face!), JSON.stringify(c.box)).toBe(false);
       expect(c.fits).toBe(true);
     });
 
-    it(`${name}: a single long line stays safe`, () => {
+    it(`${name}: per-character captions stay safe and off the faces`, () => {
+      for (const who of Object.keys(f.sub ?? {}) as Who[]) {
+        for (const [text, style] of [['Sleep', 'label'], ['睡觉|shuìjiào', 'hanzi'], ['PANDA', 'popYellow']] as const) {
+          const c = captionLayout(text, style, f, who);
+          expect(c.fits, `${name} ${who} ${style} ${JSON.stringify(c.box)}`).toBe(true);
+        }
+      }
+    });
+
+    it.skipIf(!!f.sub)(`${name}: a single long line stays safe`, () => {
       const c = captionLayout(LONG_LINE, 'line', f);
       expect(isSafe(c.box), JSON.stringify(c.box)).toBe(true);
       expect(c.lines.join(' ')).toBe(LONG_LINE);

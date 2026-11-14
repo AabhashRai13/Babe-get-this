@@ -6,7 +6,7 @@ describe('PNG asset export list', () => {
 
   it('has every expression and pose for both characters, the duo hug, and the backgrounds', () => {
     expect(jobs.filter((j) => j.kind === 'expression')).toHaveLength(38);
-    expect(jobs.filter((j) => j.kind === 'pose')).toHaveLength(25);
+    expect(jobs.filter((j) => j.kind === 'pose')).toHaveLength(27);
     expect(jobs.map((j) => j.file)).toEqual(expect.arrayContaining([
       'expressions/mr-smug.png', 'expressions/mrs-love.png', 'poses/mr-holdPhone.png', 'poses/hug.png',
       'backgrounds/kitchen.png', 'backgrounds/couch.png', 'backgrounds/aisle.png', 'backgrounds/paper.png',

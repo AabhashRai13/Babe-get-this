@@ -74,6 +74,11 @@ export const POSES: Record<PoseName, PoseFn> = {
     const { sx, holdX } = sh(who);
     return body([{ x: -sx, y: 40, rot: 0.45 }, { x: holdX, y: 70, rot: 1.2 }]);
   },
+  // Slumped forward and sunk down, arms hanging: asleep where they sat or stood.
+  asleep: (who) => {
+    const { sx } = sh(who);
+    return body([{ x: -sx, y: 60, rot: 0.15 }, { x: sx, y: 60, rot: -0.15 }], { tilt: who === 'mr' ? 0.32 : -0.32, squash: -0.06, dy: 24, feet: 'together' });
+  },
   drum: () => body([{ x: -150, y: 40, rot: 0.45 }, { x: 150, y: 40, rot: -0.45 }]),
   hug: (who) => {
     const { sx } = sh(who);

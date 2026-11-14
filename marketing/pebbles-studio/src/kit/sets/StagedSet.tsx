@@ -25,7 +25,7 @@ export const StagedSet: React.FC<{ set: HomeSet; frame: FrameName; cast: Record<
     return (
       <Pebble key={`${w}-${layers.join()}`} who={w} x={x} y={p.y} scale={p.scale} t={ctx.t} layers={layers}
         face={liveFace(w, rc, ctx)} body={liveBody(w, rc, ctx, seated ? 'chair' : 'stand')}
-        holding={rc.holding} facing={rc.facing} shadow={!seated}
+        holding={rc.holding} facing={rc.facing} glasses={rc.glasses} shadow={!seated}
         phonesSlot={rc.headphones ? <Headphones who={w} /> : null} />
     );
   };

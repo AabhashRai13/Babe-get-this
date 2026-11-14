@@ -1,19 +1,33 @@
 import React from 'react';
 import { staticFile } from 'remotion';
-import { CAPTION_FONT } from '../fonts';
+import { CAPTION_FONT, HANZI_FONT, POP_FONT } from '../fonts';
 import type { Framing } from '../framings';
 import { H, SAFE, W, captionLayout } from '../framings';
 import { HeartPath } from '../props/Effects';
+import type { CaptionStyle, Who } from '../types';
 
-/** Centred caption in the style of the first video, sized to stay inside the safe area. */
-export const Caption: React.FC<{ text: string; style: 'line' | 'verse'; framing: Framing }> = ({ text, style, framing }) => {
+/** A caption in one of the kit's styles, laid out (and sized) to stay inside the safe area and off faces. */
+export const Caption: React.FC<{ text: string; style: CaptionStyle; framing: Framing; who?: Who }> = ({ text, style, framing, who }) => {
   if (!text) return null;
-  const c = captionLayout(text, style, framing);
-  const lh = c.fontSize * 1.18;
+  const c = captionLayout(text, style, framing, who);
+  const x = W / 2;
+  if (style === 'hanzi') {
+    return (
+      <g textAnchor="middle">
+        <text x={x} y={c.box.y + c.fontSize * 0.9} fontFamily={HANZI_FONT} fontWeight={700} fontSize={c.fontSize} fill="#D7262E"
+          stroke="#FFF7EC" strokeWidth={c.fontSize * 0.06} paintOrder="stroke">{c.lines[0]}</text>
+        <text x={x} y={c.box.y + c.fontSize * 1.38} fontFamily={CAPTION_FONT} fontWeight={600} fontSize={c.fontSize * 0.4} fill="#1B1B1B">{c.pinyin}</text>
+      </g>
+    );
+  }
+  const pop = style === 'pop' || style === 'popYellow';
+  const lh = c.fontSize * (pop ? 1.04 : 1.18);
   return (
-    <g fontFamily={CAPTION_FONT} fontWeight={600} fontSize={c.fontSize} fill="#1B1B1B" textAnchor="middle">
+    <g fontFamily={pop ? POP_FONT : CAPTION_FONT} fontWeight={pop ? 400 : style === 'label' ? 700 : 600} fontSize={c.fontSize} textAnchor="middle"
+      fill={style === 'popYellow' ? '#F7C928' : pop ? '#FFFFFF' : '#1B1B1B'}
+      stroke={pop ? '#1A1410' : undefined} strokeWidth={pop ? c.fontSize * 0.09 : undefined} strokeLinejoin="round" paintOrder="stroke">
       {c.lines.map((l, i) => (
-        <text key={i} x={W / 2} y={c.box.y + i * lh + c.fontSize * 0.92}>{l}</text>
+        <text key={i} x={x} y={c.box.y + i * lh + c.fontSize * (pop ? 0.95 : 0.92)}>{l}</text>
       ))}
     </g>
   );

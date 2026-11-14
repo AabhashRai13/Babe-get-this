@@ -7,7 +7,7 @@ import { Effects } from '../props/Effects';
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
 /** The face, in the character's art units. Ported from the prototype's drawFace/drawMouth. */
-export const Face: React.FC<{ who: Who; face: FaceT; t: number }> = ({ who, face, t }) => {
+export const Face: React.FC<{ who: Who; face: FaceT; t: number; glasses?: boolean }> = ({ who, face, t, glasses }) => {
   const C = CHARACTERS[who];
   const gradUrl = `url(#pebble-grad-${who})`;
   const es = face.eyeScale;
@@ -21,6 +21,7 @@ export const Face: React.FC<{ who: Who; face: FaceT; t: number }> = ({ who, face
       {C.eyes.map((e, i) => (
         <Eye key={i} uid={uid} C={C} i={i} e={e} es={es} lid={lid} face={face} gradUrl={gradUrl} />
       ))}
+      {glasses && <Sunglasses C={C} />}
       <Brows C={C} face={face} />
       <Mouth C={C} face={face} uid={uid} />
       {face.effect && <Effects who={who} effect={face.effect} t={t} />}
@@ -100,6 +101,29 @@ const Eye: React.FC<{
         />
       )}
       {lashes}
+    </g>
+  );
+};
+
+/** Dark round sunglasses over both eyes (the "too cool" look). */
+const Sunglasses: React.FC<{ C: CharacterDef }> = ({ C }) => {
+  const [l, r] = C.eyes;
+  const rx = C.eyeRx * 1.2;
+  const ry = C.eyeRy * 0.82;
+  return (
+    <g>
+      <path d={`M ${l.x + rx * 0.7} ${l.y - ry * 0.35} Q ${(l.x + r.x) / 2} ${l.y - ry * 0.75} ${r.x - rx * 0.7} ${r.y - ry * 0.35}`} stroke="#141414" strokeWidth={C.browW * 0.7} fill="none" strokeLinecap="round" />
+      {[l, r].map((e, i) => (
+        <g key={i}>
+          <rect x={e.x - rx} y={e.y - ry} width={rx * 2} height={ry * 1.9} rx={ry * 0.85} fill="#141414" />
+          <path d={`M ${e.x - rx * 0.55} ${e.y - ry * 0.45} L ${e.x - rx * 0.1} ${e.y - ry * 0.45}`} stroke="rgba(255,255,255,0.35)" strokeWidth={C.browW * 0.5} strokeLinecap="round" />
+        </g>
+      ))}
+      {[[l, -1], [r, 1]].map(([e, s]) => {
+        const p = e as { x: number; y: number };
+        const side = s as number;
+        return <line key={side} x1={p.x + side * rx} y1={p.y - ry * 0.4} x2={p.x + side * (rx + 40)} y2={p.y - ry * 0.6} stroke="#141414" strokeWidth={C.browW * 0.6} strokeLinecap="round" />;
+      })}
     </g>
   );
 };

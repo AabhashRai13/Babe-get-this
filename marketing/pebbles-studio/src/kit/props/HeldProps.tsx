@@ -55,6 +55,20 @@ export const Mug: React.FC<{ t: number }> = ({ t }) => (
   </g>
 );
 
+/** A pipa-style lute held across the body (concert set). Drawn at the body, not the hand. */
+export const Lute: React.FC = () => (
+  <g transform="rotate(-32)">
+    <rect x={-14} y={-300} width={28} height={200} rx={8} fill="#8A5A34" />
+    <rect x={-22} y={-340} width={44} height={56} rx={12} fill="#6E4428" />
+    {[-1, 1].map((s) => [0, 1].map((k) => <circle key={`${s}${k}`} cx={s * 30} cy={-328 + k * 26} r={8} fill="#E9D5B5" />))}
+    <path d="M 0 -120 C 95 -110 110 40 70 105 C 40 150 -40 150 -70 105 C -110 40 -95 -110 0 -120 Z" fill="#C68A4E" />
+    <path d="M 0 -95 C 75 -85 88 35 55 90 C 30 125 -30 125 -55 90 C -88 35 -75 -85 0 -95 Z" fill="#D9A066" />
+    <circle cx={0} cy={-10} r={16} fill="#6E4428" />
+    <rect x={-34} y={70} width={68} height={14} rx={6} fill="#6E4428" />
+    {[-9, -3, 3, 9].map((x) => <line key={x} x1={x} y1={-330} x2={x} y2={78} stroke="#F4EADC" strokeWidth={2} />)}
+  </g>
+);
+
 const LooseStick: React.FC = () => <line x1={0} y1={-10} x2={0} y2={170} stroke="#B98D5E" strokeWidth={13} strokeLinecap="round" />;
 
 /** A held prop, drawn with its grip point at the origin (the hand). */
@@ -65,5 +79,6 @@ export const HeldProp: React.FC<{ name: PropName; t: number }> = ({ name, t }) =
     {name === 'list' && <ListPaper />}
     {name === 'mug' && <Mug t={t} />}
     {name === 'sticks' && <LooseStick />}
+    {name === 'lute' && <Lute />}
   </g>
 );
