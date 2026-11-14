@@ -1,6 +1,7 @@
 // Per-frame "life" on top of the resolved script state: blinking, lip sync, breathing, gestures.
 import type { Hit } from '../drums';
 import { pulse } from '../drums';
+import type { Lip } from '../envelope';
 import { accentPulse, mouthOpen } from '../envelope';
 import { CHARACTERS } from '../geometry';
 import { SEED, blink, breathe, cutBlink, saccade, settle, sway } from '../motion';
@@ -11,7 +12,11 @@ import type { Body, Face, Who } from '../types';
 export interface LiveCtx {
   t: number;
   frame: number;
-  lip: { open: number[]; width: number[]; accents: number[] };
+  lip: Lip;
+  /** Who the script has speaking now (even off screen), so the other Pebble can react. */
+  speaker: Who | null;
+  /** Strum times (seconds) heard in the clip's instrument stem. */
+  strums: number[];
   sinceCut: number;
   hits: Hit[];
   beat: number;

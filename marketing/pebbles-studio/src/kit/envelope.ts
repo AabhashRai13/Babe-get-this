@@ -1,4 +1,7 @@
 // Lip sync: the isolated vocals' voice-band loudness per video frame, mapped to how open the mouth is.
+import type { Phrase } from './acting';
+import { findPhrases } from './acting';
+import type { Who } from './types';
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
@@ -100,16 +103,51 @@ export function resample(arr: number[], from: number, to: number): number[] {
   });
 }
 
-/** Lip sync per frame: how open, how wide, and the stressed-syllable frames (accents). */
-export type Lip = { open: number[]; width: number[]; accents: number[] };
+/** Lip sync per frame: how open, how wide, how round, the stressed-syllable frames (accents), and the phrases. */
+export type Lip = { open: number[]; width: number[]; round: number[]; accents: number[]; phrases: Phrase[] };
 
-/** The JSON written by scripts/analyze.mjs. Old files have no `source` and may be 30 fps. */
-export type EnvelopeFile = { fps?: number; source?: 'vocals' | 'mix'; db: number[]; lo?: number[]; hi?: number[] };
+/** The JSON written by scripts/analyze.mjs. Old files have no `source` or music bands and may be 30 fps. */
+export type EnvelopeFile = {
+  fps?: number; source?: 'vocals' | 'mix'; db: number[]; lo?: number[]; hi?: number[];
+  kick?: number[]; snare?: number[]; hat?: number[]; pluck?: number[];
+};
 
-/** Smoothed lip sync at `fps` from an envelope file: openness, width, and accents (which come only from the voice). */
-export function lipFromEnvelope(j: EnvelopeFile, fps: number): Lip {
+/** Rounded lips ("oo") from a dark voice: the bright band's share of the two bands, low = round. 0..1, smoothed. */
+export function mouthRound(loDb: number[], hiDb: number[], fps: number): number[] {
+  const lin = (d: number) => (Number.isFinite(d) ? Math.pow(10, d / 20) : 0);
+  const k = 1 - Math.exp(-1 / fps / 0.05);
+  let y = 0;
+  return loDb.map((lo, i) => {
+    const a = lin(lo);
+    const b = lin(hiDb[i] ?? -99);
+    const target = a + b > 1e-4 ? clamp01((0.32 - b / (a + b)) / 0.2) : 0;
+    return (y += (target - y) * k);
+  });
+}
+
+/**
+ * Smoothed lip sync at `fps` from an envelope file: openness, width, roundness, accents and phrases (all from the
+ * voice). `ownerAt(sec)` says who the script has speaking then, so each phrase knows whose it is.
+ */
+export function lipFromEnvelope(j: EnvelopeFile, fps: number, ownerAt: (sec: number) => Who | null = () => null): Lip {
   const from = j.fps ?? 30;
   const open = smoothEnvelope(openFromDb(resample(j.db, from, fps), fps), fps);
-  const width = j.lo && j.hi ? mouthWidths(resample(j.lo, from, fps), resample(j.hi, from, fps), fps) : open.map(() => 1);
-  return { open, width, accents: findAccents(open, fps) };
+  const lo = j.lo && j.hi ? resample(j.lo, from, fps) : null;
+  const hi = j.lo && j.hi ? resample(j.hi, from, fps) : null;
+  const width = lo && hi ? mouthWidths(lo, hi, fps) : open.map(() => 1);
+  const round = lo && hi ? mouthRound(lo, hi, fps) : open.map(() => 0);
+  // A phrase belongs to whoever the script has speaking; split it where the script hands over the line.
+  const phrases: Phrase[] = [];
+  for (const p of findPhrases(open, fps)) {
+    let cur: Phrase = { start: p.start, end: p.end, who: ownerAt(p.start / fps) };
+    for (let f = p.start + 1; f < p.end; f++) {
+      const w = ownerAt(f / fps);
+      if (w !== cur.who) {
+        phrases.push({ ...cur, end: f });
+        cur = { start: f, end: p.end, who: w };
+      }
+    }
+    phrases.push(cur);
+  }
+  return { open, width, round, accents: findAccents(open, fps), phrases };
 }

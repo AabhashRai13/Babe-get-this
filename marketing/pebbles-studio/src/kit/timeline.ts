@@ -53,6 +53,8 @@ export interface Resolved {
   captions: Partial<Record<Who, CharCaption>>;
   captionsSince: Partial<Record<Who, number>>;
   cast: Record<Who, ResolvedCast | null>;
+  /** Who the script has speaking (shot or beat `speaker`), even when they are off screen. */
+  speaker: Who | null;
   onEndCard: boolean;
 }
 
@@ -241,5 +243,5 @@ export function resolveAt(s: VideoScript, t: number): Resolved {
       poseBlend: r.poseEased ? springProgress(t - r.poseSince) : 1,
     };
   }
-  return { shotIndex: idx, shot, cutStart: shot.at, caption, captionSince, captionStyle, captions, captionsSince, cast, onEndCard: !!s.endCard && t >= s.end };
+  return { shotIndex: idx, shot, cutStart: shot.at, caption, captionSince, captionStyle, captions, captionsSince, cast, speaker, onEndCard: !!s.endCard && t >= s.end };
 }

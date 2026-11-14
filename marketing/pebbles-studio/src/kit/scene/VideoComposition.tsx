@@ -2,6 +2,8 @@ import React, { useMemo } from 'react';
 import type { CalculateMetadataFunction } from 'remotion';
 import { AbsoluteFill, Audio, staticFile, useCurrentFrame } from 'remotion';
 import { drumHits } from '../drums';
+import type { Music } from '../acting';
+import { NO_MUSIC, musicFromEnvelope } from '../acting';
 import type { Lip } from '../envelope';
 import { lipFromEnvelope } from '../envelope';
 import { framingFor } from '../framings';
@@ -13,8 +15,9 @@ import { Caption, EndCard, SafeAreaGuide } from './Overlays';
 import { SceneLayer } from './SceneLayer';
 
 export type { Lip };
-export type VideoProps = { script: VideoScript; lip: Lip; showSafeArea?: boolean };
-export const NO_LIP: Lip = { open: [], width: [], accents: [] };
+export type VideoProps = { script: VideoScript; lip: Lip; music?: Music; showSafeArea?: boolean };
+export const NO_LIP: Lip = { open: [], width: [], round: [], accents: [], phrases: [] };
+export { NO_MUSIC };
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const easeInOut = (v: number) => (v < 0.5 ? 2 * v * v : 1 - Math.pow(-2 * v + 2, 2) / 2);
@@ -30,13 +33,15 @@ function cameraZoom(sinceCut: number, captionAge: number | null): number {
 
 const AUDIO_FADE = 0.25;
 
-export const VideoComposition: React.FC<VideoProps> = ({ script, lip, showSafeArea }) => {
+export const VideoComposition: React.FC<VideoProps> = ({ script, lip, music = NO_MUSIC, showSafeArea }) => {
   const frame = useCurrentFrame();
   const t = frame / FPS;
   const r = resolveAt(script, t);
-  const hits = useMemo(() => (script.drumGrid ? drumHits(script.drumGrid) : []), [script]);
+  // Real hits from the clip's drums stem; the first video's groove only when there are no stems.
+  const hits = useMemo(() => music.hits ?? (script.drumGrid ? drumHits(script.drumGrid) : []), [script, music]);
   const ctx: LiveCtx = {
-    t, frame, lip, sinceCut: t - r.cutStart, hits, beat: script.drumGrid?.beat ?? 0.5, drums: !!r.shot.drums,
+    t, frame, lip, speaker: r.speaker, strums: music.strums, sinceCut: t - r.cutStart, hits,
+    beat: script.drumGrid?.beat ?? 0.5, drums: !!r.shot.drums,
   };
   const set = r.shot.set;
   const framing = framingFor(set, r.shot.frame);
@@ -87,17 +92,19 @@ export const VideoComposition: React.FC<VideoProps> = ({ script, lip, showSafeAr
 /** Loads the envelope written by scripts/analyze.mjs (the isolated vocals) and turns it into lip sync; missing = closed mouths. */
 export const calculateVideoMetadata: CalculateMetadataFunction<VideoProps> = async ({ props }) => {
   let lip: Lip = NO_LIP;
+  let music: Music = NO_MUSIC;
   if (props.script.audio) {
     try {
       const res = await fetch(staticFile(`media/${props.script.slug}/envelope.json`));
       if (res.ok) {
         const j = await res.json();
         if (j.source !== 'vocals') console.warn(`Lip sync for ${props.script.slug} follows the whole mix (no vocal stem); music will move mouths.`);
-        lip = lipFromEnvelope(j, FPS);
+        lip = lipFromEnvelope(j, FPS, (sec) => resolveAt(props.script, sec).speaker);
+        music = musicFromEnvelope(j, FPS);
       } else console.warn(`No lip-sync envelope for ${props.script.slug}; run: npm run analyze ${props.script.slug}`);
     } catch {
       console.warn(`No lip-sync envelope for ${props.script.slug}; run: npm run analyze ${props.script.slug}`);
     }
   }
-  return { durationInFrames: framesFor(props.script), props: { ...props, lip } };
+  return { durationInFrames: framesFor(props.script), props: { ...props, lip, music } };
 };
