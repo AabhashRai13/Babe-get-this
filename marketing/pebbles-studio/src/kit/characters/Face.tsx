@@ -20,7 +20,7 @@ export const Face: React.FC<{ who: Who; face: FaceT; t: number; glasses?: boolea
         <ellipse key={i} cx={b.x} cy={b.y} rx={C.blushRx} ry={C.blushRy} fill={BLUSH} opacity={face.blush} />
       ))}
       {C.eyes.map((e, i) => (
-        <Eye key={i} uid={uid} C={C} i={i} e={e} es={es} lid={lid} face={face} gradUrl={gradUrl} />
+        <Eye key={i} uid={uid} C={C} i={i} e={e} es={es} lid={lid} face={face} gradUrl={gradUrl} behindGlasses={glasses} />
       ))}
       {glasses && <Sunglasses C={C} />}
       <Brows C={C} face={face} />
@@ -30,9 +30,14 @@ export const Face: React.FC<{ who: Who; face: FaceT; t: number; glasses?: boolea
   );
 };
 
+/**
+ * One eye. Behind sunglasses only the lashes are drawn: the lenses are opaque, and an eye drawn under them shows
+ * its white below (or, wide open, above) the lens.
+ */
 const Eye: React.FC<{
   uid: string; C: CharacterDef; i: number; e: { x: number; y: number }; es: number; lid: number; face: FaceT; gradUrl: string;
-}> = ({ uid, C, i, e, es, lid, face, gradUrl }) => {
+  behindGlasses?: boolean;
+}> = ({ uid, C, i, e, es, lid, face, gradUrl, behindGlasses }) => {
   const side = i === 0 ? -1 : 1;
   const rx = C.eyeRx * es;
   const ry = C.eyeRy * es;
@@ -78,6 +83,7 @@ const Eye: React.FC<{
     });
   }
 
+  if (behindGlasses) return <g>{lashes}</g>;
   return (
     <g>
       <defs>

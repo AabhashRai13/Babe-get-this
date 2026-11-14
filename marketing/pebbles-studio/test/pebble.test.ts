@@ -47,3 +47,25 @@ describe('rig inputs', () => {
     expect(html).toMatch(/<g transform="rotate\(-5\.729\d* [^"]*"><g id="phones"/);
   });
 });
+
+describe('sunglasses', () => {
+  const whites = (who: 'mr' | 'mrs', face: typeof EXPRESSIONS.neutral, glasses: boolean) =>
+    (renderToStaticMarkup(React.createElement('svg', null, React.createElement(Face, { who, t: 0, face, glasses })))
+      .match(/fill="#fff"/g) ?? []).length;
+
+  it('hide the eyes completely, for every expression (nothing white peeks out under the lenses)', () => {
+    for (const who of ['mr', 'mrs'] as const) {
+      for (const [name, e] of Object.entries(EXPRESSIONS)) {
+        const face = { ...e, mouthShape: 'curve' as const }; // a grin's teeth are white too; keep them out of the count
+        expect(whites(who, face, false), `${who} ${name} without glasses`).toBeGreaterThan(0);
+        expect(whites(who, face, true), `${who} ${name} with glasses`).toBe(0);
+      }
+    }
+  });
+
+  it('keep Mrs\' lashes showing above the frames', () => {
+    const lashes = (glasses: boolean) => (renderToStaticMarkup(React.createElement('svg', null,
+      React.createElement(Face, { who: 'mrs', t: 0, face: EXPRESSIONS.sing, glasses }))).match(/<line /g) ?? []).length;
+    expect(lashes(true)).toBeGreaterThanOrEqual(6);
+  });
+});
