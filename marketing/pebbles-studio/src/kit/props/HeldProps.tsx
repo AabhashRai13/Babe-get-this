@@ -55,9 +55,9 @@ export const Mug: React.FC<{ t: number }> = ({ t }) => (
   </g>
 );
 
-/** A pipa-style lute held across the body (concert set). Drawn at the body, not the hand. */
-export const Lute: React.FC = () => (
-  <g transform="rotate(-32)">
+/** A pipa-style lute held across the body (concert set). Drawn at the body, not the hand. `recoil` (degrees) is a strum's kick. */
+export const Lute: React.FC<{ recoil?: number }> = ({ recoil = 0 }) => (
+  <g transform={`rotate(${-32 + recoil})`}>
     <rect x={-14} y={-300} width={28} height={200} rx={8} fill="#8A5A34" />
     <rect x={-22} y={-340} width={44} height={56} rx={12} fill="#6E4428" />
     {[-1, 1].map((s) => [0, 1].map((k) => <circle key={`${s}${k}`} cx={s * 30} cy={-328 + k * 26} r={8} fill="#E9D5B5" />))}
@@ -72,13 +72,13 @@ export const Lute: React.FC = () => (
 const LooseStick: React.FC = () => <line x1={0} y1={-10} x2={0} y2={170} stroke="#B98D5E" strokeWidth={13} strokeLinecap="round" />;
 
 /** A held prop, drawn with its grip point at the origin (the hand). */
-export const HeldProp: React.FC<{ name: PropName; t: number }> = ({ name, t }) => (
+export const HeldProp: React.FC<{ name: PropName; t: number; recoil?: number }> = ({ name, t, recoil }) => (
   <g data-prop={name}>
     {name === 'phone' && <Phone />}
     {name === 'bag' && <Bag />}
     {name === 'list' && <ListPaper />}
     {name === 'mug' && <Mug t={t} />}
     {name === 'sticks' && <LooseStick />}
-    {name === 'lute' && <Lute />}
+    {name === 'lute' && <Lute recoil={recoil} />}
   </g>
 );

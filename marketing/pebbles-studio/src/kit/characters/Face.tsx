@@ -13,8 +13,9 @@ export const Face: React.FC<{ who: Who; face: FaceT; t: number; glasses?: boolea
   const es = face.eyeScale;
   const lid = clamp(face.lid, 0, 1);
   const uid = `${who}${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const sh = face.shift;
   return (
-    <g>
+    <g transform={sh ? `translate(${sh.x} ${sh.y})` : undefined}>
       {C.blush.map((b, i) => (
         <ellipse key={i} cx={b.x} cy={b.y} rx={C.blushRx} ry={C.blushRy} fill={BLUSH} opacity={face.blush} />
       ))}
@@ -151,7 +152,9 @@ const Brows: React.FC<{ C: CharacterDef; face: FaceT }> = ({ C, face }) => (
 const Mouth: React.FC<{ C: CharacterDef; face: FaceT; uid: string }> = ({ C, face, uid }) => {
   const M = C.mouth;
   const open = clamp(face.open, 0, 1);
-  const hw = M.hw * (1 - open * 0.22) * face.mouthWidth;
+  const round = clamp(face.round ?? 0, 0, 1);
+  // "oo" narrows the lips by up to 45%; "ah" and "ee" keep the full width (mouthWidth widens for "ee").
+  const hw = M.hw * (1 - open * 0.22) * face.mouthWidth * (1 - 0.45 * round);
   const x0 = M.x - hw;
   const x1 = M.x + hw;
   const y = M.y;
@@ -188,9 +191,12 @@ const Mouth: React.FC<{ C: CharacterDef; face: FaceT; uid: string }> = ({ C, fac
     );
   }
 
-  const top = y + sag * 0.45 - open * 4;
-  const bot = y + Math.max(sag, 4) + open * M.hw * 1.45;
-  const d = `M ${x0} ${y} C ${M.x - hw * 0.45} ${top} ${M.x + hw * 0.45} ${top} ${x1} ${y} C ${M.x + hw * 0.55} ${bot} ${M.x - hw * 0.55} ${bot} ${x0} ${y} Z`;
+  // "oo": the top lip lifts so the opening is a symmetric oval. "ee" (wide): the jaw drops less.
+  const ee = clamp((face.mouthWidth - 1) * 1.2, 0, 0.4);
+  const top = y + sag * 0.45 - open * 4 - round * open * M.hw * 0.5;
+  const bot = y + Math.max(sag, 4) + open * M.hw * 1.45 * (1 - ee) * (1 - 0.3 * round);
+  const c = 0.45 + 0.3 * round;
+  const d = `M ${x0} ${y} C ${M.x - hw * c} ${top} ${M.x + hw * c} ${top} ${x1} ${y} C ${M.x + hw * (c + 0.1)} ${bot} ${M.x - hw * (c + 0.1)} ${bot} ${x0} ${y} Z`;
   return (
     <g>
       <defs><clipPath id={clipId}><path d={d} /></clipPath></defs>

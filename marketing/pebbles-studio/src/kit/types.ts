@@ -24,6 +24,10 @@ export interface Face {
   blush: number; // 0..1 opacity
   happyEyes: boolean; // closed eyes drawn as ^ arcs
   effect?: EffectName;
+  /** Rounded lips ("oo"), 0..1. Set per frame by lip sync. */
+  round?: number;
+  /** Face features slid inside the body (art units), so a lean reads as the head turning. */
+  shift?: { x: number; y: number };
 }
 
 export type PoseName =
@@ -38,6 +42,10 @@ export interface Body {
   dy: number;
   feet: 'together' | 'apart' | 'step';
   hand: 0 | 1;
+  /** Drag (radians): headphones and the lute trail the body's rotation by this much, then catch up. */
+  lag?: number;
+  /** Lute kick from a strum (degrees). */
+  recoil?: number;
 }
 
 export const PROP_NAMES = ['phone', 'bag', 'list', 'mug', 'sticks', 'lute'] as const;

@@ -48,6 +48,8 @@ export const Pebble: React.FC<PebbleProps> = ({
   const flip = facing === 'left';
   const anchor = holding && holding !== 'lute' ? handAnchor(who, body) : null;
   const footLift = (i: number) => (body.feet === 'step' && Math.floor(t * 8) % 2 === i ? -14 : 0);
+  // Secondary motion: headphones (pivoting on the crown) and the lute trail the body's rotation.
+  const lagDeg = ((body.lag ?? 0) * 180) / Math.PI;
   const footX = (fx: number) => (body.feet === 'together' ? fx * 0.7 : fx);
   return (
     <g transform={`translate(${x} ${y}) scale(${scale})`}>
@@ -75,7 +77,7 @@ export const Pebble: React.FC<PebbleProps> = ({
             C.feet.map((f, i) => <ellipse key={i} cx={footX(f.x)} cy={f.y + footLift(i)} rx={f.rx} ry={f.ry} fill={C.footColor} />)}
           {/* Low on the body, so the lute never covers the mouth while she sings. */}
           {has('arms') && holding === 'lute' && (
-            <g transform={`translate(${C.inner.w * 0.1} ${C.bottom * 0.78})`}><HeldProp name="lute" t={t} /></g>
+            <g transform={`translate(${C.inner.w * 0.1} ${C.bottom * 0.78}) rotate(${-lagDeg * 0.6})`}><HeldProp name="lute" t={t} recoil={body.recoil} /></g>
           )}
           {has('arms') && anchor && holding !== 'bag' && (
             <g transform={`translate(${anchor.x} ${anchor.y})`}><HeldProp name={holding!} t={t} /></g>
@@ -90,7 +92,9 @@ export const Pebble: React.FC<PebbleProps> = ({
           {has('arms') && anchor && holding === 'bag' && (
             <g transform={`translate(${anchor.x} ${anchor.y})`}><HeldProp name="bag" t={t} /></g>
           )}
-          {has('phones') && phonesSlot}
+          {has('phones') && phonesSlot && (
+            <g transform={`rotate(${-lagDeg} 0 ${-C.inner.h / 2})`}>{phonesSlot}</g>
+          )}
         </g>
       </g>
     </g>

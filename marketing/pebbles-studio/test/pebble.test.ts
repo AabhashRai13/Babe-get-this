@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { Face } from '../src/kit/characters/Face';
 import { Pebble } from '../src/kit/characters/Pebble';
 import { EXPRESSIONS } from '../src/kit/expressions';
 import { CREAM } from '../src/kit/geometry';
@@ -17,5 +18,32 @@ describe('Pebble', () => {
 
   it('draws the rim only when asked', () => {
     expect(draw(true)).toContain(CREAM);
+  });
+});
+
+describe('rig inputs', () => {
+  const svg = (el: React.ReactElement) => renderToStaticMarkup(React.createElement('svg', null, el));
+  const pebble = (face = EXPRESSIONS.neutral, b: Body = body, phones?: React.ReactNode) =>
+    svg(React.createElement(Pebble, { who: 'mrs', x: 0, y: 0, scale: 1, face, body: b, t: 0, phonesSlot: phones }));
+
+  it('shifts the face features by face.shift', () => {
+    expect(pebble({ ...EXPRESSIONS.neutral, shift: { x: 5, y: -3 } })).toContain('translate(5 -3)');
+  });
+
+  /** Width of the filled open-mouth path (its first and fourth x coordinates are the corners). */
+  const mouthWidth = (round: number, mouthWidth = 1) => {
+    const html = svg(React.createElement(Face, { who: 'mrs', t: 0, face: { ...EXPRESSIONS.neutral, lid: 0, open: 0.8, round, mouthWidth } })); // lid 0: no eyelid path before the mouth
+    const d = html.match(/<path d="(M [^"]+Z)"/)![1];
+    const xs = [...d.matchAll(/(-?[\d.]+) (-?[\d.]+)/g)].map((m) => Number(m[1]));
+    return Math.max(...xs) - Math.min(...xs);
+  };
+
+  it('rounds the open mouth', () => {
+    expect(mouthWidth(1)).toBeLessThan(0.6 * mouthWidth(0));
+  });
+
+  it('rotates headphones by body.lag', () => {
+    const html = pebble(EXPRESSIONS.neutral, { ...body, lag: 0.1 }, React.createElement('g', { id: 'phones' }));
+    expect(html).toMatch(/<g transform="rotate\(-5\.729\d* [^"]*"><g id="phones"/);
   });
 });
