@@ -15,6 +15,7 @@ This repo is public. Audio, reference clips and renders live only on the Mac:
     <audio file>                       named by the script's `audio` field
     out/reel.mp4                       written by npm run render
     out/no-sound.mp4                   same picture, no audio
+    out/instagram.mp4, tiktok.mp4      per-app files (and -no-sound copies)
   assets/                              PNG exports (npm run assets)
   _sheets/                             expression, pose and set sheets
 ```
@@ -118,7 +119,8 @@ In standing sets (kitchen, aisle), `sit` is drawn as standing. On the couch and 
 
 | Command | What it does |
 |---|---|
-| `npm run render <slug>` | Stages the audio, isolates the vocals and builds the lip-sync envelope, renders `reel.mp4` (H.264 High, BT.709, AAC 44.1 kHz), then writes `no-sound.mp4`. |
+| `npm run render <slug>` | Stages the audio, splits the stems and builds the envelope, renders `reel.mp4` (60 fps, H.264 High, BT.709, AAC 44.1 kHz), then writes `no-sound.mp4` and the Instagram and TikTok files. |
+| `npm run export <slug>` | Just the Instagram and TikTok files, from an existing `reel.mp4`. |
 | `npm run assets` | Exports every expression and pose for both Pebbles as transparent PNGs (1400×1900, characters at 2×; the hug is one 1800×1900 file), plus empty kitchen, couch, aisle and paper backdrops (1080×1920), to `~/Documents/Pebbles Videos/assets/`. Re-run it after changing the art. |
 | `npm run sheets` | Renders the expression, pose and set sheets to `_sheets/`. |
 | `npm run smoke` | Typecheck, tests, then the sheets. Needs no audio. |
@@ -128,10 +130,17 @@ If npm complains about a root-owned cache in `~/.npm`, add `--cache <some temp d
 
 ## Posting
 
-Use `reel.mp4` for Reels and TikTok, which take the same file. For trending sounds you don't own, post
-`no-sound.mp4` and attach the sound inside the app, so the platform handles the licensing.
-Faces and captions are kept out of the zones the apps cover: the top 270 px, the bottom 420 px, and the
-right 140 px between y = 900 and y = 1500. `test/framings.test.ts` enforces this for every framing.
+`npm run render` also writes a file per app (`npm run export <slug>` redoes just these from `reel.mp4`):
+
+| File | For |
+|---|---|
+| `instagram.mp4` | Instagram Reels: 30 fps (what Reels plays), H.264, 48 kHz AAC at -14 LUFS |
+| `tiktok.mp4` | TikTok: 60 fps, H.264, 48 kHz AAC at -14 LUFS |
+| `instagram-no-sound.mp4`, `tiktok-no-sound.mp4` | the same pictures, silent |
+
+For trending sounds you don't own, post the `-no-sound` file and attach the sound inside the app, so the platform
+handles the licensing. Faces and captions are kept out of the zones the apps cover: the top 270 px, the bottom
+420 px, and the right 140 px between y = 900 and y = 1500. `test/framings.test.ts` enforces this for every framing.
 
 ## Adding to the kit
 
