@@ -1,6 +1,6 @@
 # Pebbles Studio
 
-A Remotion kit for short Mr & Mrs Pebbles videos (Instagram Reels / TikTok, 1080×1920, 30fps).
+A Remotion kit for short Mr & Mrs Pebbles videos (Instagram Reels / TikTok, 1080×1920, 60fps).
 Each video is a short data script plus an audio file; one command renders a post-ready MP4.
 
 Design: `docs/superpowers/specs/2026-11-13-pebbles-animation-kit-design.md`.
@@ -68,6 +68,19 @@ whole mix, where music moves the mouths.
 
 The speaker still comes from the script (`speaker`, `beats[].speaker`): the audio decides when a mouth moves,
 the script decides whose.
+
+### Acting (automatic)
+
+The audio drives the performance, so scripts only say who speaks and how they feel (`src/kit/acting.ts`, `scene/live.ts`):
+
+- Each phrase: a small lean back, then a lean toward the mic with lifted brows, held while they talk, then settling.
+  Nods and hand gestures wind up just before each stressed syllable and follow through after it.
+- The listener reacts a beat after the other Pebble starts (brow lift, a glance over) and nods when they finish.
+- Mr is laid-back (slower, smaller, later); Mrs is quick (bigger brows, faster reactions, more eye darts).
+- Faces slide inside the body with a lean; headphones and the lute trail the body's rotation for a few frames.
+- Mouth shapes: closed, small, wide "ee", round "oo" and open "ah" from the voice's tone.
+- In `drums` shots the sticks lift before each real hit from the drums stem and land on it; the body drops into
+  kicks. With a lute, Mrs strums on the notes in the instrument stem.
 
 ## Script fields
 
