@@ -1,17 +1,17 @@
 // Per-frame "life" on top of the resolved script state: blinking, lip sync, breathing, gestures.
 import type { Hit } from '../drums';
 import { pulse } from '../drums';
-import { mouthOpen } from '../envelope';
+import { accentPulse, mouthOpen } from '../envelope';
 import { CHARACTERS } from '../geometry';
-import { SEED, blink, breathe, drift, settle, sway } from '../motion';
+import { SEED, blink, breathe, cutBlink, saccade, settle, sway } from '../motion';
 import type { ResolvedCast } from '../timeline';
-import { bodyFor } from '../poses';
+import { blendBody, bodyFor } from '../poses';
 import type { Body, Face, Who } from '../types';
 
 export interface LiveCtx {
   t: number;
   frame: number;
-  env: number[];
+  lip: { open: number[]; width: number[]; accents: number[] };
   sinceCut: number;
   hits: Hit[];
   beat: number;
@@ -20,25 +20,40 @@ export interface LiveCtx {
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
-/** Average mouth opening over the last 12 frames: drives talking gestures. */
-export function talkEnergy(env: number[], frame: number, speaking: boolean): number {
-  let s = 0;
-  for (let k = 0; k < 12; k++) s += mouthOpen(env, frame - k, speaking);
-  return s / 12;
+const FPS_OF = (ctx: LiveCtx) => (ctx.t > 0 ? ctx.frame / ctx.t : 60);
+
+/** Index of the most recent accent (for alternating nod direction), or -1. */
+function lastAccent(acc: number[], frame: number): number {
+  let k = -1;
+  for (let i = 0; i < acc.length && acc[i] <= frame; i++) k = i;
+  return k;
+}
+
+/** A slower swell after each stressed syllable: drives hand gestures. */
+function gestureLevel(acc: number[], frame: number, fps: number): number {
+  const k = lastAccent(acc, frame);
+  if (k < 0) return 0;
+  const dt = (frame - acc[k]) / fps;
+  return dt < 0.08 ? dt / 0.08 : Math.exp(-(dt - 0.08) * 2.5);
 }
 
 export function liveFace(who: Who, rc: ResolvedCast, ctx: LiveCtx): Face {
   const f = rc.face;
-  const open = Math.max(f.open, mouthOpen(ctx.env, ctx.frame, rc.speaking));
+  const fps = FPS_OF(ctx);
+  const open = Math.max(f.open, mouthOpen(ctx.lip.open, ctx.frame, rc.speaking));
+  const width = rc.speaking ? ctx.lip.width[ctx.frame] ?? 1 : 1;
+  const accent = rc.speaking ? accentPulse(ctx.lip.accents, ctx.frame, fps) : 0;
   const wideAwake = f.lid === 0 && f.eyeScale > 1.05; // shock: no blinking
-  const lid = f.happyEyes || wideAwake ? f.lid : Math.max(f.lid, blink(ctx.t, SEED[who]));
-  const d = drift(ctx.t, SEED[who]);
+  const blinkNow = Math.max(blink(ctx.t, SEED[who]), cutBlink(ctx.sinceCut));
+  const lid = f.happyEyes || wideAwake ? f.lid : Math.max(f.lid, blinkNow);
+  const d = saccade(ctx.t, SEED[who]);
   return {
     ...f,
     lid,
     open,
+    mouthWidth: f.mouthWidth * (open > 0.05 ? width : 1),
     look: { x: f.look.x + d.x, y: f.look.y + d.y },
-    brow: [f.brow[0] + open * 4, f.brow[1] + open * 4],
+    brow: [f.brow[0] + open * 3 + accent * 7, f.brow[1] + open * 3 + accent * 7],
   };
 }
 
@@ -54,9 +69,14 @@ const RESTING = new Set(['sit', 'stand']);
 export function liveBody(who: Who, rc: ResolvedCast, ctx: LiveCtx, mode: BodyMode): Body {
   const C = CHARACTERS[who];
   const seed = SEED[who];
-  const open = mouthOpen(ctx.env, ctx.frame, rc.speaking);
-  const g = clamp(talkEnergy(ctx.env, ctx.frame, rc.speaking) * 2.2, 0, 1);
+  const fps = FPS_OF(ctx);
+  const open = mouthOpen(ctx.lip.open, ctx.frame, rc.speaking);
+  const accent = rc.speaking ? accentPulse(ctx.lip.accents, ctx.frame, fps) : 0;
+  const nodDir = lastAccent(ctx.lip.accents, ctx.frame) % 2 === 0 ? 1 : -1;
+  const g = rc.speaking ? clamp(gestureLevel(ctx.lip.accents, ctx.frame, fps), 0, 1) : 0;
   let b = bodyFor(who, rc.pose, ctx.t, ctx.t - rc.poseSince);
+  // Mid-shot pose changes travel there on a spring instead of snapping.
+  if (rc.prevPose && rc.poseBlend < 1) b = blendBody(bodyFor(who, rc.prevPose, ctx.t, 0), b, rc.poseBlend);
   const resting = RESTING.has(rc.pose);
 
   if (mode === 'chair' && resting) b = bodyFor(who, 'sit', ctx.t, 0);
@@ -90,8 +110,9 @@ export function liveBody(who: Who, rc: ResolvedCast, ctx: LiveCtx, mode: BodyMod
   return {
     ...b,
     arms,
-    tilt: b.tilt + sway(ctx.t, seed) + swayBeat,
-    squash: b.squash + breathe(ctx.t, seed) + settle(ctx.sinceCut) + open * 0.012,
-    dy: b.dy - open * 7,
+    // Talking: a small nod and tilt on each stressed syllable, plus a little lift with the voice.
+    tilt: b.tilt + sway(ctx.t, seed) + swayBeat + accent * 0.025 * nodDir,
+    squash: b.squash + breathe(ctx.t, seed) + settle(ctx.sinceCut) + open * 0.01 - accent * 0.012,
+    dy: b.dy - open * 4 + accent * 9,
   };
 }

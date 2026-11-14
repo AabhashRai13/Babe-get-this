@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { faceFor } from '../src/kit/expressions';
-import { END_CARD_SEC, framesFor, resolveAt, validateScript, video } from '../src/kit/timeline';
+import { END_CARD_SEC, FPS, framesFor, resolveAt, validateScript, video } from '../src/kit/timeline';
 import type { VideoScript } from '../src/kit/types';
 
 const fixture = (): VideoScript => ({
@@ -232,6 +232,6 @@ describe('resolveAt', () => {
   });
 
   it('frames include the end card', () => {
-    expect(framesFor(s)).toBe(Math.ceil((6 + END_CARD_SEC) * 30));
+    expect(framesFor(s)).toBe(Math.ceil((6 + END_CARD_SEC) * FPS));
   });
 });

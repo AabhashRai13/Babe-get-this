@@ -100,3 +100,17 @@ export function handAnchor(who: Who, b: Body): { x: number; y: number; rot: numb
   const d = CHARACTERS[who].armRy * 1.45;
   return { x: a.x - d * Math.sin(a.rot), y: a.y + d * Math.cos(a.rot), rot: a.rot };
 }
+
+const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+/** Between two bodies (k may overshoot past 1 slightly with a spring). */
+export function blendBody(a: Body, b: Body, k: number): Body {
+  const arm = (i: 0 | 1) => ({ x: lerp(a.arms[i].x, b.arms[i].x, k), y: lerp(a.arms[i].y, b.arms[i].y, k), rot: lerp(a.arms[i].rot, b.arms[i].rot, k) });
+  return {
+    arms: [arm(0), arm(1)],
+    tilt: lerp(a.tilt, b.tilt, k),
+    squash: lerp(a.squash, b.squash, k),
+    dy: lerp(a.dy, b.dy, k),
+    feet: k < 0.5 ? a.feet : b.feet,
+    hand: k < 0.5 ? a.hand : b.hand,
+  };
+}

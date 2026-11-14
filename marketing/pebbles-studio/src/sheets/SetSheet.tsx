@@ -21,9 +21,9 @@ const VERSE = 'Mañana por la mañana, la extraña araña de España araña con 
 
 const cast = (set: SetName, who: Who): ResolvedCast => ({
   face: faceFor('neutral'), pose: (set === 'band' || set === 'stage') && who === 'mr' ? 'drum' : 'sit', headphones: set === 'podcast' || set === 'band' || set === 'stage', glasses: false,
-  facing: 'right', speaking: false, poseSince: 0,
+  facing: 'right', speaking: false, poseSince: 0, poseBlend: 1,
 });
-const ctx: LiveCtx = { t: 0.5, frame: 15, env: [], sinceCut: 2, hits: [], beat: 0.4, drums: false };
+const ctx: LiveCtx = { t: 0.5, frame: 30, lip: { open: [], width: [], accents: [] }, sinceCut: 2, hits: [], beat: 0.4, drums: false };
 
 /** Every set and framing, neutral cast, the longest test caption and the safe-area guide. */
 export const SetSheet: React.FC = () => {

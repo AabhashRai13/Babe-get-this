@@ -38,7 +38,7 @@ const Seated: React.FC<{ who: Who; rc: ResolvedCast; ctx: LiveCtx; x: number; y:
 export const PodcastSet: React.FC<{ frame: FrameName; cast: Record<Who, ResolvedCast | null>; ctx: LiveCtx }> = ({ frame, cast, ctx }) => {
   const f = framingFor('podcast', frame);
   if (frame === 'two-shot') {
-    const z = 1 + Math.min(0.03, 0.01 * ctx.sinceCut);
+    const z = 1;
     return (
       <g transform={`translate(540 1200) scale(${z}) translate(-540 -1200)`}>
         {(['mr', 'mrs'] as Who[]).map((w) => {
@@ -77,7 +77,7 @@ export const PodcastSet: React.FC<{ frame: FrameName; cast: Record<Who, Resolved
   const who: Who = frame === 'single-mr' ? 'mr' : 'mrs';
   const p = f.place[who]!;
   const rc = cast[who];
-  const z = 1 + Math.min(0.04, 0.015 * ctx.sinceCut);
+  const z = 1;
   return (
     <g transform={`translate(0 ${SHIFT}) translate(540 1250) scale(${z}) translate(-540 -1250)`}>
       {rc && <Seated who={who} rc={rc} ctx={ctx} x={p.x} y={p.y - SHIFT} s={p.scale} cs={1} />}

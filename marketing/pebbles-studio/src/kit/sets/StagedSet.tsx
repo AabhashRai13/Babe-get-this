@@ -15,7 +15,7 @@ type HomeSet = Extract<SetName, 'kitchen' | 'couch' | 'aisle'>;
 export const StagedSet: React.FC<{ set: HomeSet; frame: FrameName; cast: Record<Who, ResolvedCast | null>; ctx: LiveCtx }> = ({ set, frame, cast, ctx }) => {
   const f = framingFor(set, frame);
   const seated = set === 'couch';
-  const z = 1 + Math.min(0.03, 0.012 * ctx.sinceCut);
+  const z = 1;
   const who = (['mr', 'mrs'] as Who[]).filter((w) => cast[w] && f.place[w]);
   const draw = (w: Who, layers: ('body' | 'feet' | 'arms' | 'phones')[]) => {
     const rc = cast[w]!;

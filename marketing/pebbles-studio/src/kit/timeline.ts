@@ -1,13 +1,14 @@
 import { EXPRESSIONS, blendFace, faceFor } from './expressions';
+import { SPRING_SEC, springProgress } from './motion';
 import { FRAMINGS, captionLayout } from './framings';
 import { POSES } from './poses';
 import { PROP_NAMES } from './types';
 import type { CastState, CaptionStyle, CharCaption, ExpressionName, Face, FrameName, Look, PoseName, PropName, Shot, VideoScript, Who } from './types';
 
-export const FPS = 30;
+export const FPS = 60;
 export const END_CARD_SEC = 3;
 /** A mid-shot expression change eases over this long. Cuts snap. */
-export const EASE_SEC = 4 / FPS;
+export const EASE_SEC = 4 / 30;
 
 export const FRAME_CAST: Record<FrameName, Who[]> = {
   'single-mr': ['mr'],
@@ -35,6 +36,9 @@ export interface ResolvedCast {
   speaking: boolean;
   /** When the current pose was set (seconds), for poses that animate in, such as walkIn. */
   poseSince: number;
+  /** The pose before a mid-shot change, and how far (spring, 0..~1.1) the body has moved to the new one. */
+  prevPose?: PoseName;
+  poseBlend: number;
 }
 
 export interface Resolved {
@@ -42,9 +46,12 @@ export interface Resolved {
   shot: Shot;
   cutStart: number;
   caption: string;
+  /** When the current caption text appeared (seconds), for pop-in animation. */
+  captionSince: number;
   captionStyle: CaptionStyle;
   /** Captions above each character (split and close shots). */
   captions: Partial<Record<Who, CharCaption>>;
+  captionsSince: Partial<Record<Who, number>>;
   cast: Record<Who, ResolvedCast | null>;
   onEndCard: boolean;
 }
@@ -117,7 +124,12 @@ interface Running {
   eased: boolean;
   pose: PoseName;
   poseSince: number;
+  prevPose?: PoseName;
+  poseEased: boolean;
   look?: Look;
+  lookFrom?: { x: number; y: number };
+  lookAt: number;
+  lookEased: boolean;
   holding?: PropName;
   headphones?: boolean;
   glasses: boolean;
@@ -126,11 +138,12 @@ interface Running {
 
 const fresh = (): Running => {
   const face = faceFor('neutral');
-  return { exprName: 'neutral', face, prevFace: face, changedAt: 0, eased: false, pose: 'sit', poseSince: 0, glasses: false, facing: 'right' };
+  return { exprName: 'neutral', face, prevFace: face, changedAt: 0, eased: false, pose: 'sit', poseSince: 0, poseEased: false, lookAt: 0, lookEased: false, glasses: false, facing: 'right' };
 };
 
-function apply(r: Running, c: CastState | undefined, at: number, eased: boolean) {
+function apply(r: Running, c: CastState | undefined, at: number, eased: boolean, who: Who) {
   if (!c) return;
+  const lookBefore = r.look !== undefined ? lookOffset(r.look, who) : r.face.look;
   if (c.expression !== undefined) {
     const next = typeof c.expression === 'string' ? faceFor(c.expression) : faceFor(c.expression, r.exprName);
     if (typeof c.expression === 'string') r.exprName = c.expression;
@@ -140,10 +153,14 @@ function apply(r: Running, c: CastState | undefined, at: number, eased: boolean)
     r.eased = eased;
   }
   // Setting a pose (even the same one) restarts it, so a second walkIn walks again.
-  if (c.pose !== undefined) { r.pose = c.pose; r.poseSince = at; }
+  if (c.pose !== undefined) { r.prevPose = r.pose; r.pose = c.pose; r.poseSince = at; r.poseEased = eased; }
   // A new expression brings back its own pupils unless the same change also sets a look.
-  if (c.look !== undefined) r.look = c.look ?? undefined;
-  else if (c.expression !== undefined) r.look = undefined;
+  if (c.look !== undefined) {
+    r.look = c.look ?? undefined;
+    r.lookFrom = lookBefore;
+    r.lookAt = at;
+    r.lookEased = eased;
+  } else if (c.expression !== undefined) r.look = undefined;
   if (c.holding !== undefined) r.holding = c.holding ?? undefined;
   if (c.headphones !== undefined) r.headphones = c.headphones;
   if (c.glasses !== undefined) r.glasses = c.glasses;
@@ -167,24 +184,29 @@ export function resolveAt(s: VideoScript, t: number): Resolved {
   const shot = s.shots[idx];
   const run: Record<Who, Running> = { mr: fresh(), mrs: fresh() };
   let caption = shot.caption ?? '';
+  let captionSince = shot.at;
+  const captionsSince: Partial<Record<Who, number>> = {};
   let speaker: Who | null = shot.speaker ?? null;
   let captionStyle: CaptionStyle = shot.captionStyle ?? 'line';
   const captions: Partial<Record<Who, CharCaption>> = {};
+  let capAt = shot.at;
   const applyCaps = (cs: Partial<Record<Who, CharCaption | null>> | undefined) => {
     for (const [w, c] of Object.entries(cs ?? {}) as [Who, CharCaption | null][]) {
       if (c) captions[w] = c;
       else delete captions[w];
+      captionsSince[w] = capAt;
     }
   };
   applyCaps(shot.captions);
 
   for (let i = 0; i <= idx; i++) {
     const sh = s.shots[i];
-    for (const w of WHO) apply(run[w], sh[w], sh.at, false);
+    for (const w of WHO) apply(run[w], sh[w], sh.at, false, w);
     for (const b of sh.beats ?? []) {
       if (i === idx && b.at > t) break;
-      for (const w of WHO) apply(run[w], b[w], b.at, true);
-      if (i === idx && b.caption !== undefined) caption = b.caption;
+      for (const w of WHO) apply(run[w], b[w], b.at, true, w);
+      if (i === idx && b.caption !== undefined) { caption = b.caption; captionSince = b.at; }
+      if (i === idx) capAt = b.at;
       if (i === idx && b.speaker !== undefined) speaker = b.speaker;
       if (i === idx && b.captionStyle !== undefined) captionStyle = b.captionStyle;
       if (i === idx) applyCaps(b.captions);
@@ -198,7 +220,13 @@ export function resolveAt(s: VideoScript, t: number): Resolved {
     const r = run[w];
     let face = r.face;
     if (r.eased && t - r.changedAt < EASE_SEC) face = blendFace(r.prevFace, r.face, (t - r.changedAt) / EASE_SEC);
-    if (r.look !== undefined) face = { ...face, look: lookOffset(r.look, w) };
+    const lookTarget = r.look !== undefined ? lookOffset(r.look, w) : face.look;
+    let look = lookTarget;
+    if (r.lookEased && r.lookFrom && t - r.lookAt < SPRING_SEC) {
+      const k = springProgress(t - r.lookAt);
+      look = { x: r.lookFrom.x + (lookTarget.x - r.lookFrom.x) * k, y: r.lookFrom.y + (lookTarget.y - r.lookFrom.y) * k };
+    }
+    face = { ...face, look };
     cast[w] = {
       face,
       pose: r.pose,
@@ -209,7 +237,9 @@ export function resolveAt(s: VideoScript, t: number): Resolved {
       facing: r.facing,
       speaking: speaker === w,
       poseSince: r.poseSince,
+      prevPose: r.poseEased ? r.prevPose : undefined,
+      poseBlend: r.poseEased ? springProgress(t - r.poseSince) : 1,
     };
   }
-  return { shotIndex: idx, shot, cutStart: shot.at, caption, captionStyle, captions, cast, onEndCard: !!s.endCard && t >= s.end };
+  return { shotIndex: idx, shot, cutStart: shot.at, caption, captionSince, captionStyle, captions, captionsSince, cast, onEndCard: !!s.endCard && t >= s.end };
 }

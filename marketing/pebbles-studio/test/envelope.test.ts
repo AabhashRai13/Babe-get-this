@@ -14,7 +14,7 @@ describe('lip-sync envelope', () => {
     expect(mouthOpen([1], 0, false)).toBe(0);
   });
 
-  it('mouth holds a little of the previous frame', () => {
-    expect(mouthOpen([1, 0], 1, true)).toBeCloseTo(0.55, 6);
+  it('mouth reads the (already smoothed) envelope directly', () => {
+    expect(mouthOpen([1, 0.4], 1, true)).toBeCloseTo(0.4, 6);
   });
 });

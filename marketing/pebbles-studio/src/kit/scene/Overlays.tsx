@@ -4,16 +4,24 @@ import { CAPTION_FONT, HANZI_FONT, POP_FONT } from '../fonts';
 import type { Framing } from '../framings';
 import { H, SAFE, W, captionLayout } from '../framings';
 import { HeartPath } from '../props/Effects';
+import { springProgress } from '../motion';
 import type { CaptionStyle, Who } from '../types';
 
 /** A caption in one of the kit's styles, laid out (and sized) to stay inside the safe area and off faces. */
-export const Caption: React.FC<{ text: string; style: CaptionStyle; framing: Framing; who?: Who }> = ({ text, style, framing, who }) => {
+export const Caption: React.FC<{ text: string; style: CaptionStyle; framing: Framing; who?: Who; age?: number }> = ({ text, style, framing, who, age = 1 }) => {
   if (!text) return null;
   const c = captionLayout(text, style, framing, who);
   const x = W / 2;
+  // Pop words and Chinese characters spring in with a little overshoot; sentence captions just ease in.
+  const big = style === 'pop' || style === 'popYellow' || style === 'hanzi';
+  const sc = big ? 0.55 + 0.45 * springProgress(age) : 0.92 + 0.08 * springProgress(age);
+  const op = Math.min(1, age / 0.05);
+  const cx = c.box.x + c.box.w / 2;
+  const cy = c.box.y + c.box.h / 2;
+  const anim = `translate(${cx} ${cy}) scale(${sc}) translate(${-cx} ${-cy})`;
   if (style === 'hanzi') {
     return (
-      <g textAnchor="middle">
+      <g textAnchor="middle" transform={anim} opacity={op}>
         <text x={x} y={c.box.y + c.fontSize * 0.9} fontFamily={HANZI_FONT} fontWeight={700} fontSize={c.fontSize} fill="#D7262E"
           stroke="#FFF7EC" strokeWidth={c.fontSize * 0.06} paintOrder="stroke">{c.lines[0]}</text>
         <text x={x} y={c.box.y + c.fontSize * 1.38} fontFamily={CAPTION_FONT} fontWeight={600} fontSize={c.fontSize * 0.4} fill="#1B1B1B">{c.pinyin}</text>
@@ -23,7 +31,7 @@ export const Caption: React.FC<{ text: string; style: CaptionStyle; framing: Fra
   const pop = style === 'pop' || style === 'popYellow';
   const lh = c.fontSize * (pop ? 1.04 : 1.18);
   return (
-    <g fontFamily={pop ? POP_FONT : CAPTION_FONT} fontWeight={pop ? 400 : style === 'label' ? 700 : 600} fontSize={c.fontSize} textAnchor="middle"
+    <g transform={anim} opacity={op} fontFamily={pop ? POP_FONT : CAPTION_FONT} fontWeight={pop ? 400 : style === 'label' ? 700 : 600} fontSize={c.fontSize} textAnchor="middle"
       fill={style === 'popYellow' ? '#F7C928' : pop ? '#FFFFFF' : '#1B1B1B'}
       stroke={pop ? '#1A1410' : undefined} strokeWidth={pop ? c.fontSize * 0.09 : undefined} strokeLinejoin="round" paintOrder="stroke">
       {c.lines.map((l, i) => (

@@ -18,7 +18,7 @@ const toArt = (x: number, y: number) => ({ x: x / K, y: (y - DY) / K });
 /** Mr on drums (back left), Mrs singing at a stand mic (front right). Two-shot only. */
 export const BandSet: React.FC<{ cast: Record<Who, ResolvedCast | null>; ctx: LiveCtx }> = ({ cast, ctx }) => {
   const f = framingFor('band', 'two-shot');
-  const z = 1 + Math.min(0.02, 0.003 * ctx.sinceCut);
+  const z = 1;
   const mr = cast.mr;
   const mrs = cast.mrs;
   const mp = toArt(f.place.mr!.x, f.place.mr!.y);

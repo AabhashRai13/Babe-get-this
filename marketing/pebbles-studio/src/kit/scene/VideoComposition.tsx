@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import type { CalculateMetadataFunction } from 'remotion';
 import { AbsoluteFill, Audio, staticFile, useCurrentFrame } from 'remotion';
 import { drumHits } from '../drums';
-import { envelopeFromDb } from '../envelope';
+import { envelopeFromDb, findAccents, mouthWidths, resample, smoothEnvelope } from '../envelope';
 import { framingFor } from '../framings';
 import { Paper, SoftDefs } from '../sets/Paper';
 import { END_CARD_SEC, FPS, framesFor, resolveAt } from '../timeline';
@@ -11,17 +11,32 @@ import type { LiveCtx } from './live';
 import { Caption, EndCard, SafeAreaGuide } from './Overlays';
 import { SceneLayer } from './SceneLayer';
 
-export type VideoProps = { script: VideoScript; envelope: number[]; showSafeArea?: boolean };
+/** Lip sync per frame: how open, how wide, and the stressed-syllable frames (accents). */
+export type Lip = { open: number[]; width: number[]; accents: number[] };
+export type VideoProps = { script: VideoScript; lip: Lip; showSafeArea?: boolean };
+export const NO_LIP: Lip = { open: [], width: [], accents: [] };
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const easeInOut = (v: number) => (v < 0.5 ? 2 * v * v : 1 - Math.pow(-2 * v + 2, 2) / 2);
+const POP = new Set(['pop', 'popYellow', 'hanzi']);
+
+/** A gentle push-in over the shot, a small landing after each cut, and a punch-in when a big word pops. */
+function cameraZoom(sinceCut: number, captionAge: number | null): number {
+  const push = 0.03 * easeInOut(clamp01(sinceCut / 3));
+  const land = 0.03 * Math.exp(-sinceCut * 7);
+  const punch = captionAge === null ? 0 : 0.045 * (captionAge < 0.06 ? captionAge / 0.06 : Math.exp(-(captionAge - 0.06) * 4));
+  return 1 + push + land + punch;
+}
 
 const AUDIO_FADE = 0.25;
 
-export const VideoComposition: React.FC<VideoProps> = ({ script, envelope, showSafeArea }) => {
+export const VideoComposition: React.FC<VideoProps> = ({ script, lip, showSafeArea }) => {
   const frame = useCurrentFrame();
   const t = frame / FPS;
   const r = resolveAt(script, t);
   const hits = useMemo(() => (script.drumGrid ? drumHits(script.drumGrid) : []), [script]);
   const ctx: LiveCtx = {
-    t, frame, env: envelope, sinceCut: t - r.cutStart, hits, beat: script.drumGrid?.beat ?? 0.5, drums: !!r.shot.drums,
+    t, frame, lip, sinceCut: t - r.cutStart, hits, beat: script.drumGrid?.beat ?? 0.5, drums: !!r.shot.drums,
   };
   const set = r.shot.set;
   const framing = framingFor(set, r.shot.frame);
@@ -44,10 +59,22 @@ export const VideoComposition: React.FC<VideoProps> = ({ script, envelope, showS
           <EndCard p={t - script.end} dur={END_CARD_SEC} subtitle={script.endCard?.subtitle ?? ''} />
         ) : (
           <>
-            <SceneLayer set={set} frame={r.shot.frame} cast={r.cast} ctx={ctx} />
-            <Caption text={r.caption} style={r.captionStyle} framing={framing} />
+            {(() => {
+              // Camera moves for everything except split screens (their halves must stay put).
+              const popAge = r.caption && POP.has(r.captionStyle) ? t - r.captionSince : null;
+              const z = framing.windows ? 1 : cameraZoom(t - r.cutStart, popAge);
+              const faces = Object.values(framing.faces);
+              const fx = faces.reduce((a, f) => a + f!.x + f!.w / 2, 0) / Math.max(1, faces.length);
+              const fy = faces.reduce((a, f) => a + f!.y + f!.h / 2, 0) / Math.max(1, faces.length);
+              return (
+                <g transform={`translate(${fx} ${fy}) scale(${z}) translate(${-fx} ${-fy})`}>
+                  <SceneLayer set={set} frame={r.shot.frame} cast={r.cast} ctx={ctx} />
+                </g>
+              );
+            })()}
+            <Caption text={r.caption} style={r.captionStyle} framing={framing} age={t - r.captionSince} />
             {(Object.entries(r.captions) as [Who, CharCaption][]).map(([w, c]) => (
-              <Caption key={w} text={c.text} style={c.style} framing={framing} who={framing.sub?.[w] ? w : undefined} />
+              <Caption key={w} text={c.text} style={c.style} framing={framing} who={framing.sub?.[w] ? w : undefined} age={t - (r.captionsSince[w] ?? r.cutStart)} />
             ))}
           </>
         )}
@@ -57,17 +84,22 @@ export const VideoComposition: React.FC<VideoProps> = ({ script, envelope, showS
   );
 };
 
-/** Loads the lip-sync envelope written by scripts/analyze.mjs; a missing one means closed mouths, with a warning. */
+/** Loads the envelope written by scripts/analyze.mjs and turns it into smoothed lip sync; missing = closed mouths. */
 export const calculateVideoMetadata: CalculateMetadataFunction<VideoProps> = async ({ props }) => {
-  let envelope: number[] = [];
+  let lip: Lip = NO_LIP;
   if (props.script.audio) {
     try {
       const res = await fetch(staticFile(`media/${props.script.slug}/envelope.json`));
-      if (res.ok) envelope = envelopeFromDb((await res.json()).db);
-      else console.warn(`No lip-sync envelope for ${props.script.slug}; run: npm run render ${props.script.slug}`);
+      if (res.ok) {
+        const j = await res.json();
+        const from = j.fps ?? 30;
+        const open = smoothEnvelope(resample(envelopeFromDb(j.db), from, FPS), FPS);
+        const width = j.lo && j.hi ? mouthWidths(resample(j.lo, from, FPS), resample(j.hi, from, FPS), FPS) : open.map(() => 1);
+        lip = { open, width, accents: findAccents(open, FPS) };
+      } else console.warn(`No lip-sync envelope for ${props.script.slug}; run: npm run analyze ${props.script.slug}`);
     } catch {
-      console.warn(`No lip-sync envelope for ${props.script.slug}; run: npm run render ${props.script.slug}`);
+      console.warn(`No lip-sync envelope for ${props.script.slug}; run: npm run analyze ${props.script.slug}`);
     }
   }
-  return { durationInFrames: framesFor(props.script), props: { ...props, envelope } };
+  return { durationInFrames: framesFor(props.script), props: { ...props, lip } };
 };
