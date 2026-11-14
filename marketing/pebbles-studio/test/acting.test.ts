@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { drumHitsFromBands, findPhrases, musicFromEnvelope, onsets } from '../src/kit/acting';
+import type { Phrase } from '../src/kit/acting';
+import { PERSONA, drumHitsFromBands, findPhrases, hitAction, listenReact, musicFromEnvelope, onsets, phraseLean, strokeAngle, strumAngle, windUp } from '../src/kit/acting';
 import { lipFromEnvelope } from '../src/kit/envelope';
 
 const FPS = 60;
@@ -79,5 +80,78 @@ describe('lip extras', () => {
     const bright = lipFromEnvelope({ fps: 60, db, lo: fill(120, -30), hi: fill(120, -15) }, FPS);
     expect(dark.round[100]).toBeGreaterThan(0.7);
     expect(bright.round[100]).toBeLessThan(0.1);
+  });
+});
+
+describe('motion curves', () => {
+  it('windUp dips before the action and overshoots after', () => {
+    expect(windUp(-0.5, 0.1)).toBe(0);
+    expect(windUp(0, 0.1)).toBeCloseTo(-0.25, 6);
+    let peak = 0;
+    for (let t = 0; t < 0.6; t += 0.01) peak = Math.max(peak, windUp(t, 0.1));
+    expect(peak).toBeGreaterThan(1.03);
+    expect(windUp(0.7, 0.1)).toBeCloseTo(1, 2);
+  });
+
+  it('hitAction rises and then dies away', () => {
+    expect(hitAction(0.12, 0.08, 4)).toBeGreaterThan(0.6);
+    expect(hitAction(1.5, 0.08, 4)).toBeLessThan(0.05);
+  });
+
+  const phrases: Phrase[] = [{ start: 60, end: 180, who: 'mr' }];
+
+  it('phraseLean leans back before the phrase, in during it, and lets go after', () => {
+    expect(phraseLean(phrases, 'mr', 58, FPS, PERSONA.mr)).toBeLessThan(0);
+    expect(phraseLean(phrases, 'mr', 120, FPS, PERSONA.mr)).toBeGreaterThan(0.9);
+    expect(phraseLean(phrases, 'mr', 260, FPS, PERSONA.mr)).toBe(0);
+  });
+
+  it('phraseLean is 0 for the other Pebble\'s phrases', () => {
+    for (const f of [58, 120, 200]) expect(phraseLean(phrases, 'mrs', f, FPS, PERSONA.mrs)).toBe(0);
+  });
+
+  it('only the listener reacts, and Mr reacts later than Mrs', () => {
+    expect(listenReact(phrases, 'mr', 100, FPS, PERSONA.mr)).toEqual({ brow: 0, nod: 0, glance: 0 });
+    const peakAt = (who: 'mr' | 'mrs') => {
+      const own: Phrase[] = [{ start: 60, end: 180, who: who === 'mr' ? 'mrs' : 'mr' }];
+      let best = 0; let at = 0;
+      for (let f = 60; f < 140; f++) { const b = listenReact(own, who, f, FPS, PERSONA[who]).brow; if (b > best) { best = b; at = f; } }
+      return at;
+    };
+    expect(peakAt('mr')).toBeGreaterThan(peakAt('mrs') + 6);
+    expect(PERSONA.mr.brow).toBeLessThan(PERSONA.mrs.brow);
+    expect(PERSONA.mr.tempo).toBeLessThan(PERSONA.mrs.tempo);
+    expect(listenReact([{ start: 60, end: 180, who: null }], 'mr', 100, FPS, PERSONA.mr).brow).toBe(0);
+  });
+
+  it('the listener nods after the other\'s phrase ends', () => {
+    const own: Phrase[] = [{ start: 60, end: 180, who: 'mr' }];
+    expect(listenReact(own, 'mrs', 150, FPS, PERSONA.mrs).nod).toBe(0);
+    expect(listenReact(own, 'mrs', 195, FPS, PERSONA.mrs).nod).toBeGreaterThan(0.5);
+  });
+
+  it('strokeAngle lifts before each hit and is down on it', () => {
+    const hits = [1, 1.5, 2];
+    expect(strokeAngle(hits, 1)).toBe(0);
+    expect(strokeAngle(hits, 1.5)).toBe(0);
+    expect(strokeAngle(hits, 1.3)).toBeGreaterThan(0.9);
+    expect(strokeAngle(hits, 0.85)).toBeGreaterThan(strokeAngle(hits, 0.3)); // lifting into the first hit
+    expect(strokeAngle(hits, 4)).toBeCloseTo(0.6, 2); // rests when the drumming stops
+  });
+
+  it('strokeAngle is continuous for 40 ms gaps', () => {
+    const hits = Array.from({ length: 20 }, (_, i) => 1 + i * 0.04);
+    let maxStep = 0;
+    for (let f = 50; f < 120; f++) maxStep = Math.max(maxStep, Math.abs(strokeAngle(hits, (f + 1) / 60) - strokeAngle(hits, f / 60)));
+    expect(maxStep).toBeLessThan(0.5);
+  });
+
+  it('strumAngle alternates direction per strum and holds between strums', () => {
+    const strums = [1, 2];
+    expect(strumAngle(strums, 0.5)).toBe(-1);
+    expect(strumAngle(strums, 1.2)).toBe(1);
+    expect(strumAngle(strums, 1.8)).toBe(1);
+    expect(strumAngle(strums, 2.2)).toBe(-1);
+    expect(strumAngle(strums, 0.985)).toBeLessThan(-1); // pulled back just before
   });
 });
