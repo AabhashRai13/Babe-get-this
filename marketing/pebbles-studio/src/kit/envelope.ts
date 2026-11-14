@@ -1,8 +1,37 @@
-// Lip sync: the audio's voice-band loudness per video frame, mapped to how open the mouth is.
+// Lip sync: the isolated vocals' voice-band loudness per video frame, mapped to how open the mouth is.
 
-/** dB (from ffmpeg astats, voice band) to 0..1. -38 dB and below is closed, -16 dB and above is fully open. */
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/** dB (from ffmpeg astats, voice band) to 0..1 on a fixed scale: -38 dB and below is closed, -16 dB is fully open. */
 export function envelopeFromDb(db: number[]): number[] {
-  return db.map((v) => (Number.isFinite(v) ? Math.max(0, Math.min(1, (v + 38) / 22)) : 0));
+  return db.map((v) => (Number.isFinite(v) ? clamp01((v + 38) / 22) : 0));
+}
+
+/** The clip's loud vocal level: the 95th percentile of frames with any voice (above -60 dB); -20 if there is none. */
+export function vocalReference(db: number[]): number {
+  const v = db.filter((x) => Number.isFinite(x) && x > -60).sort((a, b) => a - b);
+  if (v.length < 10) return -20;
+  return v[Math.floor((v.length - 1) * 0.95)];
+}
+
+/**
+ * How open, per frame, from the vocal stem's loudness. The scale is relative to the clip's own loud level, so a
+ * quiet mix opens as wide as a loud one, and anything 26 dB or more below it (music bleed, breaths) stays shut.
+ * Dips below the loudness of the last ~0.2 s (the gaps between sung syllables) close it part-way, so legato
+ * singing still articulates instead of holding one open shape.
+ */
+export function openFromDb(db: number[], fps: number): number[] {
+  const ref = vocalReference(db);
+  const floor = ref - 26;
+  const w = Math.max(1, Math.round(0.2 * fps));
+  return db.map((v, i) => {
+    if (!Number.isFinite(v)) return 0;
+    const level = clamp01((v - floor) / 20);
+    let peak = v;
+    for (let j = Math.max(0, i - w); j <= Math.min(db.length - 1, i + w); j++) if (db[j] > peak) peak = db[j];
+    const articulation = clamp01(1 - (peak - v) / 7);
+    return level * (0.25 + 0.75 * articulation);
+  });
 }
 
 /** How open the speaker's mouth is on this frame (the envelope is already smoothed). */
@@ -69,4 +98,18 @@ export function resample(arr: number[], from: number, to: number): number[] {
     const b = Math.min(arr.length - 1, a + 1);
     return (arr[a] ?? 0) + ((arr[b] ?? 0) - (arr[a] ?? 0)) * (x - a);
   });
+}
+
+/** Lip sync per frame: how open, how wide, and the stressed-syllable frames (accents). */
+export type Lip = { open: number[]; width: number[]; accents: number[] };
+
+/** The JSON written by scripts/analyze.mjs. Old files have no `source` and may be 30 fps. */
+export type EnvelopeFile = { fps?: number; source?: 'vocals' | 'mix'; db: number[]; lo?: number[]; hi?: number[] };
+
+/** Smoothed lip sync at `fps` from an envelope file: openness, width, and accents (which come only from the voice). */
+export function lipFromEnvelope(j: EnvelopeFile, fps: number): Lip {
+  const from = j.fps ?? 30;
+  const open = smoothEnvelope(openFromDb(resample(j.db, from, fps), fps), fps);
+  const width = j.lo && j.hi ? mouthWidths(resample(j.lo, from, fps), resample(j.hi, from, fps), fps) : open.map(() => 1);
+  return { open, width, accents: findAccents(open, fps) };
 }

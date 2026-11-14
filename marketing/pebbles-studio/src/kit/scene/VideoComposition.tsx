@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import type { CalculateMetadataFunction } from 'remotion';
 import { AbsoluteFill, Audio, staticFile, useCurrentFrame } from 'remotion';
 import { drumHits } from '../drums';
-import { envelopeFromDb, findAccents, mouthWidths, resample, smoothEnvelope } from '../envelope';
+import type { Lip } from '../envelope';
+import { lipFromEnvelope } from '../envelope';
 import { framingFor } from '../framings';
 import { Paper, SoftDefs } from '../sets/Paper';
 import { END_CARD_SEC, FPS, framesFor, resolveAt } from '../timeline';
@@ -11,8 +12,7 @@ import type { LiveCtx } from './live';
 import { Caption, EndCard, SafeAreaGuide } from './Overlays';
 import { SceneLayer } from './SceneLayer';
 
-/** Lip sync per frame: how open, how wide, and the stressed-syllable frames (accents). */
-export type Lip = { open: number[]; width: number[]; accents: number[] };
+export type { Lip };
 export type VideoProps = { script: VideoScript; lip: Lip; showSafeArea?: boolean };
 export const NO_LIP: Lip = { open: [], width: [], accents: [] };
 
@@ -84,7 +84,7 @@ export const VideoComposition: React.FC<VideoProps> = ({ script, lip, showSafeAr
   );
 };
 
-/** Loads the envelope written by scripts/analyze.mjs and turns it into smoothed lip sync; missing = closed mouths. */
+/** Loads the envelope written by scripts/analyze.mjs (the isolated vocals) and turns it into lip sync; missing = closed mouths. */
 export const calculateVideoMetadata: CalculateMetadataFunction<VideoProps> = async ({ props }) => {
   let lip: Lip = NO_LIP;
   if (props.script.audio) {
@@ -92,10 +92,8 @@ export const calculateVideoMetadata: CalculateMetadataFunction<VideoProps> = asy
       const res = await fetch(staticFile(`media/${props.script.slug}/envelope.json`));
       if (res.ok) {
         const j = await res.json();
-        const from = j.fps ?? 30;
-        const open = smoothEnvelope(resample(envelopeFromDb(j.db), from, FPS), FPS);
-        const width = j.lo && j.hi ? mouthWidths(resample(j.lo, from, FPS), resample(j.hi, from, FPS), FPS) : open.map(() => 1);
-        lip = { open, width, accents: findAccents(open, FPS) };
+        if (j.source !== 'vocals') console.warn(`Lip sync for ${props.script.slug} follows the whole mix (no vocal stem); music will move mouths.`);
+        lip = lipFromEnvelope(j, FPS);
       } else console.warn(`No lip-sync envelope for ${props.script.slug}; run: npm run analyze ${props.script.slug}`);
     } catch {
       console.warn(`No lip-sync envelope for ${props.script.slug}; run: npm run analyze ${props.script.slug}`);

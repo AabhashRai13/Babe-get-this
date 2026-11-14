@@ -36,16 +36,36 @@ To preview: `npm run studio`, then open `v-<slug>`. Set `showSafeArea` in the pr
 
 ### Timing shots to audio
 
-Speech onsets come from the voice-band loudness, the same pass the lip sync uses. With the script's `audio`
+Speech onsets come from the isolated vocals' loudness, the same pass the lip sync uses. With the script's `audio`
 field set and the file in the media folder (the script doesn't need registering yet):
 
 ```
 npm run analyze <slug>
 ```
 
-That writes `public/media/<slug>/envelope.json` (`db` per frame at 30fps). Values above about −30 dB are speech.
+That writes `public/media/<slug>/envelope.json` (`db` per frame at 60fps, measured on the vocal stem; `source` says
+`vocals` or `mix`). The stem is silent (about −90 dB) between words, so values above about −40 dB are a voice.
 For a remake of a reference clip, measure its cuts and caption changes from the video, as
 `docs/superpowers/specs/2026-11-13-pebbles-prototype/build_ref.mjs` did for the Spanish-song video.
+
+### Vocal isolation (lip sync)
+
+Trending audio is voice and music in one track. So that drums and music don't move the mouths, the analysis first
+separates the vocals with [demucs](https://github.com/facebookresearch/demucs) (htdemucs, local, about 15 s per
+clip) and measures only those. Mouths are shut wherever the stem is silent, open with each syllable, and the nods,
+brow lifts and hand gestures come from the same vocal peaks. Set it up once (about 1 GB with PyTorch):
+
+```
+/opt/homebrew/bin/python3.14 -m venv ~/.cache/pebbles-studio/demucs-venv
+~/.cache/pebbles-studio/demucs-venv/bin/pip install demucs soundfile
+```
+
+Stems are cached by audio content in `~/.cache/pebbles-studio/stems/`. `PEBBLES_DEMUCS_PYTHON` points at another
+python with demucs; `PEBBLES_VOCALS=mix` skips separation. Without demucs the analysis warns and falls back to the
+whole mix, where music moves the mouths.
+
+The speaker still comes from the script (`speaker`, `beats[].speaker`): the audio decides when a mouth moves,
+the script decides whose.
 
 ## Script fields
 
@@ -83,7 +103,7 @@ In standing sets (kitchen, aisle), `sit` is drawn as standing. On the couch and 
 
 | Command | What it does |
 |---|---|
-| `npm run render <slug>` | Stages the audio, builds the lip-sync envelope, renders `reel.mp4` (H.264 High, BT.709, AAC 44.1 kHz), then writes `no-sound.mp4`. |
+| `npm run render <slug>` | Stages the audio, isolates the vocals and builds the lip-sync envelope, renders `reel.mp4` (H.264 High, BT.709, AAC 44.1 kHz), then writes `no-sound.mp4`. |
 | `npm run assets` | Exports every expression and pose for both Pebbles as transparent PNGs (1400×1900, characters at 2×; the hug is one 1800×1900 file), plus empty kitchen, couch, aisle and paper backdrops (1080×1920), to `~/Documents/Pebbles Videos/assets/`. Re-run it after changing the art. |
 | `npm run sheets` | Renders the expression, pose and set sheets to `_sheets/`. |
 | `npm run smoke` | Typecheck, tests, then the sheets. Needs no audio. |

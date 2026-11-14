@@ -73,8 +73,9 @@ export const Pebble: React.FC<PebbleProps> = ({
           )}
           {has('feet') &&
             C.feet.map((f, i) => <ellipse key={i} cx={footX(f.x)} cy={f.y + footLift(i)} rx={f.rx} ry={f.ry} fill={C.footColor} />)}
+          {/* Low on the body, so the lute never covers the mouth while she sings. */}
           {has('arms') && holding === 'lute' && (
-            <g transform={`translate(${C.inner.w * 0.08} ${C.bottom * 0.42})`}><HeldProp name="lute" t={t} /></g>
+            <g transform={`translate(${C.inner.w * 0.1} ${C.bottom * 0.78})`}><HeldProp name="lute" t={t} /></g>
           )}
           {has('arms') && anchor && holding !== 'bag' && (
             <g transform={`translate(${anchor.x} ${anchor.y})`}><HeldProp name={holding!} t={t} /></g>

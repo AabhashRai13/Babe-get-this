@@ -9,15 +9,19 @@ const SLUG = '2026-11-12-spanish-song';
 let media: string;
 let pub: string;
 const saved = process.env.PEBBLES_MEDIA;
+const savedVocals = process.env.PEBBLES_VOCALS;
 
 beforeEach(() => {
   media = fs.mkdtempSync(path.join(os.tmpdir(), 'pebbles-media-'));
   pub = fs.mkdtempSync(path.join(os.tmpdir(), 'pebbles-public-'));
   process.env.PEBBLES_MEDIA = media;
+  process.env.PEBBLES_VOCALS = 'mix'; // vocal separation is covered in analyze.test.ts
 });
 afterEach(() => {
   if (saved === undefined) delete process.env.PEBBLES_MEDIA;
   else process.env.PEBBLES_MEDIA = saved;
+  if (savedVocals === undefined) delete process.env.PEBBLES_VOCALS;
+  else process.env.PEBBLES_VOCALS = savedVocals;
 });
 
 describe('loading a video script from Node', () => {
