@@ -50,17 +50,19 @@ For a remake of a reference clip, measure its cuts and caption changes from the 
 
 ### Vocal isolation (lip sync)
 
-Trending audio is voice and music in one track. So that drums and music don't move the mouths, the analysis first
-separates the vocals with [demucs](https://github.com/facebookresearch/demucs) (htdemucs, local, about 15 s per
-clip) and measures only those. Mouths are shut wherever the stem is silent, open with each syllable, and the nods,
-brow lifts and hand gestures come from the same vocal peaks. Set it up once (about 1 GB with PyTorch):
+Trending audio is voice and music in one track. The analysis first splits it into stems with
+[demucs](https://github.com/facebookresearch/demucs) (htdemucs, local, about 15 s per clip). The mouths follow only
+the vocals: shut wherever the vocal stem is silent, open with each syllable, and the nods, brow lifts, leans and
+gestures come from the same phrases. The drums stem gives Mr's real hits (kick, snare, hats, crash) in `drums`
+shots, and the "other" stem gives the strums on Mrs' lute. Set it up once (about 1 GB with PyTorch):
 
 ```
 /opt/homebrew/bin/python3.14 -m venv ~/.cache/pebbles-studio/demucs-venv
 ~/.cache/pebbles-studio/demucs-venv/bin/pip install demucs soundfile
 ```
 
-Stems are cached by audio content in `~/.cache/pebbles-studio/stems/`. `PEBBLES_DEMUCS_PYTHON` points at another
+Stems are cached by audio content in `~/.cache/pebbles-studio/stems/`. Without stems, `drums` shots fall back to
+`drumGrid` (the first video's groove) and nobody strums. `PEBBLES_DEMUCS_PYTHON` points at another
 python with demucs; `PEBBLES_VOCALS=mix` skips separation. Without demucs the analysis warns and falls back to the
 whole mix, where music moves the mouths.
 

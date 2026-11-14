@@ -5,8 +5,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { analyzeAudio } from '../scripts/analyze.mjs';
 
-// A stand-in for the demucs venv's python: logs each call, and "separates" by writing a silent vocals.wav
-// where demucs would (<out>/htdemucs/<input name>/vocals.wav).
+// A stand-in for the demucs venv's python: logs each call, and "separates" by writing four stems where demucs
+// would (<out>/htdemucs/<input name>/<stem>.wav): silent vocals, bass and other, and a copy of the input as drums.
 function fakeDemucs(dir: string): { python: string; calls: () => number } {
   const log = path.join(dir, 'calls.log');
   const python = path.join(dir, 'python');
@@ -15,7 +15,8 @@ echo "$@" >> "${log}"
 while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift;; *) last="$1";; esac; shift; done
 name=$(basename "$last"); name="\${name%.*}"
 mkdir -p "$out/htdemucs/$name"
-ffmpeg -v error -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 1 "$out/htdemucs/$name/vocals.wav"
+for st in vocals bass other; do ffmpeg -v error -y -f lavfi -i anullsrc=r=44100:cl=stereo -t 1 "$out/htdemucs/$name/$st.wav"; done
+ffmpeg -v error -y -i "$last" "$out/htdemucs/$name/drums.wav"
 `);
   fs.chmodSync(python, 0o755);
   return { python, calls: () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').length : 0) };
@@ -54,6 +55,14 @@ describe('lip-sync analysis', () => {
     expect(d.calls()).toBe(1);
   }, 30000);
 
+  it('writes drum and instrument bands from the stems', async () => {
+    const d = fakeDemucs(dir);
+    await analyzeAudio(SLUG, 'song.m4a', pub, { python: d.python, cacheDir: path.join(dir, 'stems') });
+    const env = read();
+    for (const k of ['kick', 'snare', 'hat', 'pluck']) expect(env[k]?.length).toBe(env.db.length);
+    expect(Math.max(...env.pluck.slice(5, 50))).toBeLessThan(-60); // "other" is silent in the fake
+  }, 30000);
+
   it('separates each audio file once and reuses the stem', async () => {
     const d = fakeDemucs(dir);
     const opts = { python: d.python, cacheDir: path.join(dir, 'stems') };
@@ -67,6 +76,7 @@ describe('lip-sync analysis', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await analyzeAudio(SLUG, 'song.m4a', pub, { python: path.join(dir, 'no-such-python'), cacheDir: path.join(dir, 'stems') });
     expect(read().source).toBe('mix');
+    expect(read().kick).toBeUndefined();
     expect(Math.max(...read().db.slice(5, 50))).toBeGreaterThan(-30);
     expect(String(warn.mock.calls[0]?.[0])).toMatch(/demucs/);
     warn.mockRestore();

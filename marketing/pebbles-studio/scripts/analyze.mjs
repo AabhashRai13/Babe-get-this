@@ -1,4 +1,4 @@
-// Lip-sync pre-pass: isolate the vocals (demucs), then measure them per 60 fps frame -> public/media/<slug>/envelope.json.
+// Lip-sync and music pre-pass: split the clip into stems (demucs), then measure them per 60 fps frame -> envelope.json.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -28,12 +28,15 @@ function bandDb(src, filter) {
     });
 }
 
+const STEMS_USED = ['vocals', 'drums', 'other'];
+
 /**
- * The vocals alone, separated from the music with demucs (htdemucs, two stems), cached by the audio's content
- * in ~/.cache/pebbles-studio/stems. The mix's drums and music would otherwise move the mouths.
+ * The clip split into stems with demucs (htdemucs: vocals, drums, bass, other), cached by the audio's content in
+ * ~/.cache/pebbles-studio/stems. Vocals drive the mouths (the mix's drums and music would otherwise move them),
+ * drums drive Mr's sticks, and "other" (guitar, lute, keys) drives strumming.
  * Returns null (use the mix) when PEBBLES_VOCALS=mix or demucs isn't installed.
  */
-export function vocalsStem(src, { python = DEMUCS_PYTHON, cacheDir = STEMS } = {}) {
+export function stemsFor(src, { python = DEMUCS_PYTHON, cacheDir = STEMS } = {}) {
   if (process.env.PEBBLES_VOCALS === 'mix') return null;
   if (!fs.existsSync(python)) {
     console.warn(`demucs not found at ${python}: lip sync will follow the whole mix, music included.\n`
@@ -41,33 +44,44 @@ export function vocalsStem(src, { python = DEMUCS_PYTHON, cacheDir = STEMS } = {
     return null;
   }
   const hash = createHash('sha1').update(fs.readFileSync(src)).digest('hex').slice(0, 16);
-  const out = path.join(cacheDir, `${hash}.vocals.wav`);
-  if (fs.existsSync(out)) return out;
+  const out = Object.fromEntries(STEMS_USED.map((st) => [st, path.join(cacheDir, `${hash}.${st}.wav`)]));
+  if (STEMS_USED.every((st) => fs.existsSync(out[st]))) return out;
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pebbles-demucs-'));
   const wav = path.join(work, 'mix.wav');
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', src, '-vn', '-ac', '2', '-ar', String(SR), wav]);
-  execFileSync(python, ['-m', 'demucs', '--two-stems', 'vocals', '-n', 'htdemucs', '-o', work, wav],
-    { stdio: ['ignore', 'ignore', 'pipe'] });
+  execFileSync(python, ['-m', 'demucs', '-n', 'htdemucs', '-o', work, wav], { stdio: ['ignore', 'ignore', 'pipe'] });
   fs.mkdirSync(cacheDir, { recursive: true });
-  fs.copyFileSync(path.join(work, 'htdemucs', 'mix', 'vocals.wav'), out);
+  for (const st of STEMS_USED) fs.copyFileSync(path.join(work, 'htdemucs', 'mix', `${st}.wav`), out[st]);
   fs.rmSync(work, { recursive: true, force: true });
   return out;
 }
 
 /**
- * Lip-sync pre-pass at 60 fps, measured on the isolated vocals: voice-band loudness (how open) plus a dark band
- * and a bright band (mouth width: "oo" vs "ee") -> public/media/<slug>/envelope.json.
- * `source` records whether it measured the vocals or (without demucs) the whole mix.
+ * Lip-sync and music pre-pass at 60 fps -> public/media/<slug>/envelope.json.
+ * From the vocals: voice-band loudness (how open) plus a dark and a bright band (mouth width and roundness).
+ * From the drums stem: kick, snare and hat bands; from the "other" stem: a pluck band (strums).
+ * `source` records whether it measured the stems or (without demucs) the whole mix, which has no music bands.
  */
 export async function analyzeAudio(slug, file, publicDir = path.join(KIT, 'public'), opts = {}) {
   const mix = path.join(publicDir, 'media', slug, file);
-  const vocals = vocalsStem(mix, opts);
-  const src = vocals ?? mix;
-  const db = bandDb(src, 'highpass=f=300,lowpass=f=3400');
-  const lo = bandDb(src, 'highpass=f=250,lowpass=f=1000');
-  const hi = bandDb(src, 'highpass=f=2000,lowpass=f=5000');
+  const stems = stemsFor(mix, opts);
+  const voice = stems?.vocals ?? mix;
+  const env = {
+    fps: FPS,
+    source: stems ? 'vocals' : 'mix',
+    db: bandDb(voice, 'highpass=f=300,lowpass=f=3400'),
+    lo: bandDb(voice, 'highpass=f=250,lowpass=f=1000'),
+    hi: bandDb(voice, 'highpass=f=2000,lowpass=f=5000'),
+  };
+  if (stems) {
+    const fit = (a) => env.db.map((_, i) => a[i] ?? -99);
+    env.kick = fit(bandDb(stems.drums, 'highpass=f=40,lowpass=f=120'));
+    env.snare = fit(bandDb(stems.drums, 'highpass=f=1500,lowpass=f=4000'));
+    env.hat = fit(bandDb(stems.drums, 'highpass=f=7000,lowpass=f=12000'));
+    env.pluck = fit(bandDb(stems.other, 'highpass=f=200,lowpass=f=4000'));
+  }
   const out = path.join(publicDir, 'media', slug, 'envelope.json');
-  fs.writeFileSync(out, JSON.stringify({ fps: FPS, source: vocals ? 'vocals' : 'mix', db, lo, hi }));
+  fs.writeFileSync(out, JSON.stringify(env));
   return out;
 }
 
