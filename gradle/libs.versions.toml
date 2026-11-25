@@ -42,7 +42,7 @@ robolectric = "4.13"
 androidxTest = "1.7.0"
 androidxTestRunner = "1.7.0"
 archCoreTesting = "2.2.0"
-# Supabase Kotlin SDK (auth, realtime later) + the Ktor HTTP engine it runs on.
+# Supabase Kotlin SDK (auth, postgrest, realtime) + the Ktor HTTP engine it runs on.
 # supabase-kt ships a BOM, so its modules are versionless in [libraries] below.
 # Pinned to the 3.0.x line on purpose: it targets Kotlin 2.0.x / Ktor 3.0, which
 # matches this project's Kotlin 2.0.21. The newest 3.6.x needs Kotlin 2.3 and

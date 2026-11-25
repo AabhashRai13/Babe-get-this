@@ -73,7 +73,7 @@ android {
 
     // Product flavors for environment switching.
     // Like Flutter's --dart-define or --flavor flag.
-    // Each flavor gets its own BASE_URL, WS_URL, and app ID suffix
+    // Each flavor gets its own BASE_URL and app ID suffix
     // so dev/staging/prod can be installed side-by-side on the same device.
     flavorDimensions += "environment"
     productFlavors {
@@ -84,7 +84,6 @@ android {
             // 10.0.2.2 = host machine's localhost from the Android emulator.
             // No "/api/" suffix — the transcribe backend serves POST /transcribe at the root.
             buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/\"")
-            buildConfigField("String", "WS_URL", "\"ws://10.0.2.2:8080/ws\"")
         }
         create("staging") {
             dimension = "environment"
@@ -94,18 +93,12 @@ android {
             // tokens against the staging Supabase project below. Pointing staging at
             // the production backend 401s every call and signs the user out.
             buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-staging.up.railway.app/\"")
-            // WS_URL is a placeholder — websockets aren't implemented yet. Repointed
-            // off the dead babegetthis.com domains to the live Railway host so it
-            // isn't misleading; revisit the exact /ws path when realtime sync lands.
-            buildConfigField("String", "WS_URL", "\"wss://babegetthisapis-production.up.railway.app/ws\"")
             buildConfigField("String", "SUPABASE_URL", "\"$stagingSupabaseUrl\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"$stagingSupabaseAnonKey\"")
         }
         create("prod") {
             dimension = "environment"
             buildConfigField("String", "BASE_URL", "\"https://babegetthisapis-production.up.railway.app/\"")
-            // Placeholder — see staging note above. Unused until websockets land.
-            buildConfigField("String", "WS_URL", "\"wss://babegetthisapis-production.up.railway.app/ws\"")
         }
     }
 
@@ -438,12 +431,13 @@ dependencies {
     // Secure token storage — EncryptedSharedPreferences (like flutter_secure_storage)
     implementation(libs.security.crypto)
 
-    // Supabase — authentication now, realtime later. The BOM (platform()) pins
+    // Supabase — authentication, data and realtime. The BOM (platform()) pins
     // every supabase module to one compatible version. auth-kt is the login client;
     // ktor-client-okhttp is the HTTP engine it sends requests through.
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.auth)
-    // postgrest-kt is only here for the delete_user RPC (account deletion).
+    // postgrest-kt serves all table and RPC calls: list sync, Got This, feature
+    // flags and account deletion.
     implementation(libs.supabase.postgrest)
     // realtime-kt powers live updates for shared lists.
     implementation(libs.supabase.realtime)
